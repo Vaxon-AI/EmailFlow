@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   CheckSquare, Paperclip, Mail,
-  Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap,
+  Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap, Eye,
 } from 'lucide-react'
 import { Suspense, useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
@@ -28,6 +28,8 @@ import { getEmailClassConfig } from '@/lib/email-classification'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { BatchReassignModal } from '@/components/batch-reassign-modal'
 import { InlineEditableName } from '@/components/inline-editable-name'
+import { EmailReviewModal } from '@/components/email-review-modal'
+import { useAuth } from '@/lib/use-auth'
 import { CACHE_TIME } from '@/lib/query-cache'
 
 // ---------------------------------------------------------------------------
@@ -193,6 +195,42 @@ function EmailsContent() {
   const [reassignEmail, setReassignEmail] = useState<EmailItem | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBatchReassign, setShowBatchReassign] = useState(false)
+
+  // Manual review mode
+  const { user } = useAuth()
+  const manualReviewMode = (user as (typeof user & { manualReviewMode?: boolean }) | null)?.manualReviewMode ?? true
+  const queryClient = useQueryClient()
+  const [reviewBannerDismissed, setReviewBannerDismissed] = useState(false)
+  const [showReviewModal, setShowReviewModal] = useState(false)
+
+  const { data: pendingReviewData } = useQuery({
+    queryKey: ['pending-review-count'],
+    queryFn: async () => {
+      const r = await fetch('/api/emails/pending-review')
+      const d = await r.json()
+      return d.count as number
+    },
+    enabled: manualReviewMode,
+    staleTime: CACHE_TIME.list,
+  })
+  const pendingReviewCount = pendingReviewData ?? 0
+
+  const reviewModeMutation = useMutation({
+    mutationFn: async (mode: boolean) => {
+      const res = await fetch('/api/settings/review-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manualReviewMode: mode }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error)
+      return json
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth-me'] })
+      queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
+    },
+  })
 
   const toggleSelect = (id: string) =>
     setSelectedIds((prev) => {
@@ -525,6 +563,21 @@ function EmailsContent() {
               />
             )}
 
+            {/* Review mode toggle */}
+            <button
+              onClick={() => reviewModeMutation.mutate(!manualReviewMode)}
+              disabled={reviewModeMutation.isPending}
+              title={manualReviewMode ? 'Manual Review mode — click to switch to Auto' : 'Auto mode — click to switch to Manual Review'}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs transition-all ${
+                manualReviewMode
+                  ? 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                  : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              }`}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {manualReviewMode ? 'Manual Review' : 'Auto'}
+            </button>
+
           </div>
         </div>
       </div>
@@ -585,6 +638,42 @@ function EmailsContent() {
           </span>
         </div>
       )}
+
+      {/* Pending review banner */}
+      {!isLoading && manualReviewMode && pendingReviewCount > 0 && !reviewBannerDismissed && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+          <button
+            onClick={() => setShowReviewModal(true)}
+            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+              <Eye className="h-4 w-4 text-amber-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-900">
+                {pendingReviewCount} email{pendingReviewCount === 1 ? '' : 's'} pending your review
+              </p>
+              <p className="text-xs text-amber-700">Tap to review — choose which emails should generate tasks.</p>
+            </div>
+          </button>
+          <button
+            onClick={() => setReviewBannerDismissed(true)}
+            className="shrink-0 rounded-full p-1.5 text-amber-500 transition-colors hover:bg-amber-100 hover:text-amber-700"
+            title="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Review modal */}
+      <EmailReviewModal
+        open={showReviewModal}
+        onClose={() => {
+          setShowReviewModal(false)
+          setReviewBannerDismissed(true)
+        }}
+      />
 
       {/* Batch action bar */}
       {selectedIds.size > 0 && (

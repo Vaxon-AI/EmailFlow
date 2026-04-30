@@ -127,6 +127,7 @@ export async function syncEmailsPhase1(userId: string, sinceDays: number = 7): P
   //    first error while earlier upserts had already committed.
   const tStore = Date.now()
   const storedEmails: StoredEmail[] = []
+  const newEmailIds: string[] = []
   let syncedCount = 0
   let skippedCount = 0
   let failedCount = 0
@@ -137,6 +138,7 @@ export async function syncEmailsPhase1(userId: string, sinceDays: number = 7): P
       storedEmails.push(email)
       if (wasCreated) {
         syncedCount++
+        newEmailIds.push(email.id)
       } else {
         skippedCount++
       }
@@ -152,6 +154,18 @@ export async function syncEmailsPhase1(userId: string, sinceDays: number = 7): P
     }
   }
   console.log(`[sync] storeEmails: ${Date.now() - tStore}ms, synced=${syncedCount}, skipped=${skippedCount}, failed=${failedCount}`)
+
+  // Tag newly stored emails as awaiting user review when manual mode is on.
+  // Also update the in-memory objects so Phase 2 passes the correct flag to processEmail.
+  if (syncInfo.manualReviewMode && newEmailIds.length > 0) {
+    await emailRepo.markEmailsAwaitingReview(newEmailIds)
+    const newIdSet = new Set(newEmailIds)
+    for (const email of storedEmails) {
+      if (newIdSet.has(email.id)) {
+        ;(email as StoredEmail & { awaitingReview: boolean }).awaitingReview = true
+      }
+    }
+  }
 
   // 3) Mark sync time — persisted before AI pipeline so it's recorded even
   //    if downstream processing is slow or never completes.
@@ -208,6 +222,7 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
           bodyFull: email.bodyFull,
           labels: email.labels,
           threadId: email.threadId,
+          awaitingReview: (email as StoredEmail & { awaitingReview?: boolean }).awaitingReview ?? false,
         })
 
         if (result?.reviewCandidate) {

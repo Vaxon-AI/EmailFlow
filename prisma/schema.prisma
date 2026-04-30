@@ -31,6 +31,7 @@ model User {
   emailProviderReauthAt       DateTime?
   emailProviderReauthProvider String?
   isAdmin                     Boolean              @default(false)
+  manualReviewMode            Boolean              @default(true)
   accounts                    Account[]
   digests                     Digest[]
   emails                      Email[]
@@ -124,6 +125,7 @@ model Email {
   retentionReason  String?
   processingStatus String          @default("done")
   syncBatchId      String?
+  awaitingReview   Boolean         @default(false)
   attachments      Attachment[]
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskLinks        TaskEmail[]
@@ -133,6 +135,7 @@ model Email {
   @@index([userId, processingStatus, receivedAt(sort: Desc)])
   @@index([userId, syncBatchId])
   @@index([userId, retentionStatus, receivedAt(sort: Desc)])
+  @@index([userId, awaitingReview, receivedAt(sort: Desc)])
 }
 
 model Task {

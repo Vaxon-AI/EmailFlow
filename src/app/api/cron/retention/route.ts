@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { executeRetention } from '@/services/retention-service'
+import { dismissStaleReviewEmails } from '@/repositories/email-repo'
 
 // ============================================================
 // Cron: Retention Cleanup
@@ -63,5 +64,11 @@ export async function GET(req: NextRequest) {
   const failed = results.filter((r) => r.status === 'error').length
   console.log(`[cron/retention] Processed ${succeeded}/${users.length} users, ${failed} errors`)
 
-  return NextResponse.json({ success: true, processed: users.length, succeeded, failed, results })
+  // Dismiss pending review emails older than 15 days (applies across all users)
+  const staleDismissed = await dismissStaleReviewEmails(15)
+  if (staleDismissed > 0) {
+    console.log(`[cron/retention] Dismissed ${staleDismissed} stale review emails (>15 days)`)
+  }
+
+  return NextResponse.json({ success: true, processed: users.length, succeeded, failed, results, staleDismissed })
 }

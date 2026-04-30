@@ -18,6 +18,7 @@ export async function getUserSyncInfo(userId: string) {
       lastSyncAt: true,
       gmailConnected: true,
       syncEnabled: true,
+      manualReviewMode: true,
       emailProviderReauthRequired: true,
       emailProviderReauthReason: true,
       emailProviderReauthAt: true,

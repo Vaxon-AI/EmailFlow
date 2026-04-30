@@ -381,7 +381,8 @@ async function stepClassify(
     timeout,
   ])
 
-  await emailRepo.updateClassification(email.id, result)
+  // DB save is handled by the caller so it can choose the appropriate save method
+  // (full updateClassification vs saveClassificationFields for review mode)
   return result
 }
 
@@ -599,6 +600,7 @@ export async function processEmail(
     bodyFull: string | null
     labels: string
     threadId?: string | null
+    awaitingReview?: boolean
   }
 ): Promise<PipelineResult> {
   try {
@@ -664,6 +666,21 @@ export async function processEmail(
   // ── 3. Classify ────────────────────────────────────────────
   const classification = await stepClassify(email, memoryContext)
   await updateSenderMemory(userId, email.sender, classification.category)
+
+  // In manual review mode, save classification fields but stop before task creation.
+  // The user will approve or ignore from the review modal.
+  if (email.awaitingReview) {
+    await emailRepo.saveClassificationFields(email.id, classification)
+    return {
+      emailId: email.id,
+      classification: classification.category,
+      confidence: classification.confidence,
+      taskCreated: false,
+      skippedByRule: false,
+    }
+  }
+
+  await emailRepo.updateClassification(email.id, classification)
 
   let currentThreadMemory: ThreadMemory | null = existingThreadMemory
   let currentMatterMemory: MatterMemory | null = existingMatterMemory
@@ -831,4 +848,31 @@ export async function processEmail(
       skippedByRule: false,
     }
   }
+}
+
+// Clears awaitingReview on an email and re-runs the full pipeline to create a task.
+// Called when the user approves an email in the manual review modal.
+export async function createTaskFromClassifiedEmail(userId: string, emailId: string): Promise<PipelineResult | null> {
+  const email = await prisma.email.findUnique({
+    where: { id: emailId, userId },
+  })
+
+  if (!email || !email.awaitingReview) return null
+
+  await prisma.email.update({
+    where: { id: emailId },
+    data: { awaitingReview: false },
+  })
+
+  return processEmail(userId, {
+    id: email.id,
+    subject: email.subject,
+    sender: email.sender,
+    receivedAt: email.receivedAt,
+    bodyPreview: email.bodyPreview,
+    bodyFull: email.bodyFull,
+    labels: email.labels,
+    threadId: email.threadId,
+    awaitingReview: false,
+  })
 }

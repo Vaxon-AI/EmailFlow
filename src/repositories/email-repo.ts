@@ -68,6 +68,79 @@ export async function updateClassification(
   })
 }
 
+// Saves classification fields without changing processingStatus or awaitingReview.
+// Used when an email is in manual review mode — classified but not yet approved by user.
+export async function saveClassificationFields(
+  emailId: string,
+  classification: {
+    category: string
+    confidence: number
+    reasoning: string
+    isWorkRelated: boolean
+  }
+) {
+  return prisma.email.update({
+    where: { id: emailId },
+    data: {
+      classification: classification.category,
+      classConfidence: classification.confidence,
+      classReasoning: classification.reasoning,
+      isWorkRelated: classification.isWorkRelated,
+    },
+  })
+}
+
+export async function markEmailsAwaitingReview(emailIds: string[]) {
+  if (emailIds.length === 0) return
+  return prisma.email.updateMany({
+    where: { id: { in: emailIds } },
+    data: { awaitingReview: true },
+  })
+}
+
+export async function approveReviewEmails(emailIds: string[]) {
+  if (emailIds.length === 0) return
+  return prisma.email.updateMany({
+    where: { id: { in: emailIds } },
+    data: { awaitingReview: false },
+  })
+}
+
+export async function dismissReviewEmails(emailIds: string[]) {
+  if (emailIds.length === 0) return
+  return prisma.email.updateMany({
+    where: { id: { in: emailIds } },
+    data: { awaitingReview: false, processingStatus: 'dismissed' },
+  })
+}
+
+export async function findPendingReviewEmails(userId: string) {
+  return prisma.email.findMany({
+    where: { userId, awaitingReview: true },
+    select: {
+      id: true,
+      subject: true,
+      sender: true,
+      receivedAt: true,
+      classification: true,
+      classConfidence: true,
+    },
+    orderBy: { receivedAt: 'desc' },
+  })
+}
+
+export async function dismissStaleReviewEmails(olderThanDays = 15) {
+  const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000)
+  const { count } = await prisma.email.updateMany({
+    where: {
+      awaitingReview: true,
+      receivedAt: { lt: cutoff },
+    },
+    data: { awaitingReview: false, processingStatus: 'dismissed' },
+  })
+  return count
+}
+
 export async function markClassificationFailed(emailId: string) {
   return prisma.email.update({
     where: { id: emailId },
@@ -87,6 +160,7 @@ export async function fixStuckEmails(userId: string | null, staleAfterMs = 2 * 6
   const cutoff = new Date(Date.now() - staleAfterMs)
   const where = {
     processingStatus: 'pending',
+    awaitingReview: false,
     createdAt: { lt: cutoff },
     ...(userId ? { userId } : {}),
   }
