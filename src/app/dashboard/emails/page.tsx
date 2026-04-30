@@ -10,6 +10,7 @@ import { StatePanel } from '@/components/state-panel'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -202,6 +203,7 @@ function EmailsContent() {
   const queryClient = useQueryClient()
   const [reviewBannerDismissed, setReviewBannerDismissed] = useState(false)
   const [showReviewModal, setShowReviewModal] = useState(false)
+  const [showAutoModeConfirm, setShowAutoModeConfirm] = useState(false)
 
   const { data: pendingReviewData } = useQuery({
     queryKey: ['pending-review-count'],
@@ -226,11 +228,29 @@ function EmailsContent() {
       if (!res.ok) throw new Error(json?.error)
       return json
     },
-    onSuccess: () => {
+    onSuccess: (json) => {
+      const nextMode = json?.data?.manualReviewMode
+      if (typeof nextMode === 'boolean') {
+        queryClient.setQueryData(['auth-user'], (current: { manualReviewMode?: boolean } | null | undefined) =>
+          current ? { ...current, manualReviewMode: nextMode } : current
+        )
+      }
+      setShowAutoModeConfirm(false)
+      setReviewBannerDismissed(false)
+      queryClient.invalidateQueries({ queryKey: ['auth-user'] })
       queryClient.invalidateQueries({ queryKey: ['auth-me'] })
       queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
     },
   })
+
+  const handleReviewModeToggle = () => {
+    if (manualReviewMode) {
+      setShowAutoModeConfirm(true)
+      return
+    }
+
+    reviewModeMutation.mutate(true)
+  }
 
   const toggleSelect = (id: string) =>
     setSelectedIds((prev) => {
@@ -564,19 +584,30 @@ function EmailsContent() {
             )}
 
             {/* Review mode toggle */}
-            <button
-              onClick={() => reviewModeMutation.mutate(!manualReviewMode)}
-              disabled={reviewModeMutation.isPending}
-              title={manualReviewMode ? 'Manual Review mode — click to switch to Auto' : 'Auto mode — click to switch to Manual Review'}
-              className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs transition-all ${
-                manualReviewMode
-                  ? 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
-                  : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700'
-              }`}
-            >
-              <Eye className="h-3.5 w-3.5" />
-              {manualReviewMode ? 'Manual Review' : 'Auto'}
-            </button>
+            <div className="group/review-toggle relative">
+              <button
+                onClick={handleReviewModeToggle}
+                disabled={reviewModeMutation.isPending}
+                title={
+                  manualReviewMode
+                    ? 'Manual Review is on. Switching to Auto will process pending review emails.'
+                    : 'Auto is on. Click to switch new action emails into Manual Review.'
+                }
+                className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                  manualReviewMode
+                    ? 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }`}
+              >
+                {reviewModeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                {manualReviewMode ? 'Manual Review' : 'Auto'}
+              </button>
+              <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 shadow-lg group-hover/review-toggle:block">
+                {manualReviewMode
+                  ? 'Manual Review is on. Switching to Auto will create tasks from emails waiting for review.'
+                  : 'Auto is on. Click to send future action emails to Manual Review before tasks are created.'}
+              </div>
+            </div>
 
           </div>
         </div>
@@ -720,6 +751,37 @@ function EmailsContent() {
           onClose={() => setShowBatchModal(false)}
         />
       )}
+
+      <Dialog open={showAutoModeConfirm} onOpenChange={setShowAutoModeConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Switch to Auto mode?</DialogTitle>
+            <DialogDescription>
+              Auto mode will process emails currently waiting for manual review and create tasks for action emails without asking you first. Future action emails will also be handled automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            This may create tasks from pending review emails in the background.
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowAutoModeConfirm(false)}
+              disabled={reviewModeMutation.isPending}
+            >
+              Keep Manual Review
+            </Button>
+            <Button
+              onClick={() => reviewModeMutation.mutate(false)}
+              disabled={reviewModeMutation.isPending}
+              className="gap-2"
+            >
+              {reviewModeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Switch to Auto
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Content */}
       {isLoading ? (

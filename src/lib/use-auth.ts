@@ -11,6 +11,7 @@ interface User {
   email: string
   name: string
   isAdmin: boolean
+  manualReviewMode: boolean
 }
 
 export function useAuth() {

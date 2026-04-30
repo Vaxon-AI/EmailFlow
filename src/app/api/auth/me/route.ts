@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
           email: context.user.email,
           name: context.user.name,
           isAdmin: context.user.isAdmin,
+          manualReviewMode: context.user.manualReviewMode,
           currentSessionId: context.session.id,
         },
       })
