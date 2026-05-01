@@ -350,8 +350,8 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
           { id: drag.taskId, data: { startDate: toDateStr(newStart), userSetDeadline: toDateStr(newEnd) } },
           {
             onSuccess: () => {
-              // Don't clear pendingRef here — React Query cache may not be written yet.
-              // getBarStyle detects when task data catches up and auto-clears pending.
+              pendingRef.current = null
+              setPendingSnapshot(null)
               toast.success('Timeline updated')
             },
             onError: () => {
@@ -1137,6 +1137,3 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
     </Card>
   )
 }
-
-
-

@@ -76,11 +76,16 @@ export async function findTasksPaginated(
     page: number
     limit: number
     status?: string
+    scope?: 'open'
     sort?: 'priority' | 'date' | 'deadline' | 'title'
   }
 ) {
   const where: Prisma.TaskWhereInput = { userId }
-  if (options.status) where.status = options.status
+  if (options.status) {
+    where.status = options.status
+  } else if (options.scope === 'open') {
+    where.status = { in: ['pending', 'confirmed'] }
+  }
 
   const orderBy: Prisma.TaskOrderByWithRelationInput =
     options.sort === 'priority'

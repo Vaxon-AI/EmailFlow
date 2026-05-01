@@ -63,6 +63,7 @@ type TaskItem = {
   title: string
   summary?: string | null
   status: TaskStatus
+  startDate?: string | null
   priorityScore?: number | null
   explicitDeadline?: string | null
   inferredDeadline?: string | null
@@ -75,6 +76,7 @@ type TaskItem = {
 
 type TaskUpdateData = {
   status?: TaskStatus
+  startDate?: string | null
   userSetDeadline?: string | null
 }
 
@@ -84,7 +86,7 @@ type TaskUpdateVars = {
 }
 
 type MutationLike = {
-  mutate: (vars: TaskUpdateVars, options?: { onSuccess?: () => void }) => void
+  mutate: (vars: TaskUpdateVars, options?: { onSuccess?: () => void; onError?: () => void }) => void
 }
 
 type QueryResponse<T> = {
@@ -144,10 +146,11 @@ function TasksContent() {
 
   // Fetch all tasks (no server-side status filter — we filter client-side for "all")
   const apiStatus = statusFilter === 'all' ? '' : statusFilter
+  const apiScope = statusFilter === 'all' ? 'open' : ''
   const { data: res, isLoading } = useQuery({
-    queryKey: ['tasks', apiStatus, sortBy],
+    queryKey: ['tasks', apiScope || apiStatus, sortBy],
     queryFn: () =>
-      fetch(`/api/tasks?status=${apiStatus}&sort=${sortBy}&limit=50`).then((r) => r.json()),
+      fetch(`/api/tasks?${apiScope ? `scope=${apiScope}` : `status=${apiStatus}`}&sort=${sortBy}&limit=50`).then((r) => r.json()),
     staleTime: CACHE_TIME.list,
     placeholderData: (previous) => previous,
   })
@@ -258,6 +261,31 @@ function TasksContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }).then((r) => r.json()),
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] })
+      const previousTasks = queryClient.getQueriesData<QueryResponse<TaskItem[]>>({ queryKey: ['tasks'] })
+      previousTasks.forEach(([queryKey, cached]) => {
+        if (!cached?.data) return
+        const scopeOrStatus = Array.isArray(queryKey) ? queryKey[1] : undefined
+        const nextData = cached.data
+          .map((task) => task.id === id ? { ...task, ...(data as Partial<TaskItem>) } : task)
+          .filter((task) => {
+            if (scopeOrStatus === 'open') return task.status === 'pending' || task.status === 'confirmed'
+            if (scopeOrStatus === 'completed') return task.status === 'completed'
+            if (scopeOrStatus === 'pending') return task.status === 'pending'
+            if (scopeOrStatus === 'confirmed') return task.status === 'confirmed'
+            return true
+          })
+        queryClient.setQueryData(queryKey, { ...cached, data: nextData })
+      })
+      return { previousTasks }
+    },
+    onError: (_err, _vars, context) => {
+      context?.previousTasks?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data)
+      })
+      showError('Failed to update task')
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
@@ -884,6 +912,20 @@ function TaskListView({ tasks, updateTask, focusProjectId, onReassign, onDelete,
   )
 }
 
+function formatTaskScheduleLabel(startDate?: string | null, deadline?: string | null) {
+  if (!deadline) return null
+  const end = new Date(deadline)
+  const endLabel = end.toLocaleDateString('en', { month: 'short', day: 'numeric' })
+
+  if (!startDate) return `Due ${endLabel}`
+
+  const start = new Date(startDate)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `Due ${endLabel}`
+
+  const startLabel = start.toLocaleDateString('en', { month: 'short', day: 'numeric' })
+  return start.toDateString() === end.toDateString() ? `Due ${endLabel}` : `${startLabel} - ${endLabel}`
+}
+
 function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleSelect }: {
   task: TaskItem
   updateTask: MutationLike
@@ -894,6 +936,8 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
 }) {
   const band = getPriorityBand(task.priorityScore || 0)
   const deadline = task.userSetDeadline || task.explicitDeadline || task.inferredDeadline
+  const startDate = task.startDate
+  const scheduleLabel = formatTaskScheduleLabel(startDate, deadline)
   const isOverdue = deadline && new Date(deadline) < new Date() && (task.status === 'pending' || task.status === 'confirmed')
   const senderName = task.emailLinks?.[0]?.email?.sender?.split('<')[0]?.trim()
   const isPending = task.status === 'pending'
@@ -956,11 +1000,11 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
           {matter ? (
             <span className="truncate text-gray-500">{matter.title}</span>
           ) : null}
-          {deadline && (
+          {scheduleLabel && (
             <span className={`flex items-center gap-1 ${isOverdue ? 'text-red-500 font-medium' : ''}`}>
               <Clock className="h-3 w-3" />
-              {isOverdue ? 'Overdue: ' : 'Due '}
-              {new Date(deadline).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+              {isOverdue ? 'Overdue: ' : ''}
+              {scheduleLabel}
             </span>
           )}
           {senderName && (
@@ -1087,13 +1131,15 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
         const m = String(dayDate.getMonth() + 1).padStart(2, '0')
         const d = String(dayDate.getDate()).padStart(2, '0')
         const dateStr = `${y}-${m}-${d}`
+        const task = tasks.find((item) => item.id === taskId)
+        const shouldAdjustStart = task?.startDate && new Date(task.startDate) > dayDate
         updateTask.mutate(
-          { id: taskId, data: { userSetDeadline: dateStr } },
+          { id: taskId, data: { userSetDeadline: dateStr, ...(shouldAdjustStart ? { startDate: dateStr } : {}) } },
           { onSuccess: () => toast.success('Deadline updated') }
         )
       }
     }
-  }, [updateTask])
+  }, [tasks, updateTask])
 
   // Build calendar cells with overflow days
   type CellData = { day: number; date: Date; isCurrentMonth: boolean }

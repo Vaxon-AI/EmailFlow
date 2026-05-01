@@ -11,6 +11,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { PageHeader } from '@/components/page-header'
 import { StatePanel } from '@/components/state-panel'
 import { InlineNotice } from '@/components/inline-notice'
@@ -38,6 +41,7 @@ interface ChecklistItem {
 type TaskUpdatePayload = {
   title?: string
   summary?: string
+  startDate?: string | null
   userSetDeadline?: string | null
   urgency?: number
   impact?: number
@@ -45,6 +49,10 @@ type TaskUpdatePayload = {
   status?: string
   actionItems?: string
   checkedActionItems?: string
+}
+
+type TaskDetailResponse = {
+  data?: Record<string, unknown>
 }
 
 type TaskEmailLink = {
@@ -87,6 +95,27 @@ function parseActionItems(raw: unknown): ChecklistItem[] {
 
 function generateId(): string {
   return `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function toDateInputValue(value?: string | null) {
+  return value ? value.toString().split('T')[0] : ''
+}
+
+function getDueDateValue(task: { userSetDeadline?: string | null; explicitDeadline?: string | null; inferredDeadline?: string | null }) {
+  return task.userSetDeadline || task.explicitDeadline || task.inferredDeadline || ''
+}
+
+function stripChecklistCompletion(items: ChecklistItem[]) {
+  return items.map(({ id, text, level }) => ({ id, text, level }))
+}
+
+function getScheduleDuration(startDate: string, dueDate: string) {
+  if (!startDate || !dueDate) return null
+  const start = new Date(startDate)
+  const due = new Date(dueDate)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(due.getTime())) return null
+  const days = Math.max(1, Math.round((due.getTime() - start.getTime()) / 86400000) + 1)
+  return `${days} day${days === 1 ? '' : 's'}`
 }
 
 // 获取某项的子任务（下一级）
@@ -178,6 +207,7 @@ export default function TaskDetailPage() {
 
   const [editTitle, setEditTitle] = useState('')
   const [editSummary, setEditSummary] = useState('')
+  const [editStartDate, setEditStartDate] = useState('')
   const [editDeadline, setEditDeadline] = useState('')
   const [editUrgency, setEditUrgency] = useState(3)
   const [editImpact, setEditImpact] = useState(3)
@@ -197,11 +227,8 @@ export default function TaskDetailPage() {
     if (task) {
       setEditTitle(task.title)
       setEditSummary(task.summary)
-      setEditDeadline(
-        (task.userSetDeadline || task.explicitDeadline || task.inferredDeadline || '')
-          .toString()
-          .split('T')[0]
-      )
+      setEditStartDate(toDateInputValue(task.startDate))
+      setEditDeadline(toDateInputValue(getDueDateValue(task)))
       setEditUrgency(task.urgency || 3)
       setEditImpact(task.impact || 3)
       setEditNotes(task.userNotes || '')
@@ -232,6 +259,13 @@ export default function TaskDetailPage() {
     }
   }, [task])
 
+  const patchTaskCache = (patch: Record<string, unknown>) => {
+    queryClient.setQueryData<TaskDetailResponse>(['task', taskId], (old) => {
+      if (!old?.data) return old
+      return { ...old, data: { ...old.data, ...patch } }
+    })
+  }
+
   const updateTask = useMutation({
     mutationFn: (data: TaskUpdatePayload) =>
       fetch(`/api/tasks/${taskId}`, {
@@ -239,18 +273,31 @@ export default function TaskDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }).then((r) => r.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['task', taskId] })
+      const previousTask = queryClient.getQueryData<TaskDetailResponse>(['task', taskId])
+      patchTaskCache(data as Record<string, unknown>)
+      return { previousTask }
+    },
+    onError: (_err, _data, context) => {
+      if (context?.previousTask) queryClient.setQueryData(['task', taskId], context.previousTask)
+      showError('Failed to update task')
+    },
+    onSuccess: (_result, data) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      if (data.status !== undefined) queryClient.invalidateQueries({ queryKey: ['stats'] })
     },
   })
 
   const handleSave = () => {
+    const nextStartDate = editStartDate && editDeadline && new Date(editStartDate) > new Date(editDeadline)
+      ? editDeadline
+      : editStartDate
     updateTask.mutate(
       {
         title: editTitle,
         summary: editSummary,
+        startDate: nextStartDate || null,
         userSetDeadline: editDeadline || null,
         urgency: editUrgency,
         impact: editImpact,
@@ -259,6 +306,7 @@ export default function TaskDetailPage() {
       },
       {
         onSuccess: () => {
+          setEditStartDate(nextStartDate)
           toast.success('Changes saved')
         },
       }
@@ -282,9 +330,11 @@ export default function TaskDetailPage() {
 
   const autoSaveChecklist = (items: ChecklistItem[]) => {
     const checkedIds = items.filter(item => item.completed).map(item => item.id)
+    const actionItems = JSON.stringify(stripChecklistCompletion(items))
+    const checkedActionItems = JSON.stringify(checkedIds)
     updateTask.mutate({
-      actionItems: JSON.stringify(items),
-      checkedActionItems: JSON.stringify(checkedIds)
+      actionItems,
+      checkedActionItems
     })
   }
 
@@ -460,7 +510,9 @@ export default function TaskDetailPage() {
   }
 
   const band = getPriorityBand(task.priorityScore || 0)
-  const deadline = task.userSetDeadline || task.explicitDeadline || task.inferredDeadline
+  const deadline = getDueDateValue(task)
+  const startDate = task.startDate || ''
+  const scheduleDuration = getScheduleDuration(startDate, deadline)
   const sts = statusConfig[task.status] || statusConfig.pending
   const StsIcon = sts.icon
   const project = task.project ?? null
@@ -698,56 +750,40 @@ export default function TaskDetailPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="cursor-text group">
-                  <Label className="text-xs text-gray-500">Deadline</Label>
-                  {editingField === 'deadline' ? (
-                    <div className="mt-1 flex gap-2 items-center">
-                      <Input
-                        autoFocus
-                        type="date"
-                        value={editDeadline}
-                        onChange={(e) => setEditDeadline(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleSave()
-                            setEditingField(null)
-                          }
-                          if (e.key === 'Escape') setEditingField(null)
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          handleSave()
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-blue-50 rounded transition-colors text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Save"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditDeadline(task.deadline || '')
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Cancel"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <p
-                      onClick={() => setEditingField('deadline')}
-                      className="mt-1 text-sm font-medium text-gray-700 py-2 px-2 -mx-2 rounded group-hover:bg-gray-50 transition-colors"
-                    >
-                      {deadline ? new Date(deadline).toLocaleDateString() : '—'}
-                    </p>
-                  )}
+              <div className="rounded-xl border border-gray-100 bg-white/75 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <Label className="text-xs text-gray-500">Schedule</Label>
+                  {scheduleDuration ? (
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">{scheduleDuration}</span>
+                  ) : null}
                 </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-[11px] text-gray-400">Start date</Label>
+                    <Input
+                      type="date"
+                      value={editStartDate}
+                      onChange={(e) => setEditStartDate(e.target.value)}
+                      onBlur={handleSave}
+                      disabled={updateTask.isPending || actionCooldown}
+                      className="mt-1 h-9 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-gray-400">Due date</Label>
+                    <Input
+                      type="date"
+                      value={editDeadline}
+                      onChange={(e) => setEditDeadline(e.target.value)}
+                      onBlur={handleSave}
+                      disabled={updateTask.isPending || actionCooldown}
+                      className="mt-1 h-9 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div className="cursor-text group">
                   <Label className="text-xs text-gray-500">Urgency</Label>
                   {editingField === 'urgency' ? (
@@ -907,22 +943,22 @@ export default function TaskDetailPage() {
 
               <div className="cursor-pointer group">
                 <Label className="text-xs text-gray-500">Status</Label>
-                <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                  {Object.entries(statusConfig).map(([value, opt]) => (
-                    <button
-                      key={value}
-                      onClick={() => handleStatusChange(value)}
-                      disabled={updateTask.isPending || actionCooldown}
-                      className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                        editStatus === value
-                          ? `${opt.color} ring-2 ring-offset-1`
-                          : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+                <Select
+                  value={editStatus}
+                  onValueChange={(value) => { if (value) handleStatusChange(value) }}
+                  disabled={updateTask.isPending || actionCooldown}
+                >
+                  <SelectTrigger className="mt-1.5 h-9 w-full max-w-xs bg-white text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {Object.entries(statusConfig).map(([value, opt]) => (
+                      <SelectItem key={value} value={value}>
+                        <span className="font-medium">{opt.label}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
@@ -1242,10 +1278,22 @@ export default function TaskDetailPage() {
                   <dt className="text-gray-400">Impact</dt>
                   <dd className="font-medium text-gray-700">{task.impact || '—'} / 5</dd>
                 </div>
+                {startDate && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-400">Start</dt>
+                    <dd className="font-medium text-gray-700">{new Date(startDate).toLocaleDateString()}</dd>
+                  </div>
+                )}
                 {deadline && (
                   <div className="flex justify-between">
-                    <dt className="text-gray-400">Deadline</dt>
+                    <dt className="text-gray-400">Due</dt>
                     <dd className="font-medium text-gray-700">{new Date(deadline).toLocaleDateString()}</dd>
+                  </div>
+                )}
+                {scheduleDuration && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-400">Duration</dt>
+                    <dd className="font-medium text-gray-700">{scheduleDuration}</dd>
                   </div>
                 )}
                 <div className="flex justify-between">

@@ -13,12 +13,14 @@ export async function GET(req: NextRequest) {
     const page = parseInt(url.searchParams.get('page') || '1')
     const limit = parseInt(url.searchParams.get('limit') || '50')
     const status = url.searchParams.get('status') || undefined
+    const scope = url.searchParams.get('scope') === 'open' ? 'open' : undefined
     const sort = (url.searchParams.get('sort') || 'priority') as 'priority' | 'date' | 'deadline' | 'title'
 
     const { tasks, total } = await taskRepo.findTasksPaginated(user.id, {
       page,
       limit,
       status,
+      scope,
       sort,
     })
 
