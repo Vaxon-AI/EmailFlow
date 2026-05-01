@@ -11,17 +11,17 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { PageHeader } from '@/components/page-header'
 import { StatePanel } from '@/components/state-panel'
 import { InlineNotice } from '@/components/inline-notice'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import {
+  Select, SelectContent, SelectItem, SelectTrigger,
+} from '@/components/ui/select'
+import {
   ArrowLeft, Mail, Calendar, TrendingUp, ExternalLink,
   CheckCircle2, ListChecks, FileText, Sparkles, ThumbsUp,
-  X, Check, AlertTriangle, Shield, RotateCcw, Square, CheckSquare, Plus,
+  X, AlertTriangle, Shield, RotateCcw, Square, CheckSquare, Plus,
   UserRound, ChevronRight, FolderOpen, Pencil,
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
@@ -659,42 +659,17 @@ export default function TaskDetailPage() {
               <div className="cursor-text group">
                 <Label className="text-xs text-gray-500">Title</Label>
                 {editingField === 'title' ? (
-                  <div className="mt-1 flex gap-2 items-center">
-                    <Input
-                      autoFocus
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleSave()
-                          setEditingField(null)
-                        }
-                        if (e.key === 'Escape') setEditingField(null)
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        handleSave()
-                        setEditingField(null)
-                      }}
-                      disabled={updateTask.isPending || actionCooldown}
-                      className="shrink-0 p-1.5 hover:bg-blue-50 rounded transition-colors text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Save"
-                    >
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditTitle(task.title)
-                        setEditingField(null)
-                      }}
-                      disabled={updateTask.isPending || actionCooldown}
-                      className="shrink-0 p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Cancel"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <Input
+                    autoFocus
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onBlur={() => { handleSave(); setEditingField(null) }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { handleSave(); setEditingField(null) }
+                      if (e.key === 'Escape') { setEditTitle(task.title); setEditingField(null) }
+                    }}
+                    className="mt-1"
+                  />
                 ) : (
                   <p
                     onClick={() => setEditingField('title')}
@@ -708,38 +683,18 @@ export default function TaskDetailPage() {
               <div className="cursor-text group">
                 <Label className="text-xs text-gray-500">Summary</Label>
                 {editingField === 'summary' ? (
-                  <div className="mt-1 flex gap-2">
-                    <Textarea
-                      autoFocus
-                      value={editSummary}
-                      onChange={(e) => setEditSummary(e.target.value)}
-                      rows={3}
-                    />
-                    <div className="flex flex-col gap-2">
-                      <button
-                        onClick={() => {
-                          handleSave()
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-blue-50 rounded transition-colors text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Save"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditSummary(task.summary)
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Cancel"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
+                  <Textarea
+                    autoFocus
+                    value={editSummary}
+                    onChange={(e) => setEditSummary(e.target.value)}
+                    onBlur={() => { handleSave(); setEditingField(null) }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); handleSave(); setEditingField(null) }
+                      if (e.key === 'Escape') { setEditSummary(task.summary); setEditingField(null) }
+                    }}
+                    rows={3}
+                    className="mt-1"
+                  />
                 ) : (
                   <p
                     onClick={() => setEditingField('summary')}
@@ -750,82 +705,95 @@ export default function TaskDetailPage() {
                 )}
               </div>
 
-              <div className="rounded-xl border border-gray-100 bg-white/75 p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <Label className="text-xs text-gray-500">Schedule</Label>
-                  {scheduleDuration ? (
-                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">{scheduleDuration}</span>
-                  ) : null}
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <Label className="text-[11px] text-gray-400">Start date</Label>
-                    <Input
-                      type="date"
-                      value={editStartDate}
-                      onChange={(e) => setEditStartDate(e.target.value)}
-                      onBlur={handleSave}
-                      disabled={updateTask.isPending || actionCooldown}
-                      className="mt-1 h-9 text-sm"
-                    />
+              <div className="cursor-text group">
+                <Label className="text-xs text-gray-500">Schedule</Label>
+                {editingField === 'schedule' ? (
+                  <div className="mt-1 grid grid-cols-2 gap-2" data-schedule-edit="">
+                    <div>
+                      <Label className="text-[11px] text-gray-400">Start date</Label>
+                      <Input
+                        autoFocus
+                        type="date"
+                        value={editStartDate}
+                        onChange={(e) => setEditStartDate(e.target.value)}
+                        onBlur={(e) => {
+                          if ((e.relatedTarget as Element | null)?.closest('[data-schedule-edit]')) return
+                          handleSave(); setEditingField(null)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { handleSave(); setEditingField(null) }
+                          if (e.key === 'Escape') {
+                            setEditStartDate(toDateInputValue(task.startDate))
+                            setEditDeadline(toDateInputValue(getDueDateValue(task)))
+                            setEditingField(null)
+                          }
+                        }}
+                        className="mt-1 h-9 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] text-gray-400">Due date</Label>
+                      <Input
+                        type="date"
+                        value={editDeadline}
+                        onChange={(e) => setEditDeadline(e.target.value)}
+                        onBlur={(e) => {
+                          if ((e.relatedTarget as Element | null)?.closest('[data-schedule-edit]')) return
+                          handleSave(); setEditingField(null)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { handleSave(); setEditingField(null) }
+                          if (e.key === 'Escape') {
+                            setEditStartDate(toDateInputValue(task.startDate))
+                            setEditDeadline(toDateInputValue(getDueDateValue(task)))
+                            setEditingField(null)
+                          }
+                        }}
+                        className="mt-1 h-9 text-sm"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-[11px] text-gray-400">Due date</Label>
-                    <Input
-                      type="date"
-                      value={editDeadline}
-                      onChange={(e) => setEditDeadline(e.target.value)}
-                      onBlur={handleSave}
-                      disabled={updateTask.isPending || actionCooldown}
-                      className="mt-1 h-9 text-sm"
-                    />
-                  </div>
-                </div>
+                ) : (
+                  <p
+                    onClick={() => setEditingField('schedule')}
+                    className="mt-1 flex items-center gap-1.5 py-2 px-2 -mx-2 rounded text-sm text-gray-700 group-hover:bg-gray-50 transition-colors"
+                  >
+                    {startDate && deadline ? (
+                      <>
+                        <span>{new Date(startDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+                        <span className="text-gray-400">→</span>
+                        <span>{new Date(deadline).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+                        {scheduleDuration && <span className="ml-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">{scheduleDuration}</span>}
+                      </>
+                    ) : deadline ? (
+                      <span>Due {new Date(deadline).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+                    ) : startDate ? (
+                      <span>From {new Date(startDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+                    ) : (
+                      <span className="font-medium">—</span>
+                    )}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="cursor-text group">
                   <Label className="text-xs text-gray-500">Urgency</Label>
                   {editingField === 'urgency' ? (
-                    <div className="mt-1 flex gap-2 items-center">
-                      <Input
-                        autoFocus
-                        type="number"
-                        min={1}
-                        max={5}
-                        value={editUrgency}
-                        onChange={(e) => setEditUrgency(Number(e.target.value))}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleSave()
-                            setEditingField(null)
-                          }
-                          if (e.key === 'Escape') setEditingField(null)
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          handleSave()
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-blue-50 rounded transition-colors text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Save"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditUrgency(task.urgency || 3)
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Cancel"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
+                    <Input
+                      autoFocus
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={editUrgency}
+                      onChange={(e) => setEditUrgency(Number(e.target.value))}
+                      onBlur={() => { handleSave(); setEditingField(null) }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { handleSave(); setEditingField(null) }
+                        if (e.key === 'Escape') { setEditUrgency(task.urgency || 3); setEditingField(null) }
+                      }}
+                      className="mt-1"
+                    />
                   ) : (
                     <p
                       onClick={() => setEditingField('urgency')}
@@ -838,45 +806,20 @@ export default function TaskDetailPage() {
                 <div className="cursor-text group">
                   <Label className="text-xs text-gray-500">Impact</Label>
                   {editingField === 'impact' ? (
-                    <div className="mt-1 flex gap-2 items-center">
-                      <Input
-                        autoFocus
-                        type="number"
-                        min={1}
-                        max={5}
-                        value={editImpact}
-                        onChange={(e) => setEditImpact(Number(e.target.value))}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleSave()
-                            setEditingField(null)
-                          }
-                          if (e.key === 'Escape') setEditingField(null)
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          handleSave()
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-blue-50 rounded transition-colors text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Save"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditImpact(task.impact || 3)
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Cancel"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
+                    <Input
+                      autoFocus
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={editImpact}
+                      onChange={(e) => setEditImpact(Number(e.target.value))}
+                      onBlur={() => { handleSave(); setEditingField(null) }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { handleSave(); setEditingField(null) }
+                        if (e.key === 'Escape') { setEditImpact(task.impact || 3); setEditingField(null) }
+                      }}
+                      className="mt-1"
+                    />
                   ) : (
                     <p
                       onClick={() => setEditingField('impact')}
@@ -891,46 +834,19 @@ export default function TaskDetailPage() {
               <div className="cursor-text group">
                 <Label className="text-xs text-gray-500">Your Notes</Label>
                 {editingField === 'notes' ? (
-                  <div className="mt-1 flex gap-2">
-                    <Textarea
-                      autoFocus
-                      value={editNotes}
-                      onChange={(e) => setEditNotes(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && e.ctrlKey) {
-                          handleSave()
-                          setEditingField(null)
-                        }
-                        if (e.key === 'Escape') setEditingField(null)
-                      }}
-                      rows={2}
-                      placeholder="Add personal notes..."
-                    />
-                    <div className="flex flex-col gap-2">
-                      <button
-                        onClick={() => {
-                          handleSave()
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-blue-50 rounded transition-colors text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Save"
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditNotes(task.userNotes || '')
-                          setEditingField(null)
-                        }}
-                        disabled={updateTask.isPending || actionCooldown}
-                        className="shrink-0 p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Cancel"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
+                  <Textarea
+                    autoFocus
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    onBlur={() => { handleSave(); setEditingField(null) }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); handleSave(); setEditingField(null) }
+                      if (e.key === 'Escape') { setEditNotes(task.userNotes || ''); setEditingField(null) }
+                    }}
+                    rows={2}
+                    placeholder="Add personal notes..."
+                    className="mt-1"
+                  />
                 ) : (
                   <p
                     onClick={() => setEditingField('notes')}
@@ -941,22 +857,50 @@ export default function TaskDetailPage() {
                 )}
               </div>
 
-              <div className="cursor-pointer group">
+              <div>
                 <Label className="text-xs text-gray-500">Status</Label>
                 <Select
                   value={editStatus}
                   onValueChange={(value) => { if (value) handleStatusChange(value) }}
                   disabled={updateTask.isPending || actionCooldown}
                 >
-                  <SelectTrigger className="mt-1.5 h-9 w-full max-w-xs bg-white text-sm">
-                    <SelectValue />
+                  <SelectTrigger className="mt-1.5 h-8 w-48 border-gray-200 bg-white text-sm shadow-sm">
+                    {(() => {
+                      const cfg = statusConfig[editStatus]
+                      const Icon = cfg?.icon ?? AlertTriangle
+                      const iconColor: Record<string, string> = {
+                        pending: 'text-purple-500',
+                        confirmed: 'text-blue-500',
+                        completed: 'text-green-500',
+                        dismissed: 'text-gray-400',
+                      }
+                      return (
+                        <div className="flex items-center gap-1.5">
+                          <Icon className={`h-3.5 w-3.5 shrink-0 ${iconColor[editStatus] ?? 'text-gray-400'}`} />
+                          <span className="text-gray-700">{cfg?.label ?? editStatus}</span>
+                        </div>
+                      )
+                    })()}
                   </SelectTrigger>
                   <SelectContent align="start">
-                    {Object.entries(statusConfig).map(([value, opt]) => (
-                      <SelectItem key={value} value={value}>
-                        <span className="font-medium">{opt.label}</span>
-                      </SelectItem>
-                    ))}
+                    {Object.entries(statusConfig)
+                      .filter(([value]) => value !== 'dismissed')
+                      .map(([value, opt]) => {
+                        const Icon = opt.icon
+                        const iconColor: Record<string, string> = {
+                          pending: 'text-purple-500',
+                          confirmed: 'text-blue-500',
+                          completed: 'text-green-500',
+                        }
+                        return (
+                          <SelectItem key={value} value={value}>
+                            <div className="flex items-center gap-1.5">
+                              <Icon className={`h-3.5 w-3.5 shrink-0 ${iconColor[value] ?? 'text-gray-400'}`} />
+                              {opt.label}
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
                   </SelectContent>
                 </Select>
               </div>
