@@ -16,12 +16,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const queryClient = useQueryClient()
   const { isAuthenticated, isLoading } = useAuth()
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [mobileNavPath, setMobileNavPath] = useState<string | null>(null)
+  const mobileNavOpen = mobileNavPath === pathname
   useSessionRotation(isAuthenticated)
-
-  useEffect(() => {
-    setMobileNavOpen(false)
-  }, [pathname])
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -89,9 +86,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(255,255,255,1)_240px)]">
-      <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
+      <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavPath(null)} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header onOpenMobileNav={() => setMobileNavOpen(true)} />
+        <Header onOpenMobileNav={() => setMobileNavPath(pathname)} />
         <main className="min-h-[calc(100vh-3.5rem)] flex-1 px-4 pb-10 pt-6 lg:px-6">
           <SectionFade>{children}</SectionFade>
         </main>
