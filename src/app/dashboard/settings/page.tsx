@@ -30,7 +30,9 @@ import {
   ShieldOff,
   Trash2,
   Unplug,
+  User,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
@@ -149,9 +151,18 @@ function getTimezonePrimaryLabel(timezone: string) {
   return `${formatTimezoneRegion(region)} (${getTimezoneOffsetLabel(timezone)})`
 }
 
+type SettingsSection = 'account' | 'email' | 'privacy'
+
+const SETTINGS_SECTIONS = [
+  { id: 'account' as const, label: 'Account', icon: User },
+  { id: 'email' as const, label: 'Email', icon: Mail },
+  { id: 'privacy' as const, label: 'Privacy', icon: Shield },
+]
+
 export default function SettingsPage() {
   const { user, logout } = useAuth()
   const queryClient = useQueryClient()
+  const [activeSection, setActiveSection] = useState<SettingsSection>('account')
   const [timezonePickerOpen, setTimezonePickerOpen] = useState(false)
   const [timezoneSearch, setTimezoneSearch] = useState('')
   const [deviceTimezone] = useState<string | null>(() => {
@@ -250,225 +261,285 @@ export default function SettingsPage() {
     },
   })
 
-  return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader
-        title="Settings"
-        description="Manage your account, email connections, and how the pipeline syncs your inbox."
-      />
-
-      <Card className="border-white/80 bg-white/95 shadow-sm">
-        <CardContent className="flex flex-col gap-4 space-y-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-2xl font-semibold text-gray-900">Hello, {user?.name || 'Your account'}!</p>
-            <p className="text-sm text-gray-500">{user?.email}</p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-800">
-                Workspace account
-              </Badge>
-              {providerReauthRequired ? (
-                <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
-                  Reconnect required
-                </Badge>
-              ) : gmailConnected ? (
-                <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Gmail connected</Badge>
-              ) : (
-                <Badge variant="outline">Email not connected</Badge>
-              )}
-            </div>
-          </div>
-
-          <Button variant="outline" size="sm" onClick={() => logout()} className="gap-2 self-start sm:self-auto">
-            <LogOut className="h-3.5 w-3.5" />
-            Sign out
-          </Button>
-        </CardContent>
-      </Card>
-
-      <LinkAccountCard
-        googleAccount={currentUser?.googleAccount ?? null}
-        gmailConnected={gmailConnected}
-        providerReauthRequired={providerReauthRequired}
-        providerReauthProvider={providerReauthProvider}
-        connectedGmail={connectedGmail}
-        providerReauthAt={syncData?.providerReauthAt ?? null}
-        lastSyncAt={syncData?.lastSyncAt ?? null}
-      />
-
-      <RetentionPolicyCard />
-
-      <EmailSyncWindowCard syncStartDate={currentUser?.syncStartDate ?? null} />
-
-      <ReviewModeCard manualReviewMode={currentUser?.manualReviewMode ?? true} />
-
-      <Card className="border-white/80 bg-white/95 shadow-sm">
-        <CardHeader >
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Globe className="h-4 w-4 text-blue-700" />
-            Timezone
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col gap-4 rounded-2xl border border-gray-200/80 bg-gray-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex-1 space-y-1">
-              <p className="text-sm font-semibold text-gray-900">Daily digest timezone</p>
-              <p className="text-sm text-gray-500">
-                Your digest generates at 20:00 in this timezone. We first detect your current device timezone, and you can search to switch it if needed.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setTimezonePickerOpen(true)}
-              className="min-w-64 justify-between gap-2 self-end sm:self-auto"
-            >
-                <span className="truncate text-left">{getTimezonePrimaryLabel(effectiveTimezone)}</span>
-                <ChevronsUpDown className="h-3.5 w-3.5 text-gray-400" />
-            </Button>
-            <Dialog
-              open={timezonePickerOpen}
-              onOpenChange={(open) => {
-                setTimezonePickerOpen(open)
-                if (!open) {
-                  setTimezoneSearch('')
-                }
-              }}
-            >
-              <DialogContent className="max-w-xl gap-0 overflow-hidden rounded-2xl border border-gray-200 p-0 shadow-xl">
-                <DialogHeader className="border-b border-gray-100 px-5 py-4">
-                  <DialogTitle>Choose timezone</DialogTitle>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Search by timezone name, city alias, or UTC offset. The detected timezone from this device is highlighted first.
-                  </p>
-                </DialogHeader>
-                <div className="border-b border-gray-100 p-4">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      autoFocus
-                      className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 placeholder-gray-400 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                      placeholder="Search timezone, city, or UTC offset..."
-                      value={timezoneSearch}
-                      onChange={(e) => setTimezoneSearch(e.target.value)}
-                    />
-                    {timezoneSearch ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setTimezoneSearch('')}
-                      >
-                        Clear
-                      </Button>
-                    ) : null}
+  function renderSectionContent() {
+    switch (activeSection) {
+      case 'account':
+        return (
+          <>
+            <Card className="border-white/80 bg-white/95 shadow-sm">
+              <CardContent className="flex flex-col gap-4 space-y-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <p className="text-2xl font-semibold text-gray-900">Hello, {user?.name || 'Your account'}!</p>
+                  <p className="text-sm text-gray-500">{user?.email}</p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-800">
+                      Workspace account
+                    </Badge>
+                    {providerReauthRequired ? (
+                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                        Reconnect required
+                      </Badge>
+                    ) : gmailConnected ? (
+                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Gmail connected</Badge>
+                    ) : (
+                      <Badge variant="outline">Email not connected</Badge>
+                    )}
                   </div>
                 </div>
-                <div className="max-h-[28rem] overflow-y-auto p-3">
-                  {deviceTimezone && (!timezoneSearch || getTimezoneSearchText(deviceTimezone).includes(timezoneSearch.toLowerCase())) ? (
+                <Button variant="outline" size="sm" onClick={() => logout()} className="gap-2 self-start sm:self-auto">
+                  <LogOut className="h-3.5 w-3.5" />
+                  Sign out
+                </Button>
+              </CardContent>
+            </Card>
+            <PasswordCard />
+            <TwoFactorCard
+              totpEnabled={Boolean(currentUser?.totpEnabled)}
+              onDisabled={() => queryClient.invalidateQueries({ queryKey: ['auth-me'] })}
+            />
+            <DeviceSessionsCard
+              currentSessionId={currentUser?.currentSessionId || null}
+              onLogoutCurrent={() => logout()}
+            />
+            <Card className="border-white/80 bg-white/95 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Globe className="h-4 w-4 text-blue-700" />
+                  Timezone
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-4 rounded-2xl border border-gray-200/80 bg-gray-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex-1 space-y-1">
+                    <p className="text-sm font-semibold text-gray-900">Daily digest timezone</p>
+                    <p className="text-sm text-gray-500">
+                      Your digest generates at 20:00 in this timezone. We first detect your current device timezone, and you can search to switch it if needed.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTimezonePickerOpen(true)}
+                    className="min-w-64 justify-between gap-2 self-end sm:self-auto"
+                  >
+                    <span className="truncate text-left">{getTimezonePrimaryLabel(effectiveTimezone)}</span>
+                    <ChevronsUpDown className="h-3.5 w-3.5 text-gray-400" />
+                  </Button>
+                  <Dialog
+                    open={timezonePickerOpen}
+                    onOpenChange={(open) => {
+                      setTimezonePickerOpen(open)
+                      if (!open) setTimezoneSearch('')
+                    }}
+                  >
+                    <DialogContent className="max-w-xl gap-0 overflow-hidden rounded-2xl border border-gray-200 p-0 shadow-xl">
+                      <DialogHeader className="border-b border-gray-100 px-5 py-4">
+                        <DialogTitle>Choose timezone</DialogTitle>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Search by timezone name, city alias, or UTC offset. The detected timezone from this device is highlighted first.
+                        </p>
+                      </DialogHeader>
+                      <div className="border-b border-gray-100 p-4">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            autoFocus
+                            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 placeholder-gray-400 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                            placeholder="Search timezone, city, or UTC offset..."
+                            value={timezoneSearch}
+                            onChange={(e) => setTimezoneSearch(e.target.value)}
+                          />
+                          {timezoneSearch ? (
+                            <Button type="button" variant="outline" size="sm" onClick={() => setTimezoneSearch('')}>
+                              Clear
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="max-h-[28rem] overflow-y-auto p-3">
+                        {deviceTimezone && (!timezoneSearch || getTimezoneSearchText(deviceTimezone).includes(timezoneSearch.toLowerCase())) ? (
+                          <button
+                            onClick={() => timezoneMutation.mutate(deviceTimezone)}
+                            className="mb-3 flex w-full items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2 text-left transition hover:bg-blue-100/70"
+                          >
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                              <Globe className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-blue-900">
+                                {getTimezonePrimaryLabel(deviceTimezone)}
+                              </p>
+                              <p className="text-xs text-blue-700/80">
+                                Detected from this device - {formatTimezoneCode(deviceTimezone)}
+                              </p>
+                            </div>
+                            {effectiveTimezone === deviceTimezone ? <Check className="h-4 w-4 text-blue-700" /> : null}
+                          </button>
+                        ) : null}
+                        <div className="space-y-1">
+                          {!timezoneSearch ? (
+                            <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                              Common timezones
+                            </p>
+                          ) : null}
+                          {timezoneResults.map((timezone) => (
+                            <button
+                              key={timezone}
+                              onClick={() => timezoneMutation.mutate(timezone)}
+                              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-gray-100"
+                            >
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500">
+                                <Globe className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-gray-900">
+                                  {getTimezonePrimaryLabel(timezone)}
+                                </p>
+                                <p className="truncate text-xs text-gray-500">
+                                  {formatTimezoneCode(timezone)}
+                                </p>
+                              </div>
+                              {effectiveTimezone === timezone ? <Check className="h-4 w-4 text-blue-700" /> : null}
+                            </button>
+                          ))}
+                          {timezoneSearch && timezoneResults.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-gray-200 px-3 py-5 text-center text-sm text-gray-500">
+                              No timezone matches. Try a city like <span className="font-medium text-gray-700">Beijing</span>, a region like <span className="font-medium text-gray-700">Australia</span>, or an offset like <span className="font-medium text-gray-700">UTC+10</span>.
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  <span>
+                    Current timezone: <span className="font-medium text-gray-700">{getTimezonePrimaryLabel(effectiveTimezone)}</span>
+                  </span>
+                  {deviceTimezone && currentUser?.timezone !== deviceTimezone ? (
                     <button
+                      type="button"
                       onClick={() => timezoneMutation.mutate(deviceTimezone)}
-                      className="mb-3 flex w-full items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2 text-left transition hover:bg-blue-100/70"
+                      className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-medium text-blue-700 transition hover:bg-blue-100"
                     >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700">
-                        <Globe className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-blue-900">
-                          {getTimezonePrimaryLabel(deviceTimezone)}
-                        </p>
-                        <p className="text-xs text-blue-700/80">
-                          Detected from this device - {formatTimezoneCode(deviceTimezone)}
-                        </p>
-                      </div>
-                      {effectiveTimezone === deviceTimezone ? <Check className="h-4 w-4 text-blue-700" /> : null}
+                      Use detected timezone
                     </button>
                   ) : null}
-
-                  <div className="space-y-1">
-                    {!timezoneSearch ? (
-                      <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
-                        Common timezones
-                      </p>
-                    ) : null}
-                    {timezoneResults.map((timezone) => (
-                      <button
-                        key={timezone}
-                        onClick={() => timezoneMutation.mutate(timezone)}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-gray-100"
-                      >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-                          <Globe className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-900">
-                            {getTimezonePrimaryLabel(timezone)}
-                          </p>
-                          <p className="truncate text-xs text-gray-500">
-                            {formatTimezoneCode(timezone)}
-                          </p>
-                        </div>
-                        {effectiveTimezone === timezone ? <Check className="h-4 w-4 text-blue-700" /> : null}
-                      </button>
-                    ))}
-                    {timezoneSearch && timezoneResults.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-gray-200 px-3 py-5 text-center text-sm text-gray-500">
-                        No timezone matches. Try a city like <span className="font-medium text-gray-700">Beijing</span>, a region like <span className="font-medium text-gray-700">Australia</span>, or an offset like <span className="font-medium text-gray-700">UTC+10</span>.
-                      </div>
-                    ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )
+      case 'email':
+        return (
+          <>
+            <LinkAccountCard
+              googleAccount={currentUser?.googleAccount ?? null}
+              gmailConnected={gmailConnected}
+              providerReauthRequired={providerReauthRequired}
+              providerReauthProvider={providerReauthProvider}
+              connectedGmail={connectedGmail}
+              providerReauthAt={syncData?.providerReauthAt ?? null}
+              lastSyncAt={syncData?.lastSyncAt ?? null}
+            />
+            <EmailSyncWindowCard syncStartDate={currentUser?.syncStartDate ?? null} />
+            <ReviewModeCard manualReviewMode={currentUser?.manualReviewMode ?? true} />
+            <RetentionPolicyCard />
+          </>
+        )
+      case 'privacy':
+        return (
+          <>
+            <Card className="border-white/80 bg-white/95 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Shield className="h-4 w-4 text-blue-700" />
+                  Privacy and Data Handling
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="divide-y divide-gray-200/70 text-sm leading-6 text-gray-500">
+                  <div className="pb-2.5">
+                    <span className="font-medium text-gray-700">Read-only access:</span>{' '}
+                    EmailFlow AI reads email to classify threads and extract tasks. It cannot send or delete mail.
+                  </div>
+                  <div className="py-2.5">
+                    <span className="font-medium text-gray-700">Processing:</span>{' '}
+                    Email content is processed by AI providers for classification and summarization using the safeguards configured by the product.
+                  </div>
+                  <div className="pt-2.5">
+                    <span className="font-medium text-gray-700">Disconnect anytime:</span>{' '}
+                    Disconnecting Gmail stops future sync runs. Existing tasks and stored records remain until you clear account data.
                   </div>
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-            <span>
-              Current timezone: <span className="font-medium text-gray-700">{getTimezonePrimaryLabel(effectiveTimezone)}</span>
-            </span>
-            {deviceTimezone && currentUser?.timezone !== deviceTimezone ? (
+              </CardContent>
+            </Card>
+            <DangerZoneCard onDeleted={() => logout()} />
+          </>
+        )
+    }
+  }
+
+  return (
+    <div className="relative">
+      <aside className="absolute left-0 top-0 hidden h-full w-44 lg:block">
+        <div className="sticky top-6">
+          <nav>
+            <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+              Settings
+            </p>
+            <div className="space-y-0.5">
+              {SETTINGS_SECTIONS.map((section) => {
+                const Icon = section.icon
+                const isActive = activeSection === section.id
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => setActiveSection(section.id)}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                      isActive
+                        ? 'bg-gray-100 font-medium text-gray-900'
+                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                    )}
+                  >
+                    <Icon className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-gray-700' : 'text-gray-400')} />
+                    {section.label}
+                  </button>
+                )
+              })}
+            </div>
+          </nav>
+        </div>
+      </aside>
+      <div className="mx-auto max-w-3xl space-y-5">
+        <PageHeader
+          title="Settings"
+          description="Manage your account, email connections, and how the pipeline syncs your inbox."
+        />
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
+          {SETTINGS_SECTIONS.map((section) => {
+            const Icon = section.icon
+            const isActive = activeSection === section.id
+            return (
               <button
-                type="button"
-                onClick={() => timezoneMutation.mutate(deviceTimezone)}
-                className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-medium text-blue-700 transition hover:bg-blue-100"
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                  isActive
+                    ? 'border-gray-900 bg-gray-900 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                )}
               >
-                Use detected timezone
+                <Icon className="h-3.5 w-3.5" />
+                {section.label}
               </button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      <PasswordCard />
-
-      <TwoFactorCard totpEnabled={Boolean(currentUser?.totpEnabled)} onDisabled={() => queryClient.invalidateQueries({ queryKey: ['auth-me'] })} />
-
-      <DeviceSessionsCard currentSessionId={currentUser?.currentSessionId || null} onLogoutCurrent={() => logout()} />
-
-      <Card className="border-white/80 bg-white/95 shadow-sm">
-        <CardHeader >
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Shield className="h-4 w-4 text-blue-700" />
-            Privacy and Data Handling
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="divide-y divide-gray-200/70 text-sm leading-6 text-gray-500">
-            <div className="pb-2.5">
-              <span className="font-medium text-gray-700">Read-only access:</span>{' '}
-              EmailFlow AI reads email to classify threads and extract tasks. It cannot send or delete mail.
-            </div>
-            <div className="py-2.5">
-              <span className="font-medium text-gray-700">Processing:</span>{' '}
-              Email content is processed by AI providers for classification and summarization using the safeguards configured by the product.
-            </div>
-            <div className="pt-2.5">
-              <span className="font-medium text-gray-700">Disconnect anytime:</span>{' '}
-              Disconnecting Gmail stops future sync runs. Existing tasks and stored records remain until you clear account data.
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      
-      <DangerZoneCard onDeleted={() => logout()} />
+            )
+          })}
+        </div>
+        {renderSectionContent()}
+      </div>
     </div>
   )
 }

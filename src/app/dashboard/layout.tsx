@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/use-auth'
 import { useSessionRotation } from '@/lib/use-session-rotation'
 import { Sidebar } from '@/components/sidebar'
@@ -13,9 +13,15 @@ import { CACHE_TIME } from '@/lib/query-cache'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const queryClient = useQueryClient()
   const { isAuthenticated, isLoading } = useAuth()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   useSessionRotation(isAuthenticated)
+
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [pathname])
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -83,10 +89,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(255,255,255,1)_240px)]">
-      <Sidebar />
+      <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header />
-        <main className="min-h-[calc(100vh-3.5rem)] flex-1 px-6 pb-10 pt-6">
+        <Header onOpenMobileNav={() => setMobileNavOpen(true)} />
+        <main className="min-h-[calc(100vh-3.5rem)] flex-1 px-4 pb-10 pt-6 lg:px-6">
           <SectionFade>{children}</SectionFade>
         </main>
       </div>

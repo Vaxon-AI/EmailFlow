@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { RefreshCw, User, LogOut, ChevronRight, CheckCircle2, AlertCircle, AlertTriangle, Loader2 } from 'lucide-react'
+import { RefreshCw, User, LogOut, ChevronRight, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Menu } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { isWorkspaceQueryKey } from '@/lib/query-cache'
@@ -40,7 +40,7 @@ interface SyncResultData {
   recoveryHint?: string
 }
 
-export function Header() {
+export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const { user, logout } = useAuth()
   const queryClient = useQueryClient()
   const pathname = usePathname()
@@ -158,10 +158,18 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-gray-200/80 bg-white/85 px-6 backdrop-blur">
+      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-gray-200/80 bg-white/85 px-4 backdrop-blur lg:px-6">
         <div className="flex min-w-0 items-center gap-2 text-sm text-gray-500">
+          <button
+            type="button"
+            onClick={onOpenMobileNav}
+            aria-label="Open navigation"
+            className="-ml-1 rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <span className="font-medium text-gray-900">Workspace</span>
-          <ChevronRight className="h-4 w-4 text-gray-300" />
+          <ChevronRight className="hidden h-4 w-4 text-gray-300 sm:block" />
           <span className="truncate">{sectionLabel}</span>
         </div>
         <div className="flex items-center gap-3">
