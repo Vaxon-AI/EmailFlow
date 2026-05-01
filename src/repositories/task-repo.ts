@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import type { TaskExtractionResult, PriorityResult } from '@/ai'
+import type { TaskCandidate, PriorityResult } from '@/ai'
 import * as Sentry from '@sentry/nextjs'
 
 // ============================================================
@@ -10,8 +10,9 @@ import * as Sentry from '@sentry/nextjs'
 export interface CreateTaskData {
   userId: string
   emailId: string
-  extraction: TaskExtractionResult
+  extraction: TaskCandidate
   priority: PriorityResult
+  status?: 'pending' | 'confirmed'
 }
 
 export async function createTask(data: CreateTaskData) {
@@ -22,8 +23,9 @@ export async function createTask(data: CreateTaskData) {
       title: data.extraction.title,
       summary: data.extraction.summary,
       actionItems: JSON.stringify(data.extraction.actionItems),
-      status: 'pending',
+      status: data.status ?? 'pending',
       source: 'ai_auto',
+      confirmedAt: data.status === 'confirmed' ? new Date() : null,
 
       urgency: data.priority.urgency,
       impact: data.priority.impact,

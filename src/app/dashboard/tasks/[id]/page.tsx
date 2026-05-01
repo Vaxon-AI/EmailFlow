@@ -155,8 +155,8 @@ function areAllChildrenCompleted(items: ChecklistItem[], itemId: string): boolea
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
-  pending: { label: 'Needs Review', color: 'bg-purple-50 text-purple-700 border-purple-200', bg: 'from-purple-50/50 to-white', icon: AlertTriangle },
-  confirmed: { label: 'Confirmed', color: 'bg-blue-50 text-blue-700 border-blue-200', bg: 'from-blue-50/50 to-white', icon: ThumbsUp },
+  pending: { label: 'AI Suggestion', color: 'bg-purple-50 text-purple-700 border-purple-200', bg: 'from-purple-50/50 to-white', icon: AlertTriangle },
+  confirmed: { label: 'Active', color: 'bg-blue-50 text-blue-700 border-blue-200', bg: 'from-blue-50/50 to-white', icon: ThumbsUp },
   completed: { label: 'Completed', color: 'bg-green-50 text-green-700 border-green-200', bg: 'from-green-50/50 to-white', icon: CheckCircle2 },
   dismissed: { label: 'Dismissed', color: 'bg-gray-50 text-gray-500 border-gray-200', bg: 'from-gray-50/50 to-white', icon: X },
 }
@@ -543,11 +543,11 @@ export default function TaskDetailPage() {
               {task.status === 'pending' && (
                 <InlineNotice variant="warning">
                   <div className="flex w-full items-center gap-3">
-                    <span className="min-w-0 flex-1 text-left">This task still needs your review before it becomes active work.</span>
+                    <span className="min-w-0 flex-1 text-left">This AI suggestion is waiting for you before it becomes active work.</span>
                     <div className="ml-auto flex shrink-0 items-center gap-2">
                       <Button size="sm" className="h-8 gap-1.5" onClick={() => handleStatusChange('confirmed')}>
                         <ThumbsUp className="h-3.5 w-3.5" />
-                        Confirm
+                        Activate
                       </Button>
                       <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => handleStatusChange('dismissed')}>
                         <X className="h-3.5 w-3.5" />
@@ -579,7 +579,7 @@ export default function TaskDetailPage() {
                     <span className="min-w-0 flex-1 text-left">This task is currently dismissed. Bring it back if the email turns into real work later.</span>
                     <Button size="sm" variant="outline" className="ml-auto h-8 shrink-0 gap-1.5" onClick={() => handleStatusChange('pending')}>
                       <RotateCcw className="h-3.5 w-3.5" />
-                      Re-review
+                      Back to AI Suggestions
                     </Button>
                   </div>
                 </InlineNotice>

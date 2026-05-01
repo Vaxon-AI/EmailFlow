@@ -59,6 +59,13 @@ vi.mock('@/lib/prisma', () => ({
     taskEmail: {
       create: vi.fn(),
     },
+    task: {
+      findMany: vi.fn(),
+    },
+    email: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }))
 
@@ -79,7 +86,7 @@ import type { MatterMemory } from '@/repositories/matter-memory-repo'
 import type { ProjectContext } from '@/repositories/project-context-repo'
 import type { UserIdentity } from '@/repositories/identity-repo'
 
-import { processEmail } from '../email-pipeline'
+import { createTaskFromClassifiedEmail, processEmail } from '../email-pipeline'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -201,6 +208,13 @@ beforeEach(() => {
   vi.mocked(prisma.senderMemory.create).mockResolvedValue({} as any)
   vi.mocked(prisma.senderMemory.update).mockResolvedValue({} as any)
   vi.mocked(prisma.taskEmail.create).mockResolvedValue({} as any)
+  vi.mocked(prisma.task.findMany).mockResolvedValue([])
+  vi.mocked(prisma.email.findUnique).mockResolvedValue({
+    ...makeEmail(),
+    userId: 'user-1',
+    awaitingReview: true,
+  } as any)
+  vi.mocked(prisma.email.update).mockResolvedValue({} as any)
 
 })
 
@@ -371,7 +385,53 @@ describe('processEmail — action classification (full pipeline)', () => {
 
     expect(taskRepo.createTask).toHaveBeenCalledOnce()
     expect(taskRepo.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-1' })
+      expect.objectContaining({ userId: 'user-1', status: 'pending' })
+    )
+  })
+
+  it('creates one task per independent extraction candidate', async () => {
+    vi.mocked(ai.extractTask).mockResolvedValue({
+      tasks: [
+        {
+          title: 'Review contract',
+          summary: 'Review the attached contract',
+          actionItems: ['Read contract', 'Send comments'],
+          explicitDeadline: null,
+          inferredDeadline: null,
+          deadlineConfidence: 0,
+          splitReason: 'Legal review outcome',
+        },
+        {
+          title: 'Schedule kickoff',
+          summary: 'Book a kickoff meeting with the vendor',
+          actionItems: ['Find availability', 'Send invite'],
+          explicitDeadline: null,
+          inferredDeadline: null,
+          deadlineConfidence: 0,
+          splitReason: 'Meeting scheduling outcome',
+        },
+      ],
+    })
+    vi.mocked(taskRepo.createTask)
+      .mockResolvedValueOnce({ id: 'task-1', title: 'Review contract' } as any)
+      .mockResolvedValueOnce({ id: 'task-2', title: 'Schedule kickoff' } as any)
+
+    const result = await processEmail('user-1', makeEmail())
+
+    expect(taskRepo.createTask).toHaveBeenCalledTimes(2)
+    expect(ai.scorePriority).toHaveBeenCalledTimes(2)
+    expect(result.taskIds).toEqual(['task-1', 'task-2'])
+  })
+
+  it('creates Active tasks when a manual review email is approved', async () => {
+    await createTaskFromClassifiedEmail('user-1', 'email-1')
+
+    expect(prisma.email.update).toHaveBeenCalledWith({
+      where: { id: 'email-1' },
+      data: { awaitingReview: false },
+    })
+    expect(taskRepo.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'confirmed' })
     )
   })
 

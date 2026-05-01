@@ -1,6 +1,6 @@
 export { classificationSchema, type ClassificationResult } from './classification'
 export { digestSchema, type DigestResult } from './digest'
-export { taskExtractionSchema, type TaskExtractionResult } from './task-extraction'
+export { taskCandidateSchema, taskExtractionSchema, type TaskCandidate, type TaskExtractionResult } from './task-extraction'
 export { prioritySchema, type PriorityResult } from './priority'
 export { threadMemoryUpdateSchema, type ThreadMemoryUpdateResult } from './thread-memory'
 export { matchMatterSchema, type MatchMatterResult } from './match-matter'

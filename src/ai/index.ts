@@ -24,6 +24,7 @@ export type {
 export {
   classificationSchema,
   taskExtractionSchema,
+  taskCandidateSchema,
   prioritySchema,
   threadMemoryUpdateSchema,
   matchMatterSchema,
@@ -31,6 +32,7 @@ export {
 
 export type {
   ClassificationResult,
+  TaskCandidate,
   TaskExtractionResult,
   PriorityResult,
   ThreadMemoryUpdateResult,

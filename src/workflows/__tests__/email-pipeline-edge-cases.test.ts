@@ -73,6 +73,9 @@ vi.mock('@/lib/prisma', () => ({
     taskEmail: {
       create: vi.fn(),
     },
+    task: {
+      findMany: vi.fn(),
+    },
   },
 }))
 
@@ -200,6 +203,7 @@ beforeEach(() => {
   vi.mocked(prisma.senderMemory.create).mockResolvedValue({} as any)
   vi.mocked(prisma.senderMemory.update).mockResolvedValue({} as any)
   vi.mocked(prisma.taskEmail.create).mockResolvedValue({} as any)
+  vi.mocked(prisma.task.findMany).mockResolvedValue([])
 })
 
 // ---------------------------------------------------------------------------

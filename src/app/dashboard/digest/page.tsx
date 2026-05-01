@@ -180,14 +180,14 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       bg: 'bg-red-50',
     },
     {
-      label: 'Awareness',
+      label: 'FYI',
       value: stats.awarenessCount || 0,
       icon: Eye,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
     },
     {
-      label: 'Needs Review',
+      label: 'AI Suggestions',
       value: stats.unresolvedCount || 0,
       icon: AlertTriangle,
       color: 'text-yellow-600',
@@ -236,8 +236,8 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
           <p className="text-sm text-gray-600">
             <span className="font-semibold text-gray-900">{taskTotal} task{taskTotal !== 1 ? 's' : ''}</span> extracted from this period
             {taskPending > 0 ? (
-              <> — <span className="font-semibold text-yellow-700">{taskPending}</span> pending confirmation</>
-            ) : ' — all confirmed or processed'}
+              <> - <span className="font-semibold text-yellow-700">{taskPending}</span> AI suggestion{taskPending === 1 ? '' : 's'}</>
+            ) : ' - all active or processed'}
           </p>
         </div>
       )}

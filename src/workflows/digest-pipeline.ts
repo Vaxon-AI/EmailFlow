@@ -49,25 +49,25 @@ function buildDailyContent({
   lines.push(`## Daily Digest — ${date}`, '')
 
   if (action.length) {
-    lines.push(`### Action Required (${action.length})`)
+    lines.push(`### Needs Action (${action.length})`)
     action.forEach(e => lines.push(`- **${e.subject}** · ${e.sender}`))
     lines.push('')
   }
 
   if (awareness.length) {
-    lines.push(`### For Your Awareness (${awareness.length})`)
+    lines.push(`### FYI (${awareness.length})`)
     awareness.forEach(e => lines.push(`- ${e.subject} · ${e.sender}`))
     lines.push('')
   }
 
   if (uncertain.length) {
-    lines.push(`### Needs Review (${uncertain.length})`)
+    lines.push(`### Uncertain (${uncertain.length})`)
     uncertain.forEach(e => lines.push(`- ${e.subject} · ${e.sender}`))
     lines.push('')
   }
 
   if (ignored.length) {
-    lines.push(`### Low Priority (${ignored.length})`)
+    lines.push(`### Ignored (${ignored.length})`)
     ignored.forEach(e => lines.push(`- ${e.subject}`))
     lines.push('')
   }
@@ -77,10 +77,10 @@ function buildDailyContent({
   }
 
   lines.push('---', '')
-  lines.push(`### Tasks — ${confirmed.length} confirmed · ${pending.length} pending review`, '')
+  lines.push(`### Tasks - ${confirmed.length} active · ${pending.length} AI suggestions`, '')
 
   if (confirmed.length) {
-    lines.push('**Confirmed**')
+    lines.push('**Active**')
     confirmed.forEach(t => {
       const due = deadline(t)
       lines.push(`- ${t.title}${t.priorityScore ? ` · Priority ${t.priorityScore}` : ''}${due ? ` · Due ${due}` : ''}`)
@@ -89,7 +89,7 @@ function buildDailyContent({
   }
 
   if (pending.length) {
-    lines.push('**Pending confirmation**')
+    lines.push('**AI Suggestions**')
     pending.forEach(t => lines.push(`- ${t.title}`))
     lines.push('')
   }
@@ -121,8 +121,8 @@ function buildWeeklyContent({
   lines.push(`## Weekly Digest — ${weekLabel}`, '')
 
   lines.push('### Summary')
-  lines.push(`- **${totalEmails} emails** processed — ${totalAction} action · ${totalAwareness} awareness · ${totalUncertain} needs review · ${totalIgnored} low priority`)
-  lines.push(`- **${confirmed.length + pending.length} tasks** — ${confirmed.length} confirmed · ${pending.length} pending`)
+  lines.push(`- **${totalEmails} emails** processed - ${totalAction} needs action · ${totalAwareness} FYI · ${totalUncertain} uncertain · ${totalIgnored} ignored`)
+  lines.push(`- **${confirmed.length + pending.length} tasks** - ${confirmed.length} active · ${pending.length} AI suggestions`)
   lines.push('')
 
   lines.push('### Daily Breakdown')
@@ -142,10 +142,10 @@ function buildWeeklyContent({
   }
 
   lines.push('---', '')
-  lines.push(`### Tasks — ${confirmed.length} confirmed · ${pending.length} pending review`, '')
+  lines.push(`### Tasks - ${confirmed.length} active · ${pending.length} AI suggestions`, '')
 
   if (confirmed.length) {
-    lines.push('**Confirmed**')
+    lines.push('**Active**')
     confirmed.forEach(t => {
       const due = deadline(t)
       lines.push(`- ${t.title}${due ? ` · Due ${due}` : ''}`)
@@ -154,7 +154,7 @@ function buildWeeklyContent({
   }
 
   if (pending.length) {
-    lines.push('**Pending confirmation**')
+    lines.push('**AI Suggestions**')
     pending.forEach(t => lines.push(`- ${t.title}`))
     lines.push('')
   }

@@ -27,7 +27,7 @@ import {
 import Link from 'next/link'
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { getPriorityBand, getPriorityColor, getPriorityLabel } from '@/types'
+import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import { EMAIL_CLASS_CONFIG, getEmailClassConfig } from '@/lib/email-classification'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
@@ -410,7 +410,7 @@ export default function EmailDetailPage() {
                               link.task.status === 'dismissed' ? 'bg-gray-100 text-gray-500' :
                               'bg-purple-100 text-purple-700'
                             }`}>
-                              {link.task.status}
+                              {getTaskStatusLabel(link.task.status)}
                             </span>
                             <Badge variant="outline" className={`text-[9px] ${getPriorityColor(band)}`}>
                               {getPriorityLabel(band)}

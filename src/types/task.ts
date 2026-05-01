@@ -3,6 +3,17 @@ export type TaskStatus = 'pending' | 'confirmed' | 'completed' | 'dismissed'
 
 export type PriorityBand = 'critical' | 'high' | 'medium' | 'low'
 
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  pending: 'AI Suggestions',
+  confirmed: 'Active',
+  completed: 'Completed',
+  dismissed: 'Dismissed',
+}
+
+export function getTaskStatusLabel(status?: string | null): string {
+  return TASK_STATUS_LABELS[status as TaskStatus] ?? 'AI Suggestions'
+}
+
 export function getPriorityBand(score: number): PriorityBand {
   if (score >= 20) return 'critical'
   if (score >= 12) return 'high'

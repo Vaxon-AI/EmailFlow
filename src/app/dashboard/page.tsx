@@ -233,10 +233,10 @@ function DashboardContent() {
               title="Emails Processed"
               value={emailData.total}
               icon={<Mail className="h-4 w-4 text-blue-600" />}
-              detail={`${emailData.action} action, ${emailData.awareness} FYI`}
+              detail={`${emailData.action} needs action, ${emailData.awareness} FYI`}
             />
             <StatCard
-              title="Active Tasks"
+              title="Open Tasks"
               value={confirmedTaskCount + pendingTaskCount}
               icon={<CheckSquare className="h-4 w-4 text-green-600" />}
               detail={`${completedTasks} completed of ${totalTasks}`}
@@ -245,7 +245,7 @@ function DashboardContent() {
               title="Due This Week"
               value={upcomingCount}
               icon={<Target className="h-4 w-4 text-orange-500" />}
-              detail="Pending deadlines in 7 days"
+              detail="Open deadlines in 7 days"
             />
             <StatCard
               title="Last Synced"
@@ -282,8 +282,8 @@ function DashboardContent() {
                   />
                   <div className="space-y-1.5 text-sm">
                     <LegendDot color="bg-green-500" label={`Completed: ${completedTasks}`} />
-                    <LegendDot color="bg-blue-500" label={`Confirmed: ${confirmedTaskCount}`} />
-                    <LegendDot color="bg-purple-500" label={`Pending: ${pendingTaskCount}`} />
+                    <LegendDot color="bg-blue-500" label={`Active: ${confirmedTaskCount}`} />
+                    <LegendDot color="bg-purple-500" label={`AI Suggestions: ${pendingTaskCount}`} />
                     <LegendDot color="bg-gray-300" label={`Dismissed: ${dismissedTaskCount}`} />
                   </div>
                 </div>
@@ -299,8 +299,8 @@ function DashboardContent() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
-                  <BarRow label="Action" value={emailData.action} max={emailData.total} color="bg-red-400" />
-                  <BarRow label="Awareness" value={emailData.awareness} max={emailData.total} color="bg-blue-400" />
+                  <BarRow label="Needs Action" value={emailData.action} max={emailData.total} color="bg-red-400" />
+                  <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-blue-400" />
                   <BarRow label="Uncertain" value={emailData.uncertain} max={emailData.total} color="bg-yellow-400" />
                   <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" />
                 </div>
@@ -426,7 +426,7 @@ function DashboardContent() {
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-purple-100">
                       <CheckSquare className="h-3.5 w-3.5 text-purple-600" />
                     </div>
-                    Tasks to Review
+                    AI Suggestions
                     {pendingTasks.length > 0 && (
                       <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">{pendingTasks.length}</span>
                     )}
@@ -436,7 +436,7 @@ function DashboardContent() {
               </CardHeader>
               <CardContent>
                 {pendingTasks.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-gray-400">All tasks reviewed</p>
+                  <p className="py-4 text-center text-xs text-gray-400">No AI suggestions waiting</p>
                 ) : (
                   <div className="space-y-1.5">
                     {pendingTasks.map((task: DashboardTask) => {
@@ -503,7 +503,7 @@ function DashboardContent() {
                           <p className="truncate text-xs text-gray-500">{email.sender?.split('<')[0]?.trim()}</p>
                         </div>
                         <Badge variant="outline" className={`shrink-0 text-[10px] ${getEmailClassConfig(email.classification).color}`}>
-                          {getEmailClassConfig(email.classification).label.split(' ')[0]}
+                          {getEmailClassConfig(email.classification).label}
                         </Badge>
                       </Link>
                     ))}
@@ -538,9 +538,9 @@ function DashboardContent() {
           ) : confirmedTasks.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center">
               <CheckSquare className="h-8 w-8 text-gray-200" />
-              <p className="text-sm text-gray-400">No confirmed tasks yet.</p>
+              <p className="text-sm text-gray-400">No active tasks yet.</p>
               <Link href="/dashboard/tasks">
-                <Button variant="outline" size="sm">Review tasks</Button>
+                <Button variant="outline" size="sm">Open tasks</Button>
               </Link>
             </div>
           ) : (

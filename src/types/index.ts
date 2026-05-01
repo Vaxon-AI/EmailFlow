@@ -11,7 +11,7 @@ export type { EmailCategory, EmailInput, ThreadContext } from './email'
 
 // Task types
 export type { TaskStatus, PriorityBand } from './task'
-export { getPriorityBand, getPriorityColor, getPriorityLabel } from './task'
+export { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from './task'
 
 // Common types
 export type { ApiResponse } from './common'

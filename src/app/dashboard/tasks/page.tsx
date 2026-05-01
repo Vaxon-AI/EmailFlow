@@ -37,7 +37,7 @@ import { GanttTimeline } from '@/components/gantt-timeline'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { BatchReassignModal } from '@/components/batch-reassign-modal'
 import { InlineEditableName } from '@/components/inline-editable-name'
-import { getPriorityBand, getPriorityColor, getPriorityLabel } from '@/types'
+import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
@@ -102,8 +102,8 @@ type CreateTaskResponse = {
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'pending', label: 'AI Suggestions' },
+  { value: 'confirmed', label: 'Active' },
   { value: 'completed', label: 'Completed' },
 ]
 
@@ -306,7 +306,7 @@ function TasksContent() {
     queryClient.invalidateQueries({ queryKey: ['tasks'] })
     queryClient.invalidateQueries({ queryKey: ['stats'] })
     clearSelection()
-    const label = action === 'complete' ? 'completed' : action === 'confirm' ? 'confirmed' : 'deleted'
+    const label = action === 'complete' ? 'completed' : action === 'confirm' ? 'activated' : 'deleted'
     toast.success(`${ids.length} task${ids.length === 1 ? '' : 's'} ${label}`)
   }
 
@@ -374,7 +374,7 @@ function TasksContent() {
           )}
           <div className="flex-1" />
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => batchOp('confirm')}>
-            <ThumbsUp className="mr-1 h-3 w-3" /> Confirm
+            <ThumbsUp className="mr-1 h-3 w-3" /> Activate
           </Button>
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => batchOp('complete')}>
             <Check className="mr-1 h-3 w-3" /> Mark Done
@@ -948,7 +948,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
             task.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
             'bg-purple-100 text-purple-700'
           }`}>
-            {task.status}
+            {getTaskStatusLabel(task.status)}
           </span>
         </div>
         <p className="mt-0.5 truncate text-xs text-gray-500">{task.summary}</p>
@@ -986,10 +986,10 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
           <>
             <button
               className="flex items-center justify-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors min-w-[4.5rem]"
-              onClick={() => { updateTask.mutate({ id: task.id, data: { status: 'confirmed' } }); toast.success('Task confirmed') }}
+              onClick={() => { updateTask.mutate({ id: task.id, data: { status: 'confirmed' } }); toast.success('Task moved to Active') }}
             >
               <ThumbsUp className="h-3.5 w-3.5" />
-              Confirm
+              Activate
             </button>
             <button
               className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors"

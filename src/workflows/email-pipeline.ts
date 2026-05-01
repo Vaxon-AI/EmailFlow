@@ -11,6 +11,7 @@ import type { ThreadMemory } from '@/repositories/thread-memory-repo'
 import type { MatterMemory } from '@/repositories/matter-memory-repo'
 import type { UserIdentity } from '@/repositories/identity-repo'
 import type { ProjectContext } from '@/repositories/project-context-repo'
+import type { TaskCandidate } from '@/ai'
 import { prisma } from '@/lib/prisma'
 
 // ============================================================
@@ -56,6 +57,7 @@ export interface PipelineResult {
   confidence: number
   taskCreated: boolean
   taskId?: string
+  taskIds?: string[]
   skippedByRule: boolean
   reviewCandidate?: PipelineReviewCandidate
 }
@@ -557,6 +559,87 @@ async function stepScorePriority(
   })
 }
 
+function normalizeTaskCandidates(extraction: unknown): TaskCandidate[] {
+  if (
+    extraction &&
+    typeof extraction === 'object' &&
+    'tasks' in extraction &&
+    Array.isArray((extraction as { tasks?: unknown }).tasks)
+  ) {
+    return (extraction as { tasks: TaskCandidate[] }).tasks.filter((candidate) => candidate?.title)
+  }
+
+  // Backward-compatible guard for tests, stale workers, or partially deployed code
+  // that still returns the former single-task extraction object.
+  if (extraction && typeof extraction === 'object' && 'title' in extraction) {
+    const candidate = extraction as TaskCandidate
+    return candidate.title ? [{ ...candidate, splitReason: candidate.splitReason ?? null }] : []
+  }
+
+  return []
+}
+
+function normalizeForMatch(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length > 2)
+}
+
+function hasHighTaskSimilarity(candidate: TaskCandidate, existing: { title: string; summary: string }) {
+  const candidateTitle = normalizeForMatch(candidate.title)
+  const existingTitle = normalizeForMatch(existing.title)
+  if (!candidateTitle.length || !existingTitle.length) return false
+
+  const existingSet = new Set(existingTitle)
+  const overlap = candidateTitle.filter((token) => existingSet.has(token)).length
+  const titleScore = overlap / Math.max(candidateTitle.length, existingTitle.length)
+
+  const summaryMatches =
+    candidate.summary.length > 20 &&
+    existing.summary.length > 20 &&
+    candidate.summary.toLowerCase().includes(existing.summary.toLowerCase().slice(0, 40))
+
+  return titleScore >= 0.75 || summaryMatches
+}
+
+async function findSimilarActiveTask(
+  userId: string,
+  candidate: TaskCandidate,
+  matterId: string | null | undefined,
+  threadId: string | null,
+  primaryTaskId?: string | null
+) {
+  if (!matterId && !threadId && !primaryTaskId) return null
+
+  const tasks = await prisma.task.findMany({
+    where: {
+      userId,
+      status: { in: ['pending', 'confirmed'] },
+      OR: [
+        ...(primaryTaskId ? [{ id: primaryTaskId }] : []),
+        ...(matterId ? [{ matterId }] : []),
+        ...(threadId ? [{ emailLinks: { some: { email: { threadId } } } }] : []),
+      ],
+    },
+    select: { id: true, title: true, summary: true },
+    take: 30,
+  })
+
+  return tasks.find((task) => hasHighTaskSimilarity(candidate, task)) ?? null
+}
+
+async function linkEmailToTask(taskId: string, emailId: string, relationship = 'follow_up') {
+  try {
+    await prisma.taskEmail.create({
+      data: { taskId, emailId, relationship },
+    })
+  } catch {
+    // unique constraint or stale link; already linked is fine for pipeline idempotency
+  }
+}
+
 // ── Sender memory update ──────────────────────────────────────
 
 async function updateSenderMemory(userId: string, sender: string, category: string) {
@@ -601,6 +684,7 @@ export async function processEmail(
     labels: string
     threadId?: string | null
     awaitingReview?: boolean
+    taskStatus?: 'pending' | 'confirmed'
   }
 ): Promise<PipelineResult> {
   try {
@@ -743,20 +827,17 @@ export async function processEmail(
   // ── 8. Task dedup — matter level (broadest check) ─────────
   //    If this matter already has a primary task, link the
   //    email as a follow-up instead of creating a duplicate.
-  if (currentMatterMemory?.linkedPrimaryTaskId) {
+  const extractionResult = await stepExtractTask(email, currentMemoryContext, currentThreadMemory)
+  const candidates = normalizeTaskCandidates(extractionResult)
+
+  if (candidates.length === 0) {
+    throw new Error('No task candidates extracted')
+  }
+
+  if (candidates.length === 1 && currentMatterMemory?.linkedPrimaryTaskId) {
     const existingTaskId = currentMatterMemory.linkedPrimaryTaskId
 
-    try {
-      await prisma.taskEmail.create({
-        data: {
-          taskId: existingTaskId,
-          emailId: email.id,
-          relationship: 'follow_up',
-        },
-      })
-    } catch {
-      // unique constraint — already linked, fine
-    }
+    await linkEmailToTask(existingTaskId, email.id)
 
     return {
       emailId: email.id,
@@ -764,26 +845,17 @@ export async function processEmail(
       confidence: classification.confidence,
       taskCreated: false,
       taskId: existingTaskId,
+      taskIds: [existingTaskId],
       skippedByRule: false,
       reviewCandidate,
     }
   }
 
   // ── 9. Task dedup — thread level (fallback for no-threadId emails) ──
-  if (currentThreadMemory?.linkedTaskId) {
+  if (candidates.length === 1 && currentThreadMemory?.linkedTaskId) {
     const existingTaskId = currentThreadMemory.linkedTaskId
 
-    try {
-      await prisma.taskEmail.create({
-        data: {
-          taskId: existingTaskId,
-          emailId: email.id,
-          relationship: 'follow_up',
-        },
-      })
-    } catch {
-      // unique constraint — already linked, fine
-    }
+    await linkEmailToTask(existingTaskId, email.id)
 
     return {
       emailId: email.id,
@@ -791,44 +863,66 @@ export async function processEmail(
       confidence: classification.confidence,
       taskCreated: false,
       taskId: existingTaskId,
+      taskIds: [existingTaskId],
       skippedByRule: false,
       reviewCandidate,
     }
   }
 
   // ── 10. Extract task ───────────────────────────────────────
-  const extraction = await stepExtractTask(email, currentMemoryContext, currentThreadMemory)
-
   // ── 11. Score priority ─────────────────────────────────────
-  const priority = await stepScorePriority(extraction, email.sender, currentMemoryContext)
+  const taskIds: string[] = []
+  const createdTaskIds: string[] = []
+  const targetStatus = email.taskStatus ?? 'pending'
 
-  // ── 12. Create task ────────────────────────────────────────
-  const task = await taskRepo.createTask({
-    userId,
-    emailId: email.id,
-    extraction,
-    priority,
-  })
+  for (const candidate of candidates) {
+    const similarTask = await findSimilarActiveTask(
+      userId,
+      candidate,
+      currentMatterMemory?.id,
+      threadId,
+      currentMatterMemory?.linkedPrimaryTaskId ?? currentThreadMemory?.linkedTaskId
+    )
+
+    if (similarTask) {
+      await linkEmailToTask(similarTask.id, email.id)
+      taskIds.push(similarTask.id)
+      continue
+    }
+
+    const priority = await stepScorePriority(candidate, email.sender, currentMemoryContext)
+    const task = await taskRepo.createTask({
+      userId,
+      emailId: email.id,
+      extraction: candidate,
+      priority,
+      status: targetStatus,
+    })
+
+    taskIds.push(task.id)
+    createdTaskIds.push(task.id)
+  }
+
+  const primaryTaskId = createdTaskIds[0] ?? taskIds[0]
 
   // ── 13. Link task to thread + matter ──────────────────────
-  if (threadId && currentThreadMemory) {
-    await threadMemoryRepo.linkTask(userId, threadId, task.id)
+  if (primaryTaskId && threadId && currentThreadMemory && !currentThreadMemory.linkedTaskId) {
+    await threadMemoryRepo.linkTask(userId, threadId, primaryTaskId)
   }
 
-  if (currentMatterMemory && !currentMatterMemory.linkedPrimaryTaskId) {
-    await matterMemoryRepo.linkPrimaryTask(currentMatterMemory.id, task.id)
+  if (primaryTaskId && currentMatterMemory && !currentMatterMemory.linkedPrimaryTaskId) {
+    await matterMemoryRepo.linkPrimaryTask(currentMatterMemory.id, primaryTaskId)
   }
 
-  if (reviewCandidate) {
-    reviewCandidate.taskId = task.id
-  }
+  if (reviewCandidate) reviewCandidate.taskId = primaryTaskId
 
   return {
     emailId: email.id,
     classification: classification.category,
     confidence: classification.confidence,
-    taskCreated: true,
-    taskId: task.id,
+    taskCreated: createdTaskIds.length > 0,
+    taskId: primaryTaskId,
+    taskIds,
     skippedByRule: false,
     reviewCandidate,
   }
@@ -852,7 +946,11 @@ export async function processEmail(
 
 // Clears awaitingReview on an email and re-runs the full pipeline to create a task.
 // Called when the user approves an email in the manual review modal.
-export async function createTaskFromClassifiedEmail(userId: string, emailId: string): Promise<PipelineResult | null> {
+export async function createTaskFromClassifiedEmail(
+  userId: string,
+  emailId: string,
+  taskStatus: 'pending' | 'confirmed' = 'confirmed'
+): Promise<PipelineResult | null> {
   const email = await prisma.email.findUnique({
     where: { id: emailId, userId },
   })
@@ -874,5 +972,6 @@ export async function createTaskFromClassifiedEmail(userId: string, emailId: str
     labels: email.labels,
     threadId: email.threadId,
     awaitingReview: false,
+    taskStatus,
   })
 }

@@ -30,7 +30,7 @@ export async function POST(req: Request) {
         after(async () => {
           for (const emailId of emailIds) {
             try {
-              await createTaskFromClassifiedEmail(user.id, emailId)
+              await createTaskFromClassifiedEmail(user.id, emailId, 'pending')
             } catch (err) {
               console.error(`[settings/review-mode] failed for email ${emailId}:`, err)
             }

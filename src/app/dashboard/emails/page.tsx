@@ -53,7 +53,7 @@ type BatchStatus = {
   actionEmails: BatchActionEmail[]
 }
 
-type Tab = 'actionable' | 'informational' | 'uncertain' | 'all'
+type Tab = 'needs_action' | 'fyi' | 'uncertain' | 'all'
 type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
 
 type LinkedTask = {
@@ -94,7 +94,7 @@ type QueryResponse<T> = {
   meta?: QueryMeta
 }
 
-const informationalPriority: Record<string, number> = {
+const fyiPriority: Record<string, number> = {
   awareness: 0,
   ignore: 1,
 }
@@ -118,11 +118,11 @@ function filterEmails({
 }: FilterEmailsOptions) {
   let result = emails
 
-  if (tab === 'actionable') {
+  if (tab === 'needs_action') {
     result = result.filter((email) =>
       email.classification === 'action' || (email.taskLinks?.length ?? 0) > 0
     )
-  } else if (tab === 'informational') {
+  } else if (tab === 'fyi') {
     result = result.filter((email) => email.classification === 'awareness')
   } else if (tab === 'uncertain') {
     result = result.filter((email) => email.classification === 'uncertain')
@@ -157,11 +157,11 @@ function filterEmails({
     )
   }
 
-  if (tab === 'informational') {
+  if (tab === 'fyi') {
     result = [...result].sort((a, b) => {
       const rankDiff =
-        (informationalPriority[a.classification ?? ''] ?? 99) -
-        (informationalPriority[b.classification ?? ''] ?? 99)
+        (fyiPriority[a.classification ?? ''] ?? 99) -
+        (fyiPriority[b.classification ?? ''] ?? 99)
 
       if (rankDiff !== 0) {
         return rankDiff
@@ -185,7 +185,7 @@ export default function EmailsPage() {
 function EmailsContent() {
   const searchParams = useSearchParams()
   const focusIdentityId = searchParams.get('identity') ?? undefined
-  const [tab, setTab] = useState<Tab>('actionable')
+  const [tab, setTab] = useState<Tab>('needs_action')
   const [classification, setClassification] = useState('all')
   const [accountFilter, setAccountFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -379,7 +379,7 @@ function EmailsContent() {
   // const { needsAttention, hasTaskEmails } = useMemo(() => { ... }, [filtered, tab])
 
   // Counts for tab badges
-  const actionableCount = emails.filter((e) =>
+  const needsActionCount = emails.filter((e) =>
     e.classification === 'action' || (e.taskLinks?.length ?? 0) > 0
   ).length
   const infoCount = emails.filter((e) => e.classification === 'awareness').length
@@ -387,9 +387,9 @@ function EmailsContent() {
   const pendingCount = emails.filter((e) => e.processingStatus === 'pending').length
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'actionable', label: 'Actionable', count: actionableCount },
+    { key: 'needs_action', label: 'Needs Action', count: needsActionCount },
+    { key: 'fyi', label: 'FYI', count: infoCount },
     { key: 'uncertain', label: 'Uncertain', count: uncertainCount },
-    { key: 'informational', label: 'Informational', count: infoCount },
     { key: 'all', label: 'All Mail', count: emails.length },
   ]
 
@@ -561,8 +561,8 @@ function EmailsContent() {
                 onChange={setClassification}
                 options={[
                   { value: 'all', label: 'All' },
-                  { value: 'action', label: 'Action' },
-                  { value: 'awareness', label: 'Awareness' },
+                  { value: 'action', label: 'Needs Action' },
+                  { value: 'awareness', label: 'FYI' },
                   { value: 'ignore', label: 'Ignored' },
                   { value: 'uncertain', label: 'Uncertain' },
                 ]}
@@ -1241,7 +1241,7 @@ function RetentionBadge({ status }: { status?: string | null }) {
 function ClassBadge({ classification, processingStatus }: { classification?: string | null; processingStatus?: string | null }) {
   if (!classification && processingStatus === 'pending') {
     return (
-      <Badge variant="outline" className="w-[84px] justify-center gap-1 text-[10px] bg-gray-50 text-gray-400 border-gray-200">
+      <Badge variant="outline" className="w-[104px] justify-center gap-1 text-[10px] bg-gray-50 text-gray-400 border-gray-200">
         <Loader2 className="h-3 w-3 animate-spin" />
         Processing
       </Badge>
@@ -1250,9 +1250,9 @@ function ClassBadge({ classification, processingStatus }: { classification?: str
   const cfg = getEmailClassConfig(classification)
   const Icon = cfg.icon
   return (
-    <Badge variant="outline" className={`w-[84px] justify-center gap-1 text-[10px] ${cfg.color}`}>
+    <Badge variant="outline" className={`w-[104px] justify-center gap-1 text-[10px] ${cfg.color}`}>
       <Icon className="h-3 w-3" />
-      {cfg.label.split(' ')[0]}
+      {cfg.label}
     </Badge>
   )
 }

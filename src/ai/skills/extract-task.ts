@@ -10,9 +10,16 @@ import { taskExtractionSchema, type TaskExtractionResult } from '../schemas'
 const SYSTEM_PROMPT = `You are an assistant that extracts structured tasks from emails.
 
 Rules:
+- Return task candidates, not arbitrary notes.
+- One independent outcome = one task candidate.
+- Steps toward the same outcome belong in that candidate's actionItems checklist.
+- Return one candidate for normal emails, even when the checklist has several steps.
+- Return multiple candidates only when the email clearly asks for separate outcomes that can be completed, delayed, or dismissed independently.
+- Do not split just because an email has multiple steps for one deliverable.
 - Title: start with a verb, max 80 chars, clear and actionable.
 - Summary: what and why, max 200 chars, concise.
-- Action items: concrete steps the user should take (bullet-style, no fluff).
+- Action items: concrete steps for that candidate (bullet-style, no fluff).
+- splitReason: short reason for separate candidates; null when there is only one candidate.
 - Deadlines:
   - Extract explicit ones as stated.
   - If none, infer from urgency cues (ASAP, this week, before Friday).
@@ -24,7 +31,7 @@ Rules:
 Additional guidance:
 - Use user preferences as soft guidance (e.g., prefer concise and actionable tasks).
 - Focus only on what the recipient needs to do, ignore irrelevant noise (signatures, disclaimers).
-`
+Return 1-5 candidates total.`
 
 export interface ExtractTaskInput {
   subject: string
