@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getPriorityBand } from '@/types/task'
+import { Prisma } from '@prisma/client'
 
 type PriorityCounts = {
   critical: number
@@ -22,23 +23,42 @@ type DashboardStats = {
   }
 }
 
-export async function getDashboardSummary(userId: string) {
-  const [emailGroups, linkedActionEmails, taskGroups, userInfo, tasks, attentionEmails, activeMatters] = await Promise.all([
+type DashboardFilters = {
+  identityIds?: string[]
+  projectIds?: string[]
+}
+
+const UNCATEGORIZED = '__uncategorized__'
+
+export async function getDashboardSummary(userId: string, filters: DashboardFilters = {}) {
+  const taskWhere = buildTaskWhere(userId, filters)
+  const emailWhere = await buildEmailWhere(userId, filters)
+
+  const [emailGroups, linkedActionEmails, taskGroups, aiTaskGroups, userInfo, tasks, attentionEmails] = await Promise.all([
     prisma.email.groupBy({
       by: ['classification'],
-      where: { userId },
+      where: emailWhere,
       _count: { id: true },
     }),
     prisma.email.count({
       where: {
-        userId,
+        ...emailWhere,
         classification: 'action',
         taskLinks: { some: {} },
       },
     }),
     prisma.task.groupBy({
       by: ['status'],
-      where: { userId },
+      where: taskWhere,
+      _count: { id: true },
+    }),
+    prisma.task.groupBy({
+      by: ['status'],
+      where: {
+        ...taskWhere,
+        source: 'ai_auto',
+        status: { in: ['confirmed', 'completed', 'dismissed'] },
+      },
       _count: { id: true },
     }),
     prisma.user.findUnique({
@@ -54,7 +74,7 @@ export async function getDashboardSummary(userId: string) {
       },
     }),
     prisma.task.findMany({
-      where: { userId },
+      where: taskWhere,
       orderBy: { priorityScore: 'desc' },
       take: 50,
       select: {
@@ -70,7 +90,7 @@ export async function getDashboardSummary(userId: string) {
     }),
     prisma.email.findMany({
       where: {
-        userId,
+        ...emailWhere,
         OR: [{ classification: 'action' }, { classification: 'uncertain' }],
         taskLinks: { none: {} },
       },
@@ -83,42 +103,75 @@ export async function getDashboardSummary(userId: string) {
         classification: true,
       },
     }),
-    prisma.matterMemory.findMany({
-      where: {
-        userId,
-        status: { not: 'completed' },
-        projectContextId: { not: null },
-      },
-      orderBy: { lastMessageAt: 'desc' },
-      select: {
-        lastMessageAt: true,
-        projectContext: {
-          select: {
-            id: true,
-            name: true,
-            identity: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
-    }),
   ])
 
   const stats = buildStats(emailGroups, linkedActionEmails, taskGroups, userInfo)
-  const taskSummary = buildTaskSummary(tasks, stats.tasks)
-  const { activeIdentities, activeProjects } = buildActiveContexts(activeMatters)
+  const taskSummary = buildTaskSummary(tasks, stats.tasks, aiTaskGroups)
 
   return {
     stats,
     tasks: taskSummary,
     attentionEmails,
-    activeIdentities,
-    activeProjects,
   }
+}
+
+function buildTaskWhere(userId: string, filters: DashboardFilters): Prisma.TaskWhereInput {
+  const where: Prisma.TaskWhereInput = { userId }
+
+  if (filters.projectIds?.length) {
+    const projectIds = filters.projectIds.filter((id) => id !== UNCATEGORIZED)
+    where.OR = [
+      ...(projectIds.length ? [{ matter: { projectContextId: { in: projectIds } } }] : []),
+      ...(filters.projectIds.includes(UNCATEGORIZED) ? [{ matterId: null }] : []),
+    ]
+  } else if (filters.identityIds?.length) {
+    const identityIds = filters.identityIds.filter((id) => id !== UNCATEGORIZED)
+    where.OR = [
+      ...(identityIds.length ? [{ matter: { projectContext: { identityId: { in: identityIds } } } }] : []),
+      ...(filters.identityIds.includes(UNCATEGORIZED)
+        ? [{ matterId: null }, { matter: { projectContext: { identityId: null } } }]
+        : []),
+    ]
+  }
+
+  return where
+}
+
+async function buildEmailWhere(userId: string, filters: DashboardFilters): Promise<Prisma.EmailWhereInput> {
+  const where: Prisma.EmailWhereInput = { userId }
+
+  if (!filters.projectIds?.length && !filters.identityIds?.length) return where
+
+  const projectIds = filters.projectIds?.filter((id) => id !== UNCATEGORIZED) ?? []
+  const identityIds = filters.identityIds?.filter((id) => id !== UNCATEGORIZED) ?? []
+  const includeUncategorizedProject = Boolean(filters.projectIds?.includes(UNCATEGORIZED))
+  const includeUncategorizedIdentity = Boolean(filters.identityIds?.includes(UNCATEGORIZED))
+
+  const threads = await prisma.threadMemory.findMany({
+    where: {
+      userId,
+      OR: filters.projectIds?.length
+        ? [
+            ...(projectIds.length ? [{ matter: { projectContextId: { in: projectIds } } }] : []),
+            ...(includeUncategorizedProject ? [{ matterId: null }] : []),
+          ]
+        : [
+            ...(identityIds.length ? [{ matter: { projectContext: { identityId: { in: identityIds } } } }] : []),
+            ...(includeUncategorizedIdentity
+              ? [{ matterId: null }, { matter: { projectContext: { identityId: null } } }]
+              : []),
+          ],
+    },
+    select: { threadId: true },
+  })
+
+  const threadIds = threads.map((thread) => thread.threadId)
+  if (includeUncategorizedProject || includeUncategorizedIdentity) {
+    where.OR = [{ threadId: { in: threadIds } }, { threadId: null }]
+  } else {
+    where.threadId = { in: threadIds }
+  }
+  return where
 }
 
 function buildStats(
@@ -186,7 +239,8 @@ function buildTaskSummary(
     inferredDeadline: Date | null
     userSetDeadline: Date | null
   }>,
-  taskStats: DashboardStats['tasks']
+  taskStats: DashboardStats['tasks'],
+  aiTaskGroups: Array<{ status: string; _count: { id: number } }>
 ) {
   const priorityCounts: PriorityCounts = { critical: 0, high: 0, medium: 0, low: 0 }
   const now = Date.now()
@@ -207,6 +261,11 @@ function buildTaskSummary(
     }
   }
 
+  const aiAccepted = aiTaskGroups
+    .filter((group) => group.status === 'confirmed' || group.status === 'completed')
+    .reduce((sum, group) => sum + group._count.id, 0)
+  const aiRejected = aiTaskGroups.find((group) => group.status === 'dismissed')?._count.id ?? 0
+
   return {
     confirmedPreview: tasks.filter((task) => task.status === 'confirmed').slice(0, 5),
     pendingPreview: tasks.filter((task) => task.status === 'pending').slice(0, 5),
@@ -215,57 +274,10 @@ function buildTaskSummary(
     dismissedCount: taskStats.dismissed,
     priorityCounts,
     upcomingCount,
-  }
-}
-
-function buildActiveContexts(
-  matters: Array<{
-    lastMessageAt: Date | null
-    projectContext: {
-      id: string
-      name: string
-      identity: { id: string; name: string } | null
-    } | null
-  }>
-) {
-  const identityCounts = new Map<string, { id: string; name: string; count: number }>()
-  const projectCounts = new Map<string, { id: string; name: string; count: number; lastActivity: number }>()
-
-  for (const matter of matters) {
-    const project = matter.projectContext
-    if (!project) continue
-
-    const projectCount = projectCounts.get(project.id) ?? {
-      id: project.id,
-      name: project.name,
-      count: 0,
-      lastActivity: 0,
-    }
-    projectCount.count += 1
-    projectCount.lastActivity = Math.max(
-      projectCount.lastActivity,
-      matter.lastMessageAt ? matter.lastMessageAt.getTime() : 0
-    )
-    projectCounts.set(project.id, projectCount)
-
-    const identity = project.identity
-    if (!identity) continue
-
-    const identityCount = identityCounts.get(identity.id) ?? {
-      id: identity.id,
-      name: identity.name,
-      count: 0,
-    }
-    identityCount.count += 1
-    identityCounts.set(identity.id, identityCount)
-  }
-
-  return {
-    activeIdentities: Array.from(identityCounts.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 4),
-    activeProjects: Array.from(projectCounts.values())
-      .sort((a, b) => b.lastActivity - a.lastActivity)
-      .slice(0, 5),
+    aiAcceptance: {
+      accepted: aiAccepted,
+      rejected: aiRejected,
+      rate: aiAccepted + aiRejected > 0 ? Math.round((aiAccepted / (aiAccepted + aiRejected)) * 100) : null,
+    },
   }
 }

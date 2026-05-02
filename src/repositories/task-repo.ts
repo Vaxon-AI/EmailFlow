@@ -77,6 +77,7 @@ export async function findTasksPaginated(
     limit: number
     status?: string
     scope?: 'open'
+    priority?: 'critical' | 'high' | 'medium' | 'low'
     sort?: 'priority' | 'date' | 'deadline' | 'title'
   }
 ) {
@@ -85,6 +86,13 @@ export async function findTasksPaginated(
     where.status = options.status
   } else if (options.scope === 'open') {
     where.status = { in: ['pending', 'confirmed'] }
+  }
+  if (options.priority) {
+    if (options.priority === 'low') {
+      where.OR = [{ priorityScore: { lt: 6 } }, { priorityScore: null }]
+    } else {
+      where.priorityScore = priorityScoreWhere(options.priority)
+    }
   }
 
   const orderBy: Prisma.TaskOrderByWithRelationInput =
@@ -142,6 +150,17 @@ export async function findTasksPaginated(
   } catch (err) {
     console.error('[task-repo] enrichment failed, returning tasks without project context:', err)
     return { tasks, total }
+  }
+}
+
+function priorityScoreWhere(priority: 'critical' | 'high' | 'medium'): Prisma.IntNullableFilter {
+  switch (priority) {
+    case 'critical':
+      return { gte: 20 }
+    case 'high':
+      return { gte: 12, lt: 20 }
+    case 'medium':
+      return { gte: 6, lt: 12 }
   }
 }
 

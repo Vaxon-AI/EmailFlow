@@ -109,6 +109,16 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
 ]
 
+const PRIORITY_OPTIONS = [
+  { value: 'all', label: 'All priorities' },
+  { value: 'critical', label: 'Critical' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+]
+
+type PriorityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low'
+
 export default function TasksPage() {
   return (
     <Suspense fallback={null}>
@@ -121,7 +131,9 @@ function TasksContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const focusProjectId = searchParams.get('project') ?? undefined
+  const initialPriority = parsePriorityFilter(searchParams.get('priority'))
   const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(initialPriority)
   const [sortBy, setSortBy] = useState('priority')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -147,10 +159,11 @@ function TasksContent() {
   // Fetch all tasks (no server-side status filter — we filter client-side for "all")
   const apiStatus = statusFilter === 'all' ? '' : statusFilter
   const apiScope = statusFilter === 'all' ? 'open' : ''
+  const apiPriority = priorityFilter === 'all' ? '' : priorityFilter
   const { data: res, isLoading } = useQuery({
-    queryKey: ['tasks', apiScope || apiStatus, sortBy],
+    queryKey: ['tasks', apiScope || apiStatus, sortBy, apiPriority],
     queryFn: () =>
-      fetch(`/api/tasks?${apiScope ? `scope=${apiScope}` : `status=${apiStatus}`}&sort=${sortBy}&limit=50`).then((r) => r.json()),
+      fetch(`/api/tasks?${apiScope ? `scope=${apiScope}` : `status=${apiStatus}`}&sort=${sortBy}&limit=50${apiPriority ? `&priority=${apiPriority}` : ''}`).then((r) => r.json()),
     staleTime: CACHE_TIME.list,
     placeholderData: (previous) => previous,
   })
@@ -267,9 +280,11 @@ function TasksContent() {
       previousTasks.forEach(([queryKey, cached]) => {
         if (!cached?.data) return
         const scopeOrStatus = Array.isArray(queryKey) ? queryKey[1] : undefined
+        const priority = Array.isArray(queryKey) ? queryKey[3] : undefined
         const nextData = cached.data
           .map((task) => task.id === id ? { ...task, ...(data as Partial<TaskItem>) } : task)
           .filter((task) => {
+            if (!matchesPriorityFilter(task, priority)) return false
             if (scopeOrStatus === 'open') return task.status === 'pending' || task.status === 'confirmed'
             if (scopeOrStatus === 'completed') return task.status === 'completed'
             if (scopeOrStatus === 'pending') return task.status === 'pending'
@@ -304,6 +319,18 @@ function TasksContent() {
     })
 
   const clearSelection = () => setSelectedIds(new Set())
+
+  const handlePriorityFilterChange = (value: string | null) => {
+    const nextPriority = parsePriorityFilter(value)
+    setPriorityFilter(nextPriority)
+
+    const params = new URLSearchParams(searchParams.toString())
+    if (nextPriority === 'all') params.delete('priority')
+    else params.set('priority', nextPriority)
+
+    const query = params.toString()
+    router.replace(query ? `/dashboard/tasks?${query}` : '/dashboard/tasks', { scroll: false })
+  }
 
   const bulkToggle = useCallback((ids: string[], select: boolean) => {
     setSelectedIds((prev) => {
@@ -378,14 +405,26 @@ function TasksContent() {
 
           <div className="flex min-h-7 justify-start sm:min-w-[180px] sm:justify-end">
             {viewMode === 'list' ? (
-              <SegmentedControl
-                value={sortBy}
-                onChange={setSortBy}
-                options={[
-                  { value: 'priority', label: 'Priority' },
-                  { value: 'deadline', label: 'Deadline' },
-                ]}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={priorityFilter} onValueChange={handlePriorityFilterChange}>
+                  <SelectTrigger size="sm" className="bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <SegmentedControl
+                  value={sortBy}
+                  onChange={setSortBy}
+                  options={[
+                    { value: 'priority', label: 'Priority' },
+                    { value: 'deadline', label: 'Deadline' },
+                  ]}
+                />
+              </div>
             ) : null}
           </div>
         </div>
@@ -673,6 +712,15 @@ function TasksContent() {
       </Dialog>
     </div>
   )
+}
+
+function parsePriorityFilter(value: string | null): PriorityFilter {
+  return value === 'critical' || value === 'high' || value === 'medium' || value === 'low' ? value : 'all'
+}
+
+function matchesPriorityFilter(task: TaskItem, priority: unknown) {
+  if (priority !== 'critical' && priority !== 'high' && priority !== 'medium' && priority !== 'low') return true
+  return getPriorityBand(task.priorityScore || 0) === priority
 }
 
 /* ========== LIST VIEW - 2-level collapsible: identity -> project ========== */

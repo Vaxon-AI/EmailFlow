@@ -1,12 +1,13 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
   BarChart3,
+  Check,
   CheckSquare,
   Clock,
   FolderOpen,
@@ -23,6 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getPriorityBand, getPriorityColor, getPriorityLabel } from '@/types'
 import { getEmailClassConfig } from '@/lib/email-classification'
@@ -51,7 +53,13 @@ type DashboardEmail = {
 type DashboardContextCount = {
   id: string
   name: string
-  count: number
+}
+
+type DashboardProject = {
+  id: string
+  name: string
+  identityId: string | null
+  identity: { id: string; name: string } | null
 }
 
 type DashboardSummary = {
@@ -72,15 +80,17 @@ type DashboardSummary = {
     dismissedCount: number
     priorityCounts: { critical: number; high: number; medium: number; low: number }
     upcomingCount: number
+    aiAcceptance: { accepted: number; rejected: number; rate: number | null }
   }
   attentionEmails: DashboardEmail[]
-  activeIdentities: DashboardContextCount[]
-  activeProjects: DashboardContextCount[]
 }
 
 type DashboardSummaryResponse = {
   data?: DashboardSummary
 }
+
+const UNCATEGORIZED_ID = '__uncategorized__'
+const UNCATEGORIZED_OPTION = { id: UNCATEGORIZED_ID, name: 'Uncategorized' }
 
 export default function DashboardPage() {
   return (
@@ -94,6 +104,8 @@ function DashboardContent() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const selectedIdentityIds = useMemo(() => parseContextParam(searchParams, 'identity'), [searchParams])
+  const selectedProjectIds = useMemo(() => parseContextParam(searchParams, 'project'), [searchParams])
   const [showSyncModal, setShowSyncModal] = useState(() => searchParams.get('gmail_connected') === '1')
   const [syncSetupLoading, setSyncSetupLoading] = useState<number | null>(null)
 
@@ -133,9 +145,69 @@ function DashboardContent() {
     setShowSyncModal(false)
     router.replace('/dashboard', { scroll: false })
   }, [router])
+
+  const { data: projectsRes } = useQuery<{ data?: DashboardProject[] }>({
+    queryKey: ['projects'],
+    queryFn: () => fetch('/api/projects').then((r) => r.json()),
+    staleTime: CACHE_TIME.list,
+  })
+
+  const projects = useMemo(() => projectsRes?.data ?? [], [projectsRes?.data])
+  const identities = useMemo(() => {
+    const map = new Map<string, DashboardContextCount>()
+    for (const project of projects) {
+      if (!project.identity) continue
+      map.set(project.identity.id, { id: project.identity.id, name: project.identity.name })
+    }
+    return [...Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name)), UNCATEGORIZED_OPTION]
+  }, [projects])
+  const filteredProjects = useMemo(
+    () => {
+      if (selectedIdentityIds.length === 0) return []
+      return projects.filter((project) =>
+        project.identityId
+          ? selectedIdentityIds.includes(project.identityId)
+          : selectedIdentityIds.includes(UNCATEGORIZED_ID)
+      )
+    },
+    [projects, selectedIdentityIds]
+  )
+  const projectOptions = useMemo(
+    () => selectedIdentityIds.length === 0 ? [] : [...filteredProjects, UNCATEGORIZED_OPTION],
+    [filteredProjects, selectedIdentityIds.length]
+  )
+  const effectiveProjectIds = useMemo(
+    () => selectedProjectIds.filter((id) => projectOptions.some((project) => project.id === id)),
+    [projectOptions, selectedProjectIds]
+  )
+
+  const updateDashboardFilter = useCallback((next: { identities?: string[]; projects?: string[] }) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('gmail_connected')
+    params.delete('gmail_error')
+
+    if (next.identities !== undefined) {
+      setMultiParam(params, 'identity', next.identities)
+      params.delete('project')
+    }
+
+    if (next.projects !== undefined) {
+      setMultiParam(params, 'project', next.projects)
+    }
+
+    const query = params.toString()
+    router.replace(query ? `/dashboard?${query}` : '/dashboard', { scroll: false })
+  }, [router, searchParams])
+
   const { data: summaryRes, isLoading: summaryLoading } = useQuery<DashboardSummaryResponse>({
-    queryKey: ['dashboard-summary'],
-    queryFn: () => fetch('/api/dashboard/summary').then((r) => r.json()),
+    queryKey: ['dashboard-summary', selectedIdentityIds.join(','), effectiveProjectIds.join(',')],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      setMultiParam(params, 'identity', selectedIdentityIds)
+      setMultiParam(params, 'project', effectiveProjectIds)
+      const query = params.toString()
+      return fetch(`/api/dashboard/summary${query ? `?${query}` : ''}`).then((r) => r.json())
+    },
     staleTime: CACHE_TIME.stats,
     placeholderData: (prev) => prev,
   })
@@ -144,21 +216,18 @@ function DashboardContent() {
   const s = summary?.stats
   const providerReauthRequired = Boolean(s?.sync?.providerReauthRequired)
 
-  const totalTasks = s?.tasks?.total ?? 0
   const completedTasks = s?.tasks?.completed ?? 0
   const pendingTaskCount = summary?.tasks.pendingCount ?? 0
   const confirmedTaskCount = summary?.tasks.confirmedCount ?? 0
-  const dismissedTaskCount = summary?.tasks.dismissedCount ?? 0
+  const totalTasks = completedTasks + pendingTaskCount + confirmedTaskCount
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
   const emailData = s?.emails ?? { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, linkedAction: 0 }
-  const actionToTask = emailData.action > 0 ? Math.round((emailData.linkedAction / emailData.action) * 100) : 0
   const confirmedTasks = summary?.tasks.confirmedPreview ?? []
   const pendingTasks = summary?.tasks.pendingPreview ?? []
   const attentionEmails = summary?.attentionEmails ?? []
   const priorityCounts = summary?.tasks.priorityCounts ?? { critical: 0, high: 0, medium: 0, low: 0 }
   const upcomingCount = summary?.tasks.upcomingCount ?? 0
-  const activeIdentities = summary?.activeIdentities ?? []
-  const activeProjects = summary?.activeProjects ?? []
+  const aiAcceptance = summary?.tasks.aiAcceptance ?? { accepted: 0, rejected: 0, rate: null }
 
   return (
     <div className="space-y-6">
@@ -185,6 +254,34 @@ function DashboardContent() {
           )
         }
       />
+
+      <div className="animate-fade-in-up stagger-1 rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm backdrop-blur">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Workspace context</p>
+            <p className="text-xs text-slate-500">Filter dashboard metrics by identity and project.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <ContextMultiFilter
+              icon={<UserRound className="h-3.5 w-3.5 text-slate-400" />}
+              label="Identity"
+              allLabel="All identities"
+              options={identities}
+              selectedIds={selectedIdentityIds}
+              onChange={(ids) => updateDashboardFilter({ identities: ids })}
+            />
+            <ContextMultiFilter
+              icon={<FolderOpen className="h-3.5 w-3.5 text-slate-400" />}
+              label="Project"
+              allLabel="All projects"
+              options={projectOptions}
+              selectedIds={effectiveProjectIds}
+              disabled={selectedIdentityIds.length === 0}
+              onChange={(ids) => updateDashboardFilter({ projects: ids })}
+            />
+          </div>
+        </div>
+      </div>
 
       {attentionEmails.length > 0 && (
         <Link href="/dashboard/emails" className="animate-fade-in-up stagger-2 block">
@@ -284,7 +381,6 @@ function DashboardContent() {
                     <LegendDot color="bg-green-500" label={`Completed: ${completedTasks}`} />
                     <LegendDot color="bg-blue-500" label={`Active: ${confirmedTaskCount}`} />
                     <LegendDot color="bg-purple-500" label={`AI Suggestions: ${pendingTaskCount}`} />
-                    <LegendDot color="bg-gray-300" label={`Dismissed: ${dismissedTaskCount}`} />
                   </div>
                 </div>
               </CardContent>
@@ -316,15 +412,15 @@ function DashboardContent() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
-                  <BarRow label="Critical" value={priorityCounts.critical} max={totalTasks || 1} color="bg-red-500" />
-                  <BarRow label="High" value={priorityCounts.high} max={totalTasks || 1} color="bg-orange-400" />
-                  <BarRow label="Medium" value={priorityCounts.medium} max={totalTasks || 1} color="bg-yellow-400" />
-                  <BarRow label="Low" value={priorityCounts.low} max={totalTasks || 1} color="bg-gray-300" />
+                  <BarRow label="Critical" value={priorityCounts.critical} max={totalTasks || 1} color="bg-red-500" href="/dashboard/tasks?priority=critical" />
+                  <BarRow label="High" value={priorityCounts.high} max={totalTasks || 1} color="bg-orange-400" href="/dashboard/tasks?priority=high" />
+                  <BarRow label="Medium" value={priorityCounts.medium} max={totalTasks || 1} color="bg-yellow-400" href="/dashboard/tasks?priority=medium" />
+                  <BarRow label="Low" value={priorityCounts.low} max={totalTasks || 1} color="bg-gray-300" href="/dashboard/tasks?priority=low" />
                 </div>
                 <div className="mt-3 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2">
                   <Target className="h-3.5 w-3.5 text-blue-600" />
                   <span className="text-xs text-blue-700">
-                    AI extraction rate: <strong>{actionToTask}%</strong> of action emails with tasks
+                    AI task acceptance: <strong>{aiAcceptance.rate === null ? 'Not enough decisions yet' : `${aiAcceptance.rate}%`}</strong>
                   </span>
                 </div>
               </CardContent>
@@ -332,87 +428,6 @@ function DashboardContent() {
           </>
         )}
       </div>
-
-      {(summaryLoading || activeIdentities.length > 0 || activeProjects.length > 0) && (
-        <div className="animate-fade-in-up stagger-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {summaryLoading ? (
-            <>
-              <IdentityCardSkeleton />
-              <IdentityCardSkeleton />
-            </>
-          ) : (
-            <>
-              <Card className="border-sky-200/80 bg-[linear-gradient(180deg,rgba(240,249,255,0.9)_0%,rgba(255,255,255,1)_100%)] shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-100">
-                      <UserRound className="h-3.5 w-3.5 text-sky-700" />
-                    </span>
-                    Active Identities
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {activeIdentities.length === 0 ? (
-                    <p className="text-sm text-gray-400">No identity groupings yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {activeIdentities.map((identity) => (
-                        <Link
-                          key={identity.id}
-                          href={`/dashboard/emails?identity=${identity.id}`}
-                          className="flex items-center justify-between rounded-xl border border-sky-100/80 bg-white/80 px-3 py-3 shadow-sm transition-colors hover:bg-sky-50/70"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-slate-900">{identity.name}</p>
-                            <p className="text-xs text-slate-500">Role context inferred from recent matter activity</p>
-                          </div>
-                          <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700 ring-1 ring-sky-100">
-                            {identity.count} active matter{identity.count !== 1 ? 's' : ''}
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border-violet-200/80 bg-[linear-gradient(180deg,rgba(245,243,255,0.9)_0%,rgba(255,255,255,1)_100%)] shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-100">
-                      <FolderOpen className="h-3.5 w-3.5 text-violet-700" />
-                    </span>
-                    Active Projects
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {activeProjects.length === 0 ? (
-                    <p className="text-sm text-gray-400">No project groupings yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {activeProjects.map((project) => (
-                        <Link
-                          key={project.id}
-                          href={`/dashboard/tasks?project=${project.id}`}
-                          className="flex items-center justify-between rounded-xl border border-violet-100/80 bg-white/80 px-3 py-3 shadow-sm transition-colors hover:bg-violet-50/70 hover:text-violet-700"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-slate-900">{project.name}</p>
-                            <p className="text-xs text-slate-500">Recently active grouped project context</p>
-                          </div>
-                          <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-100">
-                            {project.count} active matter{project.count !== 1 ? 's' : ''}
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
-      )}
 
       {(summaryLoading || pendingTasks.length > 0 || attentionEmails.length > 0) && (
         <div className="animate-fade-in-up stagger-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -684,29 +699,6 @@ function ChartCardSkeleton() {
   )
 }
 
-function IdentityCardSkeleton() {
-  return (
-    <Card className="border-gray-200/80 shadow-sm">
-      <CardHeader className="pb-2">
-        <Skeleton className="h-4 w-36" />
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="flex items-center justify-between rounded-xl border border-gray-100 px-3 py-3">
-              <div className="space-y-1.5">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-48" />
-              </div>
-              <Skeleton className="h-5 w-16 rounded-full" />
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 function ListCardSkeleton() {
   return (
     <Card className="border-gray-200/80 shadow-sm">
@@ -762,10 +754,10 @@ function DonutChart({ value, size, color }: { value: number; size: number; color
   )
 }
 
-function BarRow({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+function BarRow({ label, value, max, color, href }: { label: string; value: number; max: number; color: string; href?: string }) {
   const pct = max > 0 ? (value / max) * 100 : 0
 
-  return (
+  const content = (
     <div className="flex items-center gap-3">
       <span className="w-20 text-xs text-gray-600">{label}</span>
       <div className="h-5 flex-1 overflow-hidden rounded-full bg-gray-100">
@@ -773,6 +765,93 @@ function BarRow({ label, value, max, color }: { label: string; value: number; ma
       </div>
       <span className="w-8 text-right text-xs font-semibold text-gray-700">{value}</span>
     </div>
+  )
+
+  if (!href) return content
+
+  return (
+    <Link href={href} className="block rounded-md transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+      {content}
+    </Link>
+  )
+}
+
+function ContextMultiFilter({
+  icon,
+  label,
+  allLabel,
+  options,
+  selectedIds,
+  disabled,
+  onChange,
+}: {
+  icon: React.ReactNode
+  label: string
+  allLabel: string
+  options: DashboardContextCount[]
+  selectedIds: string[]
+  disabled?: boolean
+  onChange: (ids: string[]) => void
+}) {
+  const selectedSet = new Set(selectedIds)
+  const selectedNames = options.filter((option) => selectedSet.has(option.id)).map((option) => option.name)
+  const triggerText =
+    selectedNames.length === 0
+      ? 'All'
+      : selectedNames.length === 1
+        ? selectedNames[0]
+        : `${selectedNames.length} selected`
+
+  const toggle = (id: string) => {
+    if (selectedSet.has(id)) {
+      onChange(selectedIds.filter((selectedId) => selectedId !== id))
+    } else {
+      onChange([...selectedIds, id])
+    }
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        disabled={disabled}
+        className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-white px-2.5 text-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-56"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {icon}
+          <span className="shrink-0 text-xs font-medium text-slate-500">{label}</span>
+          <span className="truncate text-slate-900">{disabled ? 'Select identity first' : triggerText}</span>
+        </span>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-slate-50"
+        >
+          <span className="font-medium text-slate-900">{allLabel}</span>
+          {selectedIds.length === 0 ? <Check className="h-4 w-4 text-blue-600" /> : null}
+        </button>
+        <div className="max-h-64 overflow-y-auto">
+          {options.length === 0 ? (
+            <p className="px-2.5 py-3 text-sm text-slate-400">No related {label.toLowerCase()}s yet.</p>
+          ) : (
+            options.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => toggle(option.id)}
+                className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-slate-50"
+              >
+                <span className="truncate text-slate-700">{option.name}</span>
+                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selectedSet.has(option.id) ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white'}`}>
+                  {selectedSet.has(option.id) ? <Check className="h-3 w-3" /> : null}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -808,4 +887,17 @@ function timeAgo(dateStr: string): string {
   const hours = Math.floor(mins / 60)
   if (hours < 24) return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
+}
+
+function parseContextParam(params: URLSearchParams, key: string) {
+  return params
+    .getAll(key)
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function setMultiParam(params: URLSearchParams, key: string, values: string[]) {
+  params.delete(key)
+  if (values.length > 0) params.set(key, values.join(','))
 }

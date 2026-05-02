@@ -14,6 +14,8 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(url.searchParams.get('limit') || '50')
     const status = url.searchParams.get('status') || undefined
     const scope = url.searchParams.get('scope') === 'open' ? 'open' : undefined
+    const priorityParam = url.searchParams.get('priority')
+    const priority = isPriorityFilter(priorityParam) ? priorityParam : undefined
     const sort = (url.searchParams.get('sort') || 'priority') as 'priority' | 'date' | 'deadline' | 'title'
 
     const { tasks, total } = await taskRepo.findTasksPaginated(user.id, {
@@ -21,6 +23,7 @@ export async function GET(req: NextRequest) {
       limit,
       status,
       scope,
+      priority,
       sort,
     })
 
@@ -33,6 +36,10 @@ export async function GET(req: NextRequest) {
     console.error('[api/tasks GET]', err)
     return errorFromException(err, 'INTERNAL_ERROR', 'Failed to load tasks', 500)
   }
+}
+
+function isPriorityFilter(value: string | null): value is 'critical' | 'high' | 'medium' | 'low' {
+  return value === 'critical' || value === 'high' || value === 'medium' || value === 'low'
 }
 
 export async function POST(req: NextRequest) {
