@@ -49,7 +49,7 @@ export function UpgradeModal({
           <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50 p-4">
             <p className="text-sm font-medium text-blue-800">Pro plan is coming soon</p>
             <p className="mt-1 text-xs text-blue-600">
-              Want early access? Reach out and we'll get you set up.
+              Want early access? Reach out and we&apos;ll get you set up.
             </p>
             <a
               href="mailto:support@emailflow.ai?subject=Pro plan early access"
