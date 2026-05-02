@@ -223,8 +223,12 @@ function isAfterSunday20InTz(now: Date, tz: string): boolean {
 
 async function resolveTimezone(userId: string, override?: string): Promise<string> {
   if (override) return override
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } })
-  return user?.timezone || 'UTC'
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } })
+    return user?.timezone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
 }
 
 // ── Public API ───────────────────────────────────────────────

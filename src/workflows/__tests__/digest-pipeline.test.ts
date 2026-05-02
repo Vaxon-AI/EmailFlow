@@ -196,11 +196,32 @@ describe('createWeeklyDigest', () => {
     expect(content).toContain('### Summary')
   })
 
-  it('creates with isPreview = true', async () => {
-    await createWeeklyDigest(USER_ID)
-    expect(mockDigestRepo.createDigest).toHaveBeenCalledWith(
-      expect.objectContaining({ isPreview: true })
-    )
+  it('creates with isPreview = true before Sunday 20:00 in user tz', async () => {
+    vi.useFakeTimers()
+    // Wednesday May 6 2026 10:00 UTC — well before Sunday 20:00
+    vi.setSystemTime(new Date('2026-05-06T10:00:00Z'))
+    try {
+      await createWeeklyDigest(USER_ID, 'UTC')
+      expect(mockDigestRepo.createDigest).toHaveBeenCalledWith(
+        expect.objectContaining({ isPreview: true })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('creates with isPreview = false after Sunday 20:00 in user tz', async () => {
+    vi.useFakeTimers()
+    // Sunday May 10 2026 20:30 UTC — after the Sunday 20:00 cutoff
+    vi.setSystemTime(new Date('2026-05-10T20:30:00Z'))
+    try {
+      await createWeeklyDigest(USER_ID, 'UTC')
+      expect(mockDigestRepo.createDigest).toHaveBeenCalledWith(
+        expect.objectContaining({ isPreview: false })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('shows action email count in summary', async () => {
