@@ -175,6 +175,7 @@ model Task {
   @@index([userId, status, priorityScore(sort: Desc)])
   @@index([userId, priorityScore(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, completedAt(sort: Desc)])
 }
 
 model TaskEmail {

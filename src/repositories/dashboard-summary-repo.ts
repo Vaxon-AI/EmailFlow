@@ -45,12 +45,18 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
   const view = filters.view ?? 'all'
   const now = new Date()
   const period = getPeriodRange(view, filters.timezoneOffset ?? 0, now)
+  const isAllView = period === null
   const baseTaskWhere = buildTaskWhere(userId, filters)
   const baseEmailWhere = await buildEmailWhere(userId, filters)
   const taskWhere = applyTaskPeriod(baseTaskWhere, period, now)
   const emailWhere = applyEmailPeriod(baseEmailWhere, period)
   const momentumDays = view === 'today' ? 1 : view === 'week' ? WEEK_MOMENTUM_DAYS : MOMENTUM_DAYS
   const momentumStart = startOfUtcDay(addUtcDays(period?.start ?? now, -(momentumDays - 1)))
+
+  const attentionEmailWhere = {
+    OR: [{ classification: 'action' as const }, { classification: 'uncertain' as const }],
+    taskLinks: { none: {} },
+  }
 
   const [
     emailGroups,
@@ -62,16 +68,16 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     userInfo,
     tasks,
     attentionEmails,
-    allTimeAttentionEmails,
-    allTimeAttentionEmailCount,
+    allTimeAttentionEmailsRaw,
+    allTimeAttentionEmailCountRaw,
     completedMomentumTasks,
     createdMomentumTasks,
     actionMomentumEmails,
-    allTimeEmailGroups,
-    allTimeLinkedActionEmails,
-    allTimeTaskGroups,
-    allTimeAiTaskGroups,
-    allTimeTasks,
+    allTimeEmailGroupsRaw,
+    allTimeLinkedActionEmailsRaw,
+    allTimeTaskGroupsRaw,
+    allTimeAiTaskGroupsRaw,
+    allTimeTasksRaw,
   ] = await Promise.all([
     prisma.email.groupBy({
       by: ['classification'],
@@ -142,54 +148,28 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       },
     }),
     prisma.email.findMany({
-      where: {
-        ...emailWhere,
-        OR: [{ classification: 'action' }, { classification: 'uncertain' }],
-        taskLinks: { none: {} },
-      },
+      where: { ...emailWhere, ...attentionEmailWhere },
       orderBy: { receivedAt: 'desc' },
       take: 5,
-      select: {
-        id: true,
-        subject: true,
-        sender: true,
-        classification: true,
-      },
+      select: { id: true, subject: true, sender: true, classification: true },
     }),
-    prisma.email.findMany({
-      where: {
-        ...baseEmailWhere,
-        OR: [{ classification: 'action' }, { classification: 'uncertain' }],
-        taskLinks: { none: {} },
-      },
-      orderBy: { receivedAt: 'desc' },
-      take: 5,
-      select: {
-        id: true,
-        subject: true,
-        sender: true,
-        classification: true,
-      },
-    }),
-    prisma.email.count({
-      where: {
-        ...baseEmailWhere,
-        OR: [{ classification: 'action' }, { classification: 'uncertain' }],
-        taskLinks: { none: {} },
-      },
-    }),
+    isAllView
+      ? Promise.resolve(null)
+      : prisma.email.findMany({
+          where: { ...baseEmailWhere, ...attentionEmailWhere },
+          orderBy: { receivedAt: 'desc' },
+          take: 5,
+          select: { id: true, subject: true, sender: true, classification: true },
+        }),
+    isAllView
+      ? Promise.resolve(null)
+      : prisma.email.count({ where: { ...baseEmailWhere, ...attentionEmailWhere } }),
     prisma.task.findMany({
-      where: {
-        ...taskWhere,
-        completedAt: { gte: momentumStart },
-      },
+      where: { ...taskWhere, completedAt: { gte: momentumStart } },
       select: { completedAt: true },
     }),
     prisma.task.findMany({
-      where: {
-        ...taskWhere,
-        createdAt: { gte: momentumStart },
-      },
+      where: { ...taskWhere, createdAt: { gte: momentumStart } },
       select: { createdAt: true },
     }),
     prisma.email.findMany({
@@ -200,51 +180,51 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       },
       select: { receivedAt: true },
     }),
-    prisma.email.groupBy({
-      by: ['classification'],
-      where: baseEmailWhere,
-      _count: { id: true },
-    }),
-    prisma.email.count({
-      where: {
-        ...baseEmailWhere,
-        classification: 'action',
-        taskLinks: { some: {} },
-      },
-    }),
-    prisma.task.groupBy({
-      by: ['status'],
-      where: baseTaskWhere,
-      _count: { id: true },
-    }),
-    prisma.task.groupBy({
-      by: ['status'],
-      where: {
-        ...baseTaskWhere,
-        source: 'ai_auto',
-        status: { in: ['confirmed', 'completed', 'dismissed'] },
-      },
-      _count: { id: true },
-    }),
-    prisma.task.findMany({
-      where: baseTaskWhere,
-      orderBy: { priorityScore: 'desc' },
-      take: 50,
-      select: {
-        id: true,
-        title: true,
-        summary: true,
-        status: true,
-        priorityScore: true,
-        explicitDeadline: true,
-        inferredDeadline: true,
-        userSetDeadline: true,
-        createdAt: true,
-        updatedAt: true,
-        completedAt: true,
-      },
-    }),
+    isAllView
+      ? Promise.resolve(null)
+      : prisma.email.groupBy({ by: ['classification'], where: baseEmailWhere, _count: { id: true } }),
+    isAllView
+      ? Promise.resolve(null)
+      : prisma.email.count({ where: { ...baseEmailWhere, classification: 'action', taskLinks: { some: {} } } }),
+    isAllView
+      ? Promise.resolve(null)
+      : prisma.task.groupBy({ by: ['status'], where: baseTaskWhere, _count: { id: true } }),
+    isAllView
+      ? Promise.resolve(null)
+      : prisma.task.groupBy({
+          by: ['status'],
+          where: { ...baseTaskWhere, source: 'ai_auto', status: { in: ['confirmed', 'completed', 'dismissed'] } },
+          _count: { id: true },
+        }),
+    isAllView
+      ? Promise.resolve(null)
+      : prisma.task.findMany({
+          where: baseTaskWhere,
+          orderBy: { priorityScore: 'desc' },
+          take: 50,
+          select: {
+            id: true,
+            title: true,
+            summary: true,
+            status: true,
+            priorityScore: true,
+            explicitDeadline: true,
+            inferredDeadline: true,
+            userSetDeadline: true,
+            createdAt: true,
+            updatedAt: true,
+            completedAt: true,
+          },
+        }),
   ])
+
+  const allTimeEmailGroups = allTimeEmailGroupsRaw ?? emailGroups
+  const allTimeLinkedActionEmails = allTimeLinkedActionEmailsRaw ?? linkedActionEmails
+  const allTimeTaskGroups = allTimeTaskGroupsRaw ?? taskGroups
+  const allTimeAiTaskGroups = allTimeAiTaskGroupsRaw ?? aiTaskGroups
+  const allTimeTasks = allTimeTasksRaw ?? tasks
+  const allTimeAttentionEmails = allTimeAttentionEmailsRaw ?? attentionEmails
+  const allTimeAttentionEmailCount = allTimeAttentionEmailCountRaw ?? attentionEmails.length
 
   const stats = buildStats(emailGroups, linkedActionEmails, taskGroups, userInfo)
   const taskSummary = {
