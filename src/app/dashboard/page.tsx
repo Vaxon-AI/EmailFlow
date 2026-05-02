@@ -27,7 +27,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getPriorityBand, getPriorityColor, getPriorityLabel } from '@/types'
-import { getEmailClassConfig } from '@/lib/email-classification'
 import { useAuth } from '@/lib/use-auth'
 import { CACHE_TIME } from '@/lib/query-cache'
 import { toast } from 'sonner'
@@ -62,35 +61,64 @@ type DashboardProject = {
   identity: { id: string; name: string } | null
 }
 
+type DashboardStats = {
+  emails: { total: number; action: number; awareness: number; ignore: number; uncertain: number; linkedAction: number }
+  tasks: { total: number; pending: number; confirmed: number; completed: number; dismissed: number }
+  sync: {
+    lastSyncAt?: string | null
+    gmailConnected?: boolean
+    providerReauthRequired?: boolean
+  }
+}
+
+type DashboardTasksSummary = {
+  confirmedPreview: DashboardTask[]
+  pendingPreview: DashboardTask[]
+  confirmedCount: number
+  pendingCount: number
+  dismissedCount: number
+  priorityCounts: { critical: number; high: number; medium: number; low: number }
+  upcomingCount: number
+  aiAcceptance: { accepted: number; rejected: number; rate: number | null }
+}
+
 type DashboardSummary = {
-  stats: {
-    emails: { total: number; action: number; awareness: number; ignore: number; uncertain: number; linkedAction: number }
-    tasks: { total: number; pending: number; confirmed: number; completed: number; dismissed: number }
-    sync: {
-      lastSyncAt?: string | null
-      gmailConnected?: boolean
-      providerReauthRequired?: boolean
-    }
-  }
-  tasks: {
-    confirmedPreview: DashboardTask[]
-    pendingPreview: DashboardTask[]
-    confirmedCount: number
-    pendingCount: number
-    dismissedCount: number
-    priorityCounts: { critical: number; high: number; medium: number; low: number }
-    upcomingCount: number
-    aiAcceptance: { accepted: number; rejected: number; rate: number | null }
-  }
+  view: DashboardView
+  stats: DashboardStats
+  tasks: DashboardTasksSummary
   attentionEmails: DashboardEmail[]
+  attentionEmailCount?: number
+  momentum: Array<{
+    date: string
+    completedTasks: number
+    createdTasks: number
+    actionEmails: number
+  }>
+  feedback: DashboardFeedback
+  allTime?: {
+    stats: DashboardStats
+    tasks: DashboardTasksSummary
+  } | null
 }
 
 type DashboardSummaryResponse = {
   data?: DashboardSummary
 }
 
+type DashboardView = 'today' | 'week' | 'all'
+type DashboardFeedback = {
+  label: string
+  tone: 'success' | 'info' | 'warning' | 'neutral'
+  message: string
+}
+
 const UNCATEGORIZED_ID = '__uncategorized__'
 const UNCATEGORIZED_OPTION = { id: UNCATEGORIZED_ID, name: 'Uncategorized' }
+const DASHBOARD_VIEWS: Array<{ id: DashboardView; label: string }> = [
+  { id: 'all', label: 'All Time' },
+  { id: 'week', label: 'This Week' },
+  { id: 'today', label: 'Today' },
+]
 
 export default function DashboardPage() {
   return (
@@ -106,6 +134,8 @@ function DashboardContent() {
   const searchParams = useSearchParams()
   const selectedIdentityIds = useMemo(() => parseContextParam(searchParams, 'identity'), [searchParams])
   const selectedProjectIds = useMemo(() => parseContextParam(searchParams, 'project'), [searchParams])
+  const selectedView = parseDashboardView(searchParams.get('view'))
+  const timezoneOffset = useMemo(() => new Date().getTimezoneOffset(), [])
   const [showSyncModal, setShowSyncModal] = useState(() => searchParams.get('gmail_connected') === '1')
   const [syncSetupLoading, setSyncSetupLoading] = useState<number | null>(null)
 
@@ -181,7 +211,7 @@ function DashboardContent() {
     [projectOptions, selectedProjectIds]
   )
 
-  const updateDashboardFilter = useCallback((next: { identities?: string[]; projects?: string[] }) => {
+  const updateDashboardFilter = useCallback((next: { identities?: string[]; projects?: string[]; view?: DashboardView }) => {
     const params = new URLSearchParams(searchParams.toString())
     params.delete('gmail_connected')
     params.delete('gmail_error')
@@ -195,16 +225,22 @@ function DashboardContent() {
       setMultiParam(params, 'project', next.projects)
     }
 
+    if (next.view !== undefined) {
+      params.set('view', next.view)
+    }
+
     const query = params.toString()
     router.replace(query ? `/dashboard?${query}` : '/dashboard', { scroll: false })
   }, [router, searchParams])
 
   const { data: summaryRes, isLoading: summaryLoading } = useQuery<DashboardSummaryResponse>({
-    queryKey: ['dashboard-summary', selectedIdentityIds.join(','), effectiveProjectIds.join(',')],
+    queryKey: ['dashboard-summary', selectedIdentityIds.join(','), effectiveProjectIds.join(','), selectedView, timezoneOffset],
     queryFn: () => {
       const params = new URLSearchParams()
       setMultiParam(params, 'identity', selectedIdentityIds)
       setMultiParam(params, 'project', effectiveProjectIds)
+      params.set('view', selectedView)
+      params.set('timezoneOffset', String(timezoneOffset))
       const query = params.toString()
       return fetch(`/api/dashboard/summary${query ? `?${query}` : ''}`).then((r) => r.json())
     },
@@ -214,6 +250,8 @@ function DashboardContent() {
 
   const summary = summaryRes?.data
   const s = summary?.stats
+  const allTimeStats = summary?.allTime?.stats
+  const allTimeTasks = summary?.allTime?.tasks
   const providerReauthRequired = Boolean(s?.sync?.providerReauthRequired)
 
   const completedTasks = s?.tasks?.completed ?? 0
@@ -222,12 +260,35 @@ function DashboardContent() {
   const totalTasks = completedTasks + pendingTaskCount + confirmedTaskCount
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
   const emailData = s?.emails ?? { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, linkedAction: 0 }
+  const allTimeEmailData = allTimeStats?.emails ?? emailData
+  const allTimeCompletedTasks = allTimeStats?.tasks.completed ?? completedTasks
+  const allTimeOpenTasks = (allTimeTasks?.confirmedCount ?? confirmedTaskCount) + (allTimeTasks?.pendingCount ?? pendingTaskCount)
   const confirmedTasks = summary?.tasks.confirmedPreview ?? []
   const pendingTasks = summary?.tasks.pendingPreview ?? []
   const attentionEmails = summary?.attentionEmails ?? []
+  const attentionEmailCount = summary?.attentionEmailCount ?? attentionEmails.length
   const priorityCounts = summary?.tasks.priorityCounts ?? { critical: 0, high: 0, medium: 0, low: 0 }
   const upcomingCount = summary?.tasks.upcomingCount ?? 0
   const aiAcceptance = summary?.tasks.aiAcceptance ?? { accepted: 0, rejected: 0, rate: null }
+  const momentum = summary?.momentum ?? []
+  const periodLabel = getViewPeriodLabel(selectedView)
+  const dueTitle = selectedView === 'today' ? 'Due Today' : selectedView === 'week' ? 'Due This Week' : 'Due This Week'
+  const dueDetail = selectedView === 'all' ? 'Open deadlines in 7 days' : `Open deadlines ${periodLabel.toLowerCase()}`
+  const dashboardQuery = useMemo(() => {
+    const params = new URLSearchParams()
+    setMultiParam(params, 'identity', selectedIdentityIds)
+    setMultiParam(params, 'project', effectiveProjectIds)
+    params.set('view', selectedView)
+    return params.toString()
+  }, [effectiveProjectIds, selectedIdentityIds, selectedView])
+  const dashboardLink = useCallback((path: string, params?: Record<string, string>) => {
+    const next = new URLSearchParams(dashboardQuery)
+    for (const [key, value] of Object.entries(params ?? {})) {
+      next.set(key, value)
+    }
+    const query = next.toString()
+    return query ? `${path}?${query}` : path
+  }, [dashboardQuery])
 
   return (
     <div className="space-y-6">
@@ -256,12 +317,13 @@ function DashboardContent() {
       />
 
       <div className="animate-fade-in-up stagger-1 rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm backdrop-blur">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <p className="text-sm font-semibold text-slate-900">Workspace context</p>
-            <p className="text-xs text-slate-500">Filter dashboard metrics by identity and project.</p>
+            <p className="text-xs text-slate-500">Filter dashboard metrics by time, identity, and project.</p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <TimeViewToggle value={selectedView} onChange={(view) => updateDashboardFilter({ view })} />
             <ContextMultiFilter
               icon={<UserRound className="h-3.5 w-3.5 text-slate-400" />}
               label="Identity"
@@ -283,27 +345,54 @@ function DashboardContent() {
         </div>
       </div>
 
-      {attentionEmails.length > 0 && (
-        <Link href="/dashboard/emails" className="animate-fade-in-up stagger-2 block">
+      {attentionEmailCount > 0 && (
+        <Link href={dashboardLink('/dashboard/emails', { tab: 'uncertain' })} className="animate-fade-in-up stagger-2 block">
           <div className="flex items-center gap-3 rounded-2xl border border-red-200/80 bg-[linear-gradient(135deg,rgba(254,242,242,1)_0%,rgba(255,247,237,1)_100%)] px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
             <div className="relative shrink-0">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100">
                 <AlertTriangle className="h-4.5 w-4.5 text-red-600" />
               </div>
               <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-                {attentionEmails.length}
+                {attentionEmailCount}
               </span>
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-red-800">
-                {attentionEmails.length} email{attentionEmails.length > 1 ? 's' : ''} need your attention
+                {attentionEmailCount} email{attentionEmailCount > 1 ? 's' : ''} need your attention
               </p>
               <p className="truncate text-xs text-red-600">
                 {attentionEmails[0]?.subject}
-                {attentionEmails.length > 1 ? ` and ${attentionEmails.length - 1} more...` : ''}
+                {attentionEmailCount > 1 ? ` and ${attentionEmailCount - 1} more...` : ''}
               </p>
             </div>
             <span className="shrink-0 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700">
+              View
+            </span>
+          </div>
+        </Link>
+      )}
+
+      {pendingTaskCount > 0 && (
+        <Link href={dashboardLink('/dashboard/tasks', { status: 'pending' })} className="animate-fade-in-up stagger-2 block">
+          <div className="flex items-center gap-3 rounded-2xl border border-orange-200/80 bg-[linear-gradient(135deg,rgba(255,247,237,1)_0%,rgba(255,251,235,1)_100%)] px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+            <div className="relative shrink-0">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100">
+                <CheckSquare className="h-4.5 w-4.5 text-orange-600" />
+              </div>
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[9px] font-bold text-white">
+                {pendingTaskCount}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-orange-800">
+                {pendingTaskCount} AI suggestion{pendingTaskCount > 1 ? 's' : ''} need review
+              </p>
+              <p className="truncate text-xs text-orange-600">
+                {pendingTasks[0]?.title}
+                {pendingTaskCount > 1 ? ` and ${pendingTaskCount - 1} more...` : ''}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-700">
               View
             </span>
           </div>
@@ -330,19 +419,20 @@ function DashboardContent() {
               title="Emails Processed"
               value={emailData.total}
               icon={<Mail className="h-4 w-4 text-blue-600" />}
-              detail={`${emailData.action} needs action, ${emailData.awareness} FYI`}
+              detail={`${emailData.action} needs action, ${allTimeEmailData.total} total`}
+              href={dashboardLink('/dashboard/emails', { tab: 'all' })}
             />
             <StatCard
               title="Open Tasks"
               value={confirmedTaskCount + pendingTaskCount}
               icon={<CheckSquare className="h-4 w-4 text-green-600" />}
-              detail={`${completedTasks} completed of ${totalTasks}`}
+              detail={`${completedTasks} completed ${periodLabel.toLowerCase()}, ${allTimeOpenTasks} open total`}
             />
             <StatCard
-              title="Due This Week"
+              title={dueTitle}
               value={upcomingCount}
               icon={<Target className="h-4 w-4 text-orange-500" />}
-              detail="Open deadlines in 7 days"
+              detail={dueDetail}
             />
             <StatCard
               title="Last Synced"
@@ -395,10 +485,10 @@ function DashboardContent() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
-                  <BarRow label="Needs Action" value={emailData.action} max={emailData.total} color="bg-red-400" />
-                  <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-blue-400" />
-                  <BarRow label="Uncertain" value={emailData.uncertain} max={emailData.total} color="bg-yellow-400" />
-                  <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" />
+                  <BarRow label="Needs Action" value={emailData.action} max={emailData.total} color="bg-red-400" href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} />
+                  <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-blue-400" href={dashboardLink('/dashboard/emails', { tab: 'fyi' })} />
+                  <BarRow label="Needs Review" value={emailData.uncertain} max={emailData.total} color="bg-yellow-400" href={dashboardLink('/dashboard/emails', { tab: 'uncertain' })} />
+                  <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" href={dashboardLink('/dashboard/emails', { tab: 'all', classification: 'ignore' })} />
                 </div>
               </CardContent>
             </Card>
@@ -429,106 +519,18 @@ function DashboardContent() {
         )}
       </div>
 
-      {(summaryLoading || pendingTasks.length > 0 || attentionEmails.length > 0) && (
-        <div className="animate-fade-in-up stagger-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {summaryLoading ? (
-            <ListCardSkeleton />
-          ) : (
-            <Card className="border-purple-200/80 bg-[linear-gradient(180deg,rgba(250,245,255,0.75)_0%,rgba(255,255,255,1)_100%)] shadow-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-purple-100">
-                      <CheckSquare className="h-3.5 w-3.5 text-purple-600" />
-                    </div>
-                    AI Suggestions
-                    {pendingTasks.length > 0 && (
-                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">{pendingTasks.length}</span>
-                    )}
-                  </CardTitle>
-                  <Link href="/dashboard/tasks" className="text-xs text-purple-600 hover:underline">View all</Link>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {pendingTasks.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-gray-400">No AI suggestions waiting</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {pendingTasks.map((task: DashboardTask) => {
-                      const band = getPriorityBand(task.priorityScore || 0)
-                      return (
-                        <Link
-                          key={task.id}
-                          href={`/dashboard/tasks/${task.id}`}
-                          className="flex items-center gap-3 rounded-lg border border-purple-100 bg-white/80 px-3 py-2.5 transition-colors hover:bg-purple-50"
-                        >
-                          <div className={`h-7 w-1 shrink-0 rounded-full ${
-                            band === 'critical' ? 'bg-red-500' : band === 'high' ? 'bg-orange-400' : band === 'medium' ? 'bg-yellow-400' : 'bg-gray-300'
-                          }`} />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-900">{task.title}</p>
-                            <p className="truncate text-xs text-gray-500">{task.summary}</p>
-                          </div>
-                          <Badge variant="outline" className={`shrink-0 text-[10px] ${getPriorityColor(band)}`}>
-                            {getPriorityLabel(band)}
-                          </Badge>
-                        </Link>
-                      )
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {summaryLoading ? (
-            <ListCardSkeleton />
-          ) : (
-            <Card className="border-red-200/80 bg-[linear-gradient(180deg,rgba(254,242,242,0.75)_0%,rgba(255,255,255,1)_100%)] shadow-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100">
-                      <Mail className="h-3.5 w-3.5 text-red-600" />
-                    </div>
-                    Emails Need Attention
-                    {attentionEmails.length > 0 && (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">{attentionEmails.length}</span>
-                    )}
-                  </CardTitle>
-                  <Link href="/dashboard/emails" className="text-xs text-red-600 hover:underline">View all</Link>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {attentionEmails.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-gray-400">All caught up</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {attentionEmails.map((email: DashboardEmail) => (
-                      <Link
-                        key={email.id}
-                        href={`/dashboard/emails/${email.id}`}
-                        className="flex items-center gap-3 rounded-lg border border-red-100 bg-white/80 px-3 py-2.5 transition-colors hover:bg-red-50"
-                      >
-                        <div className={`h-7 w-1 shrink-0 rounded-full ${
-                          email.classification === 'action' ? 'bg-red-500' : 'bg-yellow-400'
-                        }`} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-900">{email.subject}</p>
-                          <p className="truncate text-xs text-gray-500">{email.sender?.split('<')[0]?.trim()}</p>
-                        </div>
-                        <Badge variant="outline" className={`shrink-0 text-[10px] ${getEmailClassConfig(email.classification).color}`}>
-                          {getEmailClassConfig(email.classification).label}
-                        </Badge>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
+      <div className="animate-fade-in-up stagger-5">
+        {summaryLoading ? (
+          <MomentumCardSkeleton />
+        ) : (
+          <CompletionMomentumCard
+            data={momentum}
+            view={selectedView}
+            feedback={summary?.feedback}
+            allTimeCompletedTasks={allTimeCompletedTasks}
+          />
+        )}
+      </div>
 
       <Card className="animate-fade-in-up stagger-6 border-gray-200/80 shadow-sm">
         <CardHeader className="pb-3">
@@ -699,6 +701,26 @@ function ChartCardSkeleton() {
   )
 }
 
+function MomentumCardSkeleton() {
+  return (
+    <Card className="border-gray-200/80 shadow-sm">
+      <CardHeader className="pb-2">
+        <Skeleton className="h-4 w-44" />
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] lg:items-end">
+          <Skeleton className="h-44 w-full rounded-xl" />
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-4 w-44" />
+            <Skeleton className="h-4 w-40" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function ListCardSkeleton() {
   return (
     <Card className="border-gray-200/80 shadow-sm">
@@ -723,6 +745,198 @@ function ListCardSkeleton() {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function TimeViewToggle({ value, onChange }: { value: DashboardView; onChange: (view: DashboardView) => void }) {
+  return (
+    <div className="flex h-8 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+      {DASHBOARD_VIEWS.map((view) => (
+        <button
+          key={view.id}
+          type="button"
+          onClick={() => onChange(view.id)}
+          className={`rounded-md px-3 text-xs font-semibold transition-colors ${
+            value === view.id
+              ? 'bg-white text-blue-700 shadow-sm'
+              : 'text-slate-500 hover:bg-white/70 hover:text-slate-800'
+          }`}
+        >
+          {view.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function CompletionMomentumCard({
+  data,
+  view,
+  feedback,
+  allTimeCompletedTasks,
+}: {
+  data: Array<{ date: string; completedTasks: number; createdTasks: number; actionEmails: number }>
+  view: DashboardView
+  feedback?: DashboardFeedback
+  allTimeCompletedTasks: number
+}) {
+  const totalCompleted = data.reduce((sum, day) => sum + day.completedTasks, 0)
+  const totalCreated = data.reduce((sum, day) => sum + day.createdTasks, 0)
+  const totalActionEmails = data.reduce((sum, day) => sum + day.actionEmails, 0)
+  const periodLabel = getMomentumPeriodLabel(view)
+  const statusClass = getFeedbackStatusClass(feedback?.tone ?? 'neutral')
+
+  return (
+    <Card className="overflow-hidden border-gray-200/80 bg-white shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <TrendingUp className="h-4 w-4 text-green-600" />
+          Completion Momentum
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] lg:items-center">
+          {view === 'today' ? (
+            <TodayMomentumSummary completed={totalCompleted} created={totalCreated} actionEmails={totalActionEmails} />
+          ) : (
+            <MomentumChart data={data} view={view} />
+          )}
+          <div className="space-y-3">
+            {feedback ? (
+              <div className={`rounded-xl border px-3 py-3 ${statusClass.wrapper}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-xl font-bold leading-tight ${statusClass.title}`}>{feedback.label}</p>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusClass.badge}`}>
+                    {getViewLabel(view)}
+                  </span>
+                </div>
+                <p className={`mt-1 text-xs leading-5 ${statusClass.message}`}>{feedback.message}</p>
+              </div>
+            ) : null}
+            <div>
+              <p className="text-2xl font-bold text-slate-950">{totalCompleted}</p>
+              <p className="text-sm font-medium text-slate-700">
+                {totalCompleted === 0
+                  ? 'No completed tasks yet'
+                  : `task${totalCompleted === 1 ? '' : 's'} completed ${periodLabel}`}
+              </p>
+            </div>
+            <p className="text-xs leading-5 text-slate-500">
+              {totalCompleted === 0
+                ? 'Finish a task to start your streak.'
+                : view === 'all'
+                  ? `${allTimeCompletedTasks} tasks completed overall.`
+                  : 'Nice progress. Your workspace is moving forward.'}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-slate-200 bg-white/80 px-3 py-2">
+                <p className="text-lg font-semibold text-slate-900">{totalCreated}</p>
+                <p className="text-[11px] text-slate-500">tasks created</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white/80 px-3 py-2">
+                <p className="text-lg font-semibold text-slate-900">{totalActionEmails}</p>
+                <p className="text-[11px] text-slate-500">action emails</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function TodayMomentumSummary({
+  completed,
+  created,
+  actionEmails,
+}: {
+  completed: number
+  created: number
+  actionEmails: number
+}) {
+  return (
+    <div className="grid min-h-52 gap-3 rounded-xl border border-green-100 bg-white/80 p-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+      <div className="flex flex-col justify-between rounded-xl bg-green-50 px-4 py-3">
+        <span className="text-xs font-medium text-green-700">Completed today</span>
+        <span className="mt-5 text-3xl font-bold text-green-700">{completed}</span>
+      </div>
+      <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <span className="text-xs font-medium text-slate-500">Tasks created</span>
+        <span className="mt-5 text-3xl font-bold text-slate-900">{created}</span>
+      </div>
+      <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <span className="text-xs font-medium text-slate-500">Action emails</span>
+        <span className="mt-5 text-3xl font-bold text-slate-900">{actionEmails}</span>
+      </div>
+    </div>
+  )
+}
+
+function MomentumChart({
+  data,
+  view,
+}: {
+  data: Array<{ date: string; completedTasks: number; createdTasks: number; actionEmails: number }>
+  view: DashboardView
+}) {
+  const width = 640
+  const height = 190
+  const padding = { top: 18, right: 22, bottom: 34, left: 28 }
+  const chartWidth = width - padding.left - padding.right
+  const chartHeight = height - padding.top - padding.bottom
+  const maxCompleted = Math.max(1, ...data.map((day) => day.completedTasks))
+  const points = data.map((day, index) => {
+    const x = padding.left + (data.length <= 1 ? 0 : (index / (data.length - 1)) * chartWidth)
+    const y = padding.top + chartHeight - (day.completedTasks / maxCompleted) * chartHeight
+    return { ...day, x, y }
+  })
+  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+  const areaPath =
+    points.length > 0
+      ? `${linePath} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`
+      : ''
+  const xLabels = points.filter((_, index) => index === 0 || index === Math.floor(points.length / 2) || index === points.length - 1)
+  const yGrid = [0, 0.5, 1]
+
+  return (
+    <div className="rounded-xl border border-green-100 bg-white/80 p-3">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Completed tasks ${getMomentumPeriodLabel(view)}`} className="h-52 w-full">
+        <defs>
+          <linearGradient id="momentum-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#22c55e" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {yGrid.map((ratio) => {
+          const y = padding.top + chartHeight - ratio * chartHeight
+          return (
+            <line key={ratio} x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="4 6" />
+          )
+        })}
+        {areaPath ? <path d={areaPath} fill="url(#momentum-fill)" /> : null}
+        {linePath ? <path d={linePath} fill="none" stroke="#16a34a" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" /> : null}
+        {points.map((point) => (
+          <g key={point.date} className="group outline-none" tabIndex={0}>
+            <circle cx={point.x} cy={point.y} r="4" fill="#16a34a" stroke="white" strokeWidth="2" />
+            <circle cx={point.x} cy={point.y} r="12" fill="transparent" />
+            <g className="pointer-events-none opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100">
+              <rect x={Math.min(width - 150, Math.max(8, point.x - 68))} y={Math.max(8, point.y - 58)} width="136" height="44" rx="8" fill="#0f172a" />
+              <text x={Math.min(width - 82, Math.max(76, point.x))} y={Math.max(26, point.y - 38)} textAnchor="middle" className="fill-white text-[11px] font-semibold">
+                {formatMomentumDate(point.date)}
+              </text>
+              <text x={Math.min(width - 82, Math.max(76, point.x))} y={Math.max(42, point.y - 22)} textAnchor="middle" className="fill-slate-200 text-[10px]">
+                {point.completedTasks} done / {point.createdTasks} new / {point.actionEmails} emails
+              </text>
+            </g>
+          </g>
+        ))}
+        {xLabels.map((point) => (
+          <text key={`label-${point.date}`} x={point.x} y={height - 10} textAnchor="middle" className="fill-slate-400 text-[10px]">
+            {formatMomentumDate(point.date)}
+          </text>
+        ))}
+      </svg>
+    </div>
   )
 }
 
@@ -864,9 +1078,9 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   )
 }
 
-function StatCard({ title, value, icon, detail }: { title: string; value: string | number; icon: React.ReactNode; detail: string }) {
-  return (
-    <Card className="border-gray-200/80 shadow-sm transition-transform duration-200 hover:-translate-y-0.5">
+function StatCard({ title, value, icon, detail, href }: { title: string; value: string | number; icon: React.ReactNode; detail: string; href?: string }) {
+  const card = (
+    <Card className={`border-gray-200/80 shadow-sm transition-all duration-200 ${href ? 'hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md' : ''}`}>
       <CardContent className="pt-4 pb-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-gray-500">{title}</p>
@@ -876,6 +1090,14 @@ function StatCard({ title, value, icon, detail }: { title: string; value: string
         <p className="mt-0.5 text-xs text-gray-400">{detail}</p>
       </CardContent>
     </Card>
+  )
+
+  if (!href) return card
+
+  return (
+    <Link href={href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+      {card}
+    </Link>
   )
 }
 
@@ -897,7 +1119,66 @@ function parseContextParam(params: URLSearchParams, key: string) {
     .filter(Boolean)
 }
 
+function parseDashboardView(value: string | null): DashboardView {
+  return value === 'today' || value === 'week' ? value : 'all'
+}
+
 function setMultiParam(params: URLSearchParams, key: string, values: string[]) {
   params.delete(key)
   if (values.length > 0) params.set(key, values.join(','))
+}
+
+function getViewLabel(view: DashboardView) {
+  return DASHBOARD_VIEWS.find((item) => item.id === view)?.label ?? 'All Time'
+}
+
+function getViewPeriodLabel(view: DashboardView) {
+  if (view === 'today') return 'Today'
+  if (view === 'week') return 'This week'
+  return 'All time'
+}
+
+function getMomentumPeriodLabel(view: DashboardView) {
+  if (view === 'today') return 'today'
+  if (view === 'week') return 'this week'
+  return 'in the last 14 days'
+}
+
+function getFeedbackStatusClass(tone: DashboardFeedback['tone']) {
+  if (tone === 'success') {
+    return {
+      wrapper: 'border-green-200 bg-green-50',
+      title: 'text-green-800',
+      message: 'text-green-700',
+      badge: 'bg-white/80 text-green-700',
+    }
+  }
+  if (tone === 'info') {
+    return {
+      wrapper: 'border-blue-200 bg-blue-50',
+      title: 'text-blue-800',
+      message: 'text-blue-700',
+      badge: 'bg-white/80 text-blue-700',
+    }
+  }
+  if (tone === 'warning') {
+    return {
+      wrapper: 'border-amber-200 bg-amber-50',
+      title: 'text-amber-800',
+      message: 'text-amber-700',
+      badge: 'bg-white/80 text-amber-700',
+    }
+  }
+  return {
+    wrapper: 'border-slate-200 bg-slate-50',
+    title: 'text-slate-950',
+    message: 'text-slate-600',
+    badge: 'bg-white text-slate-600',
+  }
+}
+
+function formatMomentumDate(date: string) {
+  const [, month, day] = date.split('-')
+  const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${monthLabels[Math.max(0, Number(month) - 1)]} ${Number(day)}`
 }

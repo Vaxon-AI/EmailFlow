@@ -32,7 +32,7 @@ export const EMAIL_CLASS_CONFIG: Record<EmailCategory, EmailClassConfig> = {
     icon: Trash2,
   },
   uncertain: {
-    label: 'Uncertain',
+    label: 'Needs Review',
     color: 'bg-yellow-50 text-yellow-700 border-yellow-200',
     bg: 'from-yellow-50/50 to-white',
     icon: AlertTriangle,

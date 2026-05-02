@@ -44,6 +44,7 @@ import { CACHE_TIME } from '@/lib/query-cache'
 
 type ViewMode = 'list' | 'timeline' | 'calendar'
 type TaskStatus = 'pending' | 'confirmed' | 'completed' | 'dismissed'
+type StatusFilter = 'all' | 'pending' | 'confirmed' | 'completed'
 
 type TaskEmailLink = {
   email?: {
@@ -131,8 +132,9 @@ function TasksContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const focusProjectId = searchParams.get('project') ?? undefined
+  const initialStatus = parseStatusFilter(searchParams.get('status'))
   const initialPriority = parsePriorityFilter(searchParams.get('priority'))
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus)
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(initialPriority)
   const [sortBy, setSortBy] = useState('priority')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
@@ -155,6 +157,7 @@ function TasksContent() {
   const [draftSource, setDraftSource] = useState('manual')
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const queryClient = useQueryClient()
+  const priorityFilterLabel = PRIORITY_OPTIONS.find((option) => option.value === priorityFilter)?.label ?? 'All priorities'
 
   // Fetch all tasks (no server-side status filter — we filter client-side for "all")
   const apiStatus = statusFilter === 'all' ? '' : statusFilter
@@ -332,6 +335,18 @@ function TasksContent() {
     router.replace(query ? `/dashboard/tasks?${query}` : '/dashboard/tasks', { scroll: false })
   }
 
+  const handleStatusFilterChange = (value: string | null) => {
+    const nextStatus = parseStatusFilter(value)
+    setStatusFilter(nextStatus)
+
+    const params = new URLSearchParams(searchParams.toString())
+    if (nextStatus === 'all') params.delete('status')
+    else params.set('status', nextStatus)
+
+    const query = params.toString()
+    router.replace(query ? `/dashboard/tasks?${query}` : '/dashboard/tasks', { scroll: false })
+  }
+
   const bulkToggle = useCallback((ids: string[], select: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -398,7 +413,7 @@ function TasksContent() {
           <div className="flex flex-wrap items-center gap-2">
             <SegmentedControl
               value={statusFilter}
-              onChange={setStatusFilter}
+              onChange={handleStatusFilterChange}
               options={STATUS_OPTIONS}
             />
           </div>
@@ -408,7 +423,7 @@ function TasksContent() {
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={priorityFilter} onValueChange={handlePriorityFilterChange}>
                   <SelectTrigger size="sm" className="bg-white">
-                    <SelectValue />
+                    <SelectValue>{priorityFilterLabel}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {PRIORITY_OPTIONS.map((option) => (
@@ -716,6 +731,10 @@ function TasksContent() {
 
 function parsePriorityFilter(value: string | null): PriorityFilter {
   return value === 'critical' || value === 'high' || value === 'medium' || value === 'low' ? value : 'all'
+}
+
+function parseStatusFilter(value: string | null): StatusFilter {
+  return value === 'pending' || value === 'confirmed' || value === 'completed' ? value : 'all'
 }
 
 function matchesPriorityFilter(task: TaskItem, priority: unknown) {

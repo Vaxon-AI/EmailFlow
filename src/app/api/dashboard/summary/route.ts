@@ -5,6 +5,7 @@ import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
 import { getDashboardSummary } from '@/repositories/dashboard-summary-repo'
 
 const EMPTY_SUMMARY = {
+  view: 'all',
   stats: {
     emails: { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, linkedAction: 0 },
     tasks: { total: 0, pending: 0, confirmed: 0, completed: 0, dismissed: 0 },
@@ -29,6 +30,15 @@ const EMPTY_SUMMARY = {
     aiAcceptance: { accepted: 0, rejected: 0, rate: null },
   },
   attentionEmails: [],
+  attentionEmailCount: 0,
+  momentum: [],
+  feedback: {
+    label: 'Workspace Summary',
+    tone: 'neutral',
+    message: '0 tasks completed overall, 0 currently open.',
+  },
+  currentPeriod: null,
+  allTime: null,
 }
 
 export async function GET(req: NextRequest) {
@@ -39,12 +49,23 @@ export async function GET(req: NextRequest) {
     const summary = await getDashboardSummary(user.id, {
       identityIds: parseMultiParam(req.nextUrl.searchParams, 'identity'),
       projectIds: parseMultiParam(req.nextUrl.searchParams, 'project'),
+      view: parseView(req.nextUrl.searchParams.get('view')),
+      timezoneOffset: parseTimezoneOffset(req.nextUrl.searchParams.get('timezoneOffset')),
     })
     return success(summary)
   } catch (err) {
     console.error('[api/dashboard/summary GET]', err)
     return errorFromException(err, 'INTERNAL_ERROR', 'Failed to load dashboard summary', 500)
   }
+}
+
+function parseView(value: string | null) {
+  return value === 'today' || value === 'week' ? value : 'all'
+}
+
+function parseTimezoneOffset(value: string | null) {
+  const offset = Number(value)
+  return Number.isFinite(offset) ? offset : 0
 }
 
 function parseMultiParam(params: URLSearchParams, key: string) {

@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { Suspense, useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format } from 'date-fns'
@@ -55,6 +55,7 @@ type BatchStatus = {
 
 type Tab = 'needs_action' | 'fyi' | 'uncertain' | 'all'
 type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
+type EmailClassificationFilter = EmailClassification | 'all'
 
 type LinkedTask = {
   id: string
@@ -98,6 +99,9 @@ const fyiPriority: Record<string, number> = {
   awareness: 0,
   ignore: 1,
 }
+
+const VALID_TABS = new Set<Tab>(['needs_action', 'fyi', 'uncertain', 'all'])
+const VALID_CLASSIFICATION_FILTERS = new Set<EmailClassificationFilter>(['all', 'action', 'awareness', 'ignore', 'uncertain'])
 
 type FilterEmailsOptions = {
   emails: EmailItem[]
@@ -174,6 +178,17 @@ function filterEmails({
   return result
 }
 
+function parseEmailTab(value: string | null): Tab {
+  return value && VALID_TABS.has(value as Tab) ? (value as Tab) : 'needs_action'
+}
+
+function parseEmailClassification(value: string | null, tab: Tab): EmailClassificationFilter {
+  if (tab !== 'all') return 'all'
+  return value && VALID_CLASSIFICATION_FILTERS.has(value as EmailClassificationFilter)
+    ? (value as EmailClassificationFilter)
+    : 'all'
+}
+
 export default function EmailsPage() {
   return (
     <Suspense fallback={null}>
@@ -183,10 +198,11 @@ export default function EmailsPage() {
 }
 
 function EmailsContent() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const focusIdentityId = searchParams.get('identity') ?? undefined
-  const [tab, setTab] = useState<Tab>('needs_action')
-  const [classification, setClassification] = useState('all')
+  const tab = parseEmailTab(searchParams.get('tab'))
+  const classification = parseEmailClassification(searchParams.get('classification'), tab)
   const [accountFilter, setAccountFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
@@ -204,6 +220,21 @@ function EmailsContent() {
   const [reviewBannerDismissed, setReviewBannerDismissed] = useState(false)
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [showAutoModeConfirm, setShowAutoModeConfirm] = useState(false)
+
+  const updateEmailUrlFilter = useCallback((next: { tab?: Tab; classification?: EmailClassificationFilter }) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (next.tab) {
+      params.set('tab', next.tab)
+      params.delete('classification')
+    }
+    if (next.classification) {
+      params.set('tab', 'all')
+      if (next.classification === 'all') params.delete('classification')
+      else params.set('classification', next.classification)
+    }
+    const query = params.toString()
+    router.replace(query ? `/dashboard/emails?${query}` : '/dashboard/emails', { scroll: false })
+  }, [router, searchParams])
 
   const { data: pendingReviewData } = useQuery({
     queryKey: ['pending-review-count'],
@@ -389,7 +420,7 @@ function EmailsContent() {
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'needs_action', label: 'Needs Action', count: needsActionCount },
     { key: 'fyi', label: 'FYI', count: infoCount },
-    { key: 'uncertain', label: 'Uncertain', count: uncertainCount },
+    { key: 'uncertain', label: 'Needs Review', count: uncertainCount },
     { key: 'all', label: 'All Mail', count: emails.length },
   ]
 
@@ -406,8 +437,7 @@ function EmailsContent() {
         <SegmentedControl
           value={tab}
           onChange={(nextTab) => {
-            setTab(nextTab)
-            setClassification('all')
+            updateEmailUrlFilter({ tab: nextTab })
           }}
           options={tabs.map(({ key, label, count }) => ({
             value: key,
@@ -558,13 +588,13 @@ function EmailsContent() {
             {tab === 'all' && (
               <SegmentedControl
                 value={classification}
-                onChange={setClassification}
+                onChange={(nextClassification) => updateEmailUrlFilter({ classification: nextClassification })}
                 options={[
                   { value: 'all', label: 'All' },
                   { value: 'action', label: 'Needs Action' },
                   { value: 'awareness', label: 'FYI' },
                   { value: 'ignore', label: 'Ignored' },
-                  { value: 'uncertain', label: 'Uncertain' },
+                  { value: 'uncertain', label: 'Needs Review' },
                 ]}
               />
             )}
