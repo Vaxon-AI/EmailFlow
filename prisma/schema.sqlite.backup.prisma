@@ -99,6 +99,9 @@ model Email {
 
   processedAt DateTime?
   createdAt   DateTime  @default(now())
+  aiReplyDraft String?
+  aiReplyGeneratedAt DateTime?
+  aiReplyEditedAt DateTime?
 
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskLinks TaskEmail[]

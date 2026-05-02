@@ -9,6 +9,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import {
+  Select, SelectContent, SelectItem, SelectTrigger,
+} from '@/components/ui/select'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -23,9 +26,10 @@ import {
   ArrowLeft, Mail, Paperclip, Clock, ArrowUpRight,
   CheckSquare, Sparkles, Shield, Plus, Tag, X,
   UserRound, ChevronRight, FolderOpen, Pencil, Loader2, Trash2,
+  Copy, RefreshCw, Save,
 } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import { EMAIL_CLASS_CONFIG, getEmailClassConfig } from '@/lib/email-classification'
@@ -38,9 +42,21 @@ type EmailTaskLink = {
   task: {
     id: string
     title: string
+    summary?: string | null
+    actionItems?: string | null
+    checkedActionItems?: string | null
     status: string
     priorityScore?: number | null
+    startDate?: string | null
+    explicitDeadline?: string | null
+    inferredDeadline?: string | null
+    userSetDeadline?: string | null
+    userNotes?: string | null
   }
+}
+
+type ApiErrorPayload = {
+  error?: { message?: string } | string
 }
 
 export default function EmailDetailPage() {
@@ -57,6 +73,9 @@ export default function EmailDetailPage() {
   const [linkedEmailIds, setLinkedEmailIds] = useState<string[]>([])
   const [creatingTask, setCreatingTask] = useState(false)
   const [restoring, setRestoring] = useState(false)
+  const [replyDraft, setReplyDraft] = useState('')
+  const [generatingReply, setGeneratingReply] = useState(false)
+  const [savingReply, setSavingReply] = useState(false)
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['email', emailId],
@@ -66,6 +85,20 @@ export default function EmailDetailPage() {
   })
 
   const email = res?.data
+
+  useEffect(() => {
+    setReplyDraft(email?.aiReplyDraft ?? '')
+  }, [email?.id, email?.aiReplyDraft])
+
+  async function readErrorMessage(response: Response, fallback: string) {
+    try {
+      const data = await response.json() as ApiErrorPayload
+      if (typeof data.error === 'string') return data.error
+      return data.error?.message || fallback
+    } catch {
+      return fallback
+    }
+  }
 
   async function handleRestore() {
     setRestoring(true)
@@ -86,6 +119,7 @@ export default function EmailDetailPage() {
   }
 
   const handleClassify = async (newClass: string) => {
+    if (newClass === email?.classification) return
     setClassifying(true)
     try {
       const res = await fetch(`/api/emails/${emailId}`, {
@@ -97,11 +131,68 @@ export default function EmailDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['email', emailId] })
         queryClient.invalidateQueries({ queryKey: ['emails'] })
         toast.success(`Marked as ${getEmailClassConfig(newClass).label}`)
+      } else {
+        showError(await readErrorMessage(res, 'Failed to update classification'))
       }
     } catch {
       showError('Failed to update classification')
     } finally {
       setClassifying(false)
+    }
+  }
+
+  const generateReply = async (force = false) => {
+    if (replyDraft.trim() && !force) {
+      const shouldReplace = confirm('Regenerate the AI reply draft? This will replace the current draft.')
+      if (!shouldReplace) return
+    }
+
+    setGeneratingReply(true)
+    try {
+      const res = await fetch(`/api/emails/${emailId}/reply-suggestion`, { method: 'POST' })
+      if (!res.ok) {
+        showError(await readErrorMessage(res, 'Failed to generate reply draft'))
+        return
+      }
+      const data = await res.json()
+      const nextReply = data?.data?.reply ?? ''
+      setReplyDraft(nextReply)
+      queryClient.invalidateQueries({ queryKey: ['email', emailId] })
+      toast.success('Reply draft generated')
+    } catch {
+      showError('Failed to generate reply draft')
+    } finally {
+      setGeneratingReply(false)
+    }
+  }
+
+  const saveReply = async () => {
+    setSavingReply(true)
+    try {
+      const res = await fetch(`/api/emails/${emailId}/reply-suggestion`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: replyDraft }),
+      })
+      if (!res.ok) {
+        showError(await readErrorMessage(res, 'Failed to save reply draft'))
+        return
+      }
+      queryClient.invalidateQueries({ queryKey: ['email', emailId] })
+      toast.success('Reply draft saved')
+    } catch {
+      showError('Failed to save reply draft')
+    } finally {
+      setSavingReply(false)
+    }
+  }
+
+  const copyReply = async () => {
+    try {
+      await navigator.clipboard.writeText(replyDraft)
+      toast.success('Reply draft copied')
+    } catch {
+      showError('Failed to copy reply draft')
     }
   }
 
@@ -194,6 +285,9 @@ export default function EmailDetailPage() {
   const senderInitial = (senderName || 'U')[0].toUpperCase()
   const project = email.project ?? null
   const matter = email.matter ?? null
+  const taskLinks = (email.taskLinks ?? []) as EmailTaskLink[]
+  const canShowReplyDraft = email.classification === 'action' || taskLinks.length > 0 || !!email.aiReplyDraft
+  const canGenerateReply = email.retentionStatus !== 'PURGED'
 
   return (
     <div className="animate-in fade-in duration-200">
@@ -343,8 +437,93 @@ export default function EmailDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Reply draft */}
+          {canShowReplyDraft && (
+            <Card className="animate-fade-in-up stagger-5 border-white/70 bg-white/95 shadow-sm">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Sparkles className="h-4 w-4 text-amber-600" />
+                    AI Reply Draft
+                  </CardTitle>
+                  {email.aiReplyGeneratedAt && (
+                    <span className="text-[10px] font-medium text-slate-400">
+                      Generated {new Date(email.aiReplyGeneratedAt).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs leading-5 text-slate-500">
+                  Drafts use this email plus linked task status, checklist progress, deadlines, and notes. Nothing is sent automatically.
+                </p>
+                {replyDraft ? (
+                  <>
+                    <Textarea
+                      value={replyDraft}
+                      onChange={(e) => setReplyDraft(e.target.value)}
+                      rows={8}
+                      className="resize-y bg-white text-sm leading-6"
+                      placeholder="AI reply draft will appear here..."
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={saveReply}
+                        disabled={savingReply || !replyDraft.trim()}
+                        className="h-8 gap-1.5 bg-blue-600 hover:bg-blue-700"
+                      >
+                        {savingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => generateReply()}
+                        disabled={generatingReply || !canGenerateReply}
+                        className="h-8 gap-1.5"
+                      >
+                        {generatingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        Regenerate
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={copyReply}
+                        disabled={!replyDraft.trim()}
+                        className="h-8 gap-1.5"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-4">
+                    <p className="text-sm font-medium text-amber-950">No reply draft yet</p>
+                    <p className="mt-1 text-xs leading-5 text-amber-800/80">
+                      Generate a draft when you want a starting point, then edit it before using it.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => generateReply()}
+                      disabled={generatingReply || !canGenerateReply}
+                      className="mt-3 h-8 gap-1.5 bg-amber-600 text-white hover:bg-amber-700"
+                    >
+                      {generatingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      Generate reply
+                    </Button>
+                    {!canGenerateReply && (
+                      <p className="mt-2 text-[11px] text-amber-800/70">This email no longer has enough content to generate a draft.</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {email.classReasoning && (
-            <Card className="animate-fade-in-up stagger-4 border-yellow-200 bg-gradient-to-br from-yellow-50/55 to-white shadow-sm">
+            <Card className="animate-fade-in-up stagger-6 border-yellow-200 bg-gradient-to-br from-yellow-50/55 to-white shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <Sparkles className="h-4 w-4 text-yellow-600" />
@@ -367,7 +546,7 @@ export default function EmailDetailPage() {
                   <CardTitle className="flex items-center gap-2 text-sm">
                     <CheckSquare className="h-4 w-4 text-blue-600" />
                     Linked Tasks
-                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">{email.taskLinks?.length || 0}</span>
+                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">{taskLinks.length}</span>
                   </CardTitle>
                   <Button
                     size="sm"
@@ -380,8 +559,8 @@ export default function EmailDetailPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {email.taskLinks?.length ? (
-                  (email.taskLinks as EmailTaskLink[]).map((link) => {
+                {taskLinks.length ? (
+                  taskLinks.map((link) => {
                   const band = getPriorityBand(link.task.priorityScore || 0)
                   const isDone = link.task.status === 'completed' || link.task.status === 'dismissed'
                   const isUnlinking = unlinkingTaskId === link.task.id
@@ -450,7 +629,7 @@ export default function EmailDetailPage() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm">
                 <Tag className="h-4 w-4 text-blue-600" />
-                Mark As
+                Classification
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -463,21 +642,34 @@ export default function EmailDetailPage() {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {Object.entries(EMAIL_CLASS_CONFIG).map(([key, config]) => (
-                  <Button
-                    key={key}
-                    variant={email.classification === key ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => handleClassify(key)}
-                    disabled={classifying}
-                    className={`h-auto min-h-11 justify-start gap-2 px-3 py-2 text-left ${email.classification === key ? '' : 'bg-white'}`}
-                  >
-                    <config.icon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="whitespace-normal leading-4">{config.label}</span>
-                  </Button>
-                ))}
-              </div>
+              <Label className="text-xs text-gray-500">Mark this email as</Label>
+              <Select
+                value={email.classification ?? 'uncertain'}
+                onValueChange={(value) => { if (value) handleClassify(value) }}
+                disabled={classifying}
+              >
+                <SelectTrigger className="h-10 w-full border-gray-200 bg-white text-sm shadow-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {classifying ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
+                    ) : (
+                      <ClsIcon className="h-4 w-4 shrink-0 text-blue-500" />
+                    )}
+                    <span className="truncate font-medium text-gray-800">{cls.label}</span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {Object.entries(EMAIL_CLASS_CONFIG).map(([key, config]) => {
+                    const Icon = config.icon
+                    return (
+                      <SelectItem key={key} value={key}>
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        <span>{config.label}</span>
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
             </CardContent>
           </Card>
 
@@ -513,7 +705,7 @@ export default function EmailDetailPage() {
                 )}
                 <div className="flex justify-between">
                   <dt className="text-gray-400">Tasks linked</dt>
-                  <dd className="font-medium text-gray-700">{email.taskLinks?.length || 0}</dd>
+                  <dd className="font-medium text-gray-700">{taskLinks.length}</dd>
                 </div>
               </dl>
             </CardContent>

@@ -126,6 +126,9 @@ model Email {
   processingStatus String          @default("done")
   syncBatchId      String?
   awaitingReview   Boolean         @default(false)
+  aiReplyDraft      String?
+  aiReplyGeneratedAt DateTime?
+  aiReplyEditedAt   DateTime?
   attachments      Attachment[]
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskLinks        TaskEmail[]

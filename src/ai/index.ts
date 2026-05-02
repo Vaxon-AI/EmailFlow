@@ -10,6 +10,7 @@ export {
   scorePriority,
   updateThreadMemory,
   matchMatter,
+  generateReplyDraft,
 } from './skills'
 
 export type {
@@ -18,6 +19,7 @@ export type {
   ScorePriorityInput,
   UpdateThreadMemoryInput,
   MatchMatterInput,
+  GenerateReplyDraftInput,
 } from './skills'
 
 // Schemas (output format definitions)
@@ -28,6 +30,7 @@ export {
   prioritySchema,
   threadMemoryUpdateSchema,
   matchMatterSchema,
+  replyDraftSchema,
 } from './schemas'
 
 export type {
@@ -37,6 +40,7 @@ export type {
   PriorityResult,
   ThreadMemoryUpdateResult,
   MatchMatterResult,
+  ReplyDraftResult,
 } from './schemas'
 
 // Provider (model configuration)

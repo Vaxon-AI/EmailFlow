@@ -292,7 +292,24 @@ export async function findEmailById(userId: string, emailId: string) {
     where: { id: emailId, userId },
     include: {
       taskLinks: {
-        include: { task: { select: { id: true, title: true, status: true, priorityScore: true } } },
+        include: {
+          task: {
+            select: {
+              id: true,
+              title: true,
+              summary: true,
+              actionItems: true,
+              checkedActionItems: true,
+              status: true,
+              priorityScore: true,
+              startDate: true,
+              explicitDeadline: true,
+              inferredDeadline: true,
+              userSetDeadline: true,
+              userNotes: true,
+            },
+          },
+        },
       },
     },
   })
@@ -307,6 +324,18 @@ export async function findEmailById(userId: string, emailId: string) {
     console.error('[email-repo] detail enrichment failed:', err)
     return email
   }
+}
+
+export async function updateReplyDraft(userId: string, emailId: string, draft: string, generated = false) {
+  const now = new Date()
+  return prisma.email.updateMany({
+    where: { id: emailId, userId },
+    data: {
+      aiReplyDraft: draft,
+      aiReplyEditedAt: now,
+      ...(generated ? { aiReplyGeneratedAt: now } : {}),
+    },
+  })
 }
 
 export async function findBatchStatus(userId: string, batchId: string) {
