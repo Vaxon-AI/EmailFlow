@@ -6,6 +6,7 @@ import type { PipelineReviewCandidate } from '@/workflows'
 import * as emailRepo from '@/repositories/email-repo'
 import * as userRepo from '@/repositories/user-repo'
 import * as failedRepo from '@/repositories/failed-email-sync-repo'
+import { getClassifyRemaining, incrementClassifyUsed } from '@/lib/quota'
 
 export interface BatchClassificationReviewPayload {
   syncRunId: string
@@ -211,7 +212,16 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
     const tAI = Date.now()
     const reviewItems: PipelineReviewCandidate[] = []
 
-    for (const email of storedEmails) {
+    const remaining = await getClassifyRemaining(userId)
+    const emailsToProcess = remaining === Infinity
+      ? storedEmails
+      : storedEmails.slice(0, remaining)
+
+    if (emailsToProcess.length < storedEmails.length) {
+      console.log(`[sync] phase2 quota: ${storedEmails.length - emailsToProcess.length} email(s) skipped (free plan limit reached)`)
+    }
+
+    for (const email of emailsToProcess) {
       try {
         const result = await processEmail(userId, {
           id: email.id,
@@ -224,6 +234,8 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
           threadId: email.threadId,
           awaitingReview: (email as StoredEmail & { awaitingReview?: boolean }).awaitingReview ?? false,
         })
+
+        await incrementClassifyUsed(userId)
 
         if (result?.reviewCandidate) {
           reviewItems.push(result.reviewCandidate)

@@ -23,6 +23,7 @@ export interface SessionUser {
   name: string
   isAdmin: boolean
   manualReviewMode: boolean
+  plan: string
 }
 
 export interface SessionContext {
@@ -180,6 +181,7 @@ function toSessionUser(user: {
   name: string | null
   isAdmin: boolean
   manualReviewMode: boolean
+  plan: string
 }): SessionUser {
   return {
     id: user.id,
@@ -187,6 +189,7 @@ function toSessionUser(user: {
     name: user.name || 'User',
     isAdmin: user.isAdmin,
     manualReviewMode: user.manualReviewMode,
+    plan: user.plan,
   }
 }
 
@@ -340,7 +343,7 @@ async function handleSuspiciousLoginSignal() {
 }
 
 const SESSION_INCLUDE = {
-  user: { select: { id: true, email: true, name: true, isAdmin: true, manualReviewMode: true } },
+  user: { select: { id: true, email: true, name: true, isAdmin: true, manualReviewMode: true, plan: true } },
 } as const satisfies Prisma.SessionInclude
 
 type SessionWithUser = Prisma.SessionGetPayload<{ include: typeof SESSION_INCLUDE }>

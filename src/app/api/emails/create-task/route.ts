@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
+import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,6 +11,13 @@ export async function POST(req: NextRequest) {
 
     if (!title || !sourceEmailId) {
       return error('BAD_REQUEST', 'Title and sourceEmailId are required', 400)
+    }
+
+    if (user.plan === 'free') {
+      const remaining = await getExtractRemaining(user.id)
+      if (remaining <= 0) {
+        return error('QUOTA_EXCEEDED', 'Free plan limit of 3 manual task extractions per month reached. Upgrade to Pro for unlimited access.', 402)
+      }
     }
 
     // Create task
@@ -43,6 +51,10 @@ export async function POST(req: NextRequest) {
         })
       )
     )
+
+    if (user.plan === 'free') {
+      await incrementExtractUsed(user.id)
+    }
 
     return success(task)
   } catch (err) {

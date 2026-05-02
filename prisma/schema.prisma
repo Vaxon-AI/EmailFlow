@@ -33,6 +33,11 @@ model User {
   emailProviderReauthProvider String?
   isAdmin                     Boolean              @default(false)
   manualReviewMode            Boolean              @default(true)
+  plan                        String               @default("free")
+  planActivatedAt             DateTime?
+  classifyUsed                Int                  @default(0)
+  extractUsed                 Int                  @default(0)
+  quotaResetAt                DateTime             @default(now())
   accounts                    Account[]
   digests                     Digest[]
   emails                      Email[]
