@@ -205,7 +205,15 @@ function EmailsContent() {
   const classification = parseEmailClassification(searchParams.get('classification'), tab)
   const [accountFilter, setAccountFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
+    if (!from && !to) return undefined
+    return {
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+    }
+  })
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [selectingStep, setSelectingStep] = useState<'from' | 'to'>('from')
   const [page, setPage] = useState(1)

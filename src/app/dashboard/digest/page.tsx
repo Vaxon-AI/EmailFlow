@@ -17,11 +17,11 @@ import {
   ChevronDown,
   ChevronRight,
   BarChart3,
-  ListTodo,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import ReactMarkdown from 'react-markdown'
+import Link from 'next/link'
 import { useState } from 'react'
 
 type Period = 'daily' | 'weekly'
@@ -166,18 +166,35 @@ export default function DigestPage() {
   )
 }
 
+function digestPeriodLink(base: string, digest: DigestRecord, extra: Record<string, string> = {}) {
+  const start = new Date(digest.periodStart)
+  const end = new Date(start)
+  end.setDate(end.getDate() + (digest.period === 'weekly' ? 6 : 0))
+  const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const sp = new URLSearchParams({ ...extra, from: fmt(start), to: fmt(end) })
+  return `${base}?${sp.toString()}`
+}
+
+type DigestCard = {
+  label: string
+  value: number
+  icon: typeof CheckCircle2
+  color: string
+  bg: string
+  href: string
+}
+
 function DigestHighlight({ digest }: { digest: DigestRecord }) {
   const stats = parseStats(digest.stats)
-  const taskTotal = stats.taskTotal || 0
-  const taskPending = stats.taskPending || 0
 
-  const cards = [
+  const emailCards: DigestCard[] = [
     {
       label: 'Action Items',
       value: stats.actionCount || 0,
       icon: CheckCircle2,
       color: 'text-red-600',
       bg: 'bg-red-50',
+      href: digestPeriodLink('/dashboard/emails', digest, { tab: 'needs_action' }),
     },
     {
       label: 'FYI',
@@ -185,6 +202,7 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       icon: Eye,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
+      href: digestPeriodLink('/dashboard/emails', digest, { tab: 'fyi' }),
     },
     {
       label: 'AI Suggestions',
@@ -192,6 +210,7 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       icon: AlertTriangle,
       color: 'text-yellow-600',
       bg: 'bg-yellow-50',
+      href: digestPeriodLink('/dashboard/emails', digest, { tab: 'uncertain' }),
     },
     {
       label: 'Total Processed',
@@ -203,47 +222,58 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       icon: Mail,
       color: 'text-gray-600',
       bg: 'bg-gray-50',
+      href: digestPeriodLink('/dashboard/emails', digest, { tab: 'all' }),
+    },
+  ]
+
+  const taskCards: DigestCard[] = [
+    {
+      label: 'Tasks Extracted',
+      value: stats.taskTotal || 0,
+      icon: CheckCircle2,
+      color: 'text-green-600',
+      bg: 'bg-green-50',
+      href: digestPeriodLink('/dashboard/tasks', digest),
+    },
+    {
+      label: 'AI Suggestions',
+      value: stats.taskPending || 0,
+      icon: AlertTriangle,
+      color: 'text-yellow-600',
+      bg: 'bg-yellow-50',
+      href: digestPeriodLink('/dashboard/tasks', digest, { status: 'pending' }),
     },
   ]
 
   return (
-    <div className="animate-fade-in-up stagger-2">
-      <div className="mb-3 flex items-center gap-2 px-1">
+    <div className="animate-fade-in-up stagger-2 space-y-5">
+      <div className="flex items-center gap-2 px-1">
         <TrendingUp className="h-4 w-4 text-blue-600" />
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
           Latest - {new Date(digest.periodStart).toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric' })}
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {cards.map((card) => (
-          <Card key={card.label} className="border-gray-200/80 bg-white/95 shadow-sm">
-            <CardContent className="py-4">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-500">{card.label}</span>
-                <div className={`rounded-lg p-1.5 ${card.bg}`}>
-                  <card.icon className={`h-4 w-4 ${card.color}`} />
-                </div>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
-      {taskTotal > 0 && (
-        <div className="mt-3 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50/70 px-4 py-3">
-          <ListTodo className="h-4 w-4 shrink-0 text-gray-400" />
-          <p className="text-sm text-gray-600">
-            <span className="font-semibold text-gray-900">{taskTotal} task{taskTotal !== 1 ? 's' : ''}</span> extracted from this period
-            {taskPending > 0 ? (
-              <> - <span className="font-semibold text-yellow-700">{taskPending}</span> AI suggestion{taskPending === 1 ? '' : 's'}</>
-            ) : ' - all active or processed'}
-          </p>
+      <section>
+        <h3 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Emails</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {emailCards.map((card) => (
+            <DigestStatLink key={`email-${card.label}`} card={card} />
+          ))}
         </div>
-      )}
+      </section>
+
+      <section>
+        <h3 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Tasks</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {taskCards.map((card) => (
+            <DigestStatLink key={`task-${card.label}`} card={card} />
+          ))}
+        </div>
+      </section>
 
       {(stats.actionCount || 0) > 0 ? (
-        <div className="mt-3 flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-3">
+        <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-3">
           <TrendingUp className="h-5 w-5 shrink-0 text-blue-600" />
           <div>
             <p className="text-sm font-medium text-blue-900">
@@ -263,6 +293,27 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
         </div>
       ) : null}
     </div>
+  )
+}
+
+function DigestStatLink({ card }: { card: DigestCard }) {
+  return (
+    <Link
+      href={card.href}
+      className="block rounded-xl transition-all hover:shadow-md"
+    >
+      <Card className="h-full border-gray-200/80 bg-white/95 shadow-sm transition-colors hover:border-gray-300">
+        <CardContent className="py-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-gray-500">{card.label}</span>
+            <div className={`rounded-lg p-1.5 ${card.bg}`}>
+              <card.icon className={`h-4 w-4 ${card.color}`} />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{card.value}</p>
+        </CardContent>
+      </Card>
+    </Link>
   )
 }
 

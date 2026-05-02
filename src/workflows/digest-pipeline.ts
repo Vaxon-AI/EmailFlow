@@ -1,6 +1,7 @@
 import * as taskRepo from '@/repositories/task-repo'
 import * as emailRepo from '@/repositories/email-repo'
 import * as digestRepo from '@/repositories/digest-repo'
+import { prisma } from '@/lib/prisma'
 
 // ============================================================
 // Digest Pipeline — template-based, no AI required
@@ -166,30 +167,73 @@ function buildWeeklyContent({
   return lines.join('\n')
 }
 
-// ── Period helpers ───────────────────────────────────────────
+// ── Period helpers (timezone-aware) ──────────────────────────
 
-function todayRange() {
-  const now = new Date()
-  const start = new Date(now)
-  start.setHours(0, 0, 0, 0)
-  return { start, end: now }
+const WEEKDAY_MAP: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+
+function getLocalParts(now: Date, tz: string) {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+    weekday: 'short',
+  })
+  const parts = fmt.formatToParts(now)
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ''
+  return {
+    year: parseInt(get('year'), 10),
+    month: parseInt(get('month'), 10),
+    day: parseInt(get('day'), 10),
+    hour: parseInt(get('hour'), 10) % 24,
+    minute: parseInt(get('minute'), 10),
+    second: parseInt(get('second'), 10),
+    weekday: WEEKDAY_MAP[get('weekday')] ?? -1,
+  }
 }
 
+function getTzOffsetMs(now: Date, tz: string): number {
+  // ms to add to a UTC instant such that interpreting the result as UTC matches the wall-clock time in tz
+  const p = getLocalParts(now, tz)
+  const localAsUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
+  return localAsUtc - now.getTime()
+}
 
-function thisWeekSoFarRange() {
-  const now = new Date()
-  const start = new Date(now)
-  const day = start.getDay() // 0=Sun,1=Mon,...,6=Sat
-  const daysSinceMonday = day === 0 ? 6 : day - 1
-  start.setDate(start.getDate() - daysSinceMonday)
-  start.setHours(0, 0, 0, 0)
-  return { start, end: now }
+function startOfTodayInTz(now: Date, tz: string): Date {
+  const p = getLocalParts(now, tz)
+  const offsetMs = getTzOffsetMs(now, tz)
+  const localMidnightAsUtc = Date.UTC(p.year, p.month - 1, p.day, 0, 0, 0)
+  return new Date(localMidnightAsUtc - offsetMs)
+}
+
+function startOfWeekInTz(now: Date, tz: string): Date {
+  const p = getLocalParts(now, tz)
+  const daysSinceMonday = p.weekday === 0 ? 6 : p.weekday - 1
+  const todayStart = startOfTodayInTz(now, tz)
+  todayStart.setUTCDate(todayStart.getUTCDate() - daysSinceMonday)
+  return todayStart
+}
+
+function isAfterSunday20InTz(now: Date, tz: string): boolean {
+  const weekStart = startOfWeekInTz(now, tz)
+  // Sunday 20:00 of this week = weekStart + 6 days + 20 hours
+  const sun20 = new Date(weekStart.getTime() + (6 * 24 + 20) * 60 * 60 * 1000)
+  return now.getTime() >= sun20.getTime()
+}
+
+async function resolveTimezone(userId: string, override?: string): Promise<string> {
+  if (override) return override
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } })
+  return user?.timezone || 'UTC'
 }
 
 // ── Public API ───────────────────────────────────────────────
 
-export async function createDailyDigest(userId: string) {
-  const { start, end } = todayRange()
+export async function createDailyDigest(userId: string, timezone?: string) {
+  const tz = await resolveTimezone(userId, timezone)
+  const now = new Date()
+  const start = startOfTodayInTz(now, tz)
+  const end = now
 
   const [action, awareness, uncertain, ignored, tasks] = await Promise.all([
     emailRepo.findEmailsByClassification(userId, 'action', { start, end }),
@@ -226,25 +270,23 @@ export async function createDailyDigest(userId: string) {
   })
 }
 
-export async function createWeeklyDigest(userId: string) {
-  const { start, end } = thisWeekSoFarRange()
+export async function createWeeklyDigest(userId: string, timezone?: string) {
+  const tz = await resolveTimezone(userId, timezone)
+  const now = new Date()
+  const start = startOfWeekInTz(now, tz)
+  const end = now
 
-  // Fetch each day's emails separately — Mon through today only
+  // Fetch each day's emails separately — Mon through today only (user-local day boundaries)
   const days: Date[] = []
-  const cursor = new Date(start)
-  const todayEnd = new Date(end)
-  todayEnd.setHours(23, 59, 59, 999)
-  while (cursor <= todayEnd) {
-    days.push(new Date(cursor))
-    cursor.setDate(cursor.getDate() + 1)
+  for (let i = 0; i < 7; i++) {
+    const dayStart = new Date(start.getTime() + i * 24 * 60 * 60 * 1000)
+    if (dayStart.getTime() > now.getTime()) break
+    days.push(dayStart)
   }
 
   const byDay = await Promise.all(
-    days.map(async (date) => {
-      const dayStart = new Date(date)
-      dayStart.setHours(0, 0, 0, 0)
-      const dayEnd = new Date(date)
-      dayEnd.setHours(23, 59, 59, 999)
+    days.map(async (dayStart) => {
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1)
       const range = { start: dayStart, end: dayEnd }
 
       const [action, awareness, uncertain, ignored] = await Promise.all([
@@ -254,7 +296,7 @@ export async function createWeeklyDigest(userId: string) {
         emailRepo.findEmailsByClassification(userId, 'ignore', range),
       ])
 
-      return { date, action, awareness, uncertain, ignored }
+      return { date: dayStart, action, awareness, uncertain, ignored }
     })
   )
 
@@ -286,6 +328,6 @@ export async function createWeeklyDigest(userId: string) {
     periodEnd: end,
     content,
     stats,
-    isPreview: true,
+    isPreview: !isAfterSunday20InTz(now, tz),
   })
 }

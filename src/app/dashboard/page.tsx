@@ -427,6 +427,7 @@ function DashboardContent() {
               value={confirmedTaskCount + pendingTaskCount}
               icon={<CheckSquare className="h-4 w-4 text-green-600" />}
               detail={`${completedTasks} completed ${periodLabel.toLowerCase()}, ${allTimeOpenTasks} open total`}
+              href={dashboardLink('/dashboard/tasks')}
             />
             <StatCard
               title={dueTitle}

@@ -92,11 +92,11 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      await createDailyDigest(user.id)
+      await createDailyDigest(user.id, tz)
       const weeklyStatus = weekday === 0 ? 'ok' : 'skipped'
 
       if (weekday === 0) {
-        await createWeeklyDigest(user.id)
+        await createWeeklyDigest(user.id, tz)
       }
 
       results.push({

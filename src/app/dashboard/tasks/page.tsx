@@ -73,6 +73,7 @@ type TaskItem = {
   project?: TaskProject
   matter?: { id: string; title: string } | null
   source?: string | null
+  createdAt?: string
 }
 
 type TaskUpdateData = {
@@ -136,6 +137,15 @@ function TasksContent() {
   const initialPriority = parsePriorityFilter(searchParams.get('priority'))
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus)
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(initialPriority)
+  const [dateFilter, setDateFilter] = useState<{ from?: Date; to?: Date } | null>(() => {
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
+    if (!from && !to) return null
+    return {
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+    }
+  })
   const [sortBy, setSortBy] = useState('priority')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -380,7 +390,30 @@ function TasksContent() {
     toast.success(`${ids.length} task${ids.length === 1 ? '' : 's'} ${label}`)
   }
 
-  const tasks = useMemo(() => ((res as QueryResponse<TaskItem[]>)?.data || []) as TaskItem[], [res])
+  const tasks = useMemo(() => {
+    const raw = ((res as QueryResponse<TaskItem[]>)?.data || []) as TaskItem[]
+    if (!dateFilter) return raw
+    return raw.filter((t) => {
+      if (!t.createdAt) return true
+      const created = new Date(t.createdAt)
+      if (dateFilter.from && created < dateFilter.from) return false
+      if (dateFilter.to) {
+        const end = new Date(dateFilter.to)
+        end.setHours(23, 59, 59, 999)
+        if (created > end) return false
+      }
+      return true
+    })
+  }, [res, dateFilter])
+
+  const clearDateFilter = useCallback(() => {
+    setDateFilter(null)
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('from')
+    params.delete('to')
+    const q = params.toString()
+    router.replace(q ? `/dashboard/tasks?${q}` : '/dashboard/tasks', { scroll: false })
+  }, [router, searchParams])
 
   return (
     <div className="space-y-5">
@@ -406,6 +439,23 @@ function TasksContent() {
           </>
         }
       />
+
+      {dateFilter ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-2.5 text-sm">
+          <span className="text-blue-900">
+            Showing tasks from{' '}
+            <strong>{dateFilter.from?.toLocaleDateString() || '—'}</strong>
+            {dateFilter.to ? <> to <strong>{dateFilter.to.toLocaleDateString()}</strong></> : null}
+          </span>
+          <button
+            type="button"
+            onClick={clearDateFilter}
+            className="shrink-0 rounded-full px-3 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+          >
+            Clear date
+          </button>
+        </div>
+      ) : null}
 
       {/* Filter bar */}
       <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm backdrop-blur">
