@@ -16,6 +16,14 @@ vi.mock('@/repositories/digest-repo', () => ({
   createDigest: vi.fn(),
 }))
 
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    user: {
+      findUnique: vi.fn(),
+    },
+  },
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -23,6 +31,7 @@ vi.mock('@/repositories/digest-repo', () => ({
 import * as emailRepo from '@/repositories/email-repo'
 import * as taskRepo from '@/repositories/task-repo'
 import * as digestRepo from '@/repositories/digest-repo'
+import { prisma } from '@/lib/prisma'
 import { createDailyDigest, createWeeklyDigest } from '../digest-pipeline'
 
 // ---------------------------------------------------------------------------
@@ -42,12 +51,14 @@ function makeTask(title: string, status: 'confirmed' | 'pending', priorityScore:
 const mockEmailRepo = vi.mocked(emailRepo)
 const mockTaskRepo = vi.mocked(taskRepo)
 const mockDigestRepo = vi.mocked(digestRepo)
+const mockUser = vi.mocked(prisma.user)
 
 beforeEach(() => {
   vi.clearAllMocks()
   mockEmailRepo.findEmailsByClassification.mockResolvedValue([])
   mockTaskRepo.findTasksByDateRange.mockResolvedValue([])
   mockDigestRepo.createDigest.mockResolvedValue({ id: 'digest-1' } as never)
+  mockUser.findUnique.mockResolvedValue({ timezone: 'UTC' } as never)
 })
 
 // ---------------------------------------------------------------------------
