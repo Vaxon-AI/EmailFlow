@@ -12,6 +12,7 @@ interface User {
   name: string
   isAdmin: boolean
   manualReviewMode: boolean
+  plan: string
 }
 
 export function useAuth() {

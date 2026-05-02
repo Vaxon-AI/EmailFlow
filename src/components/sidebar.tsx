@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -11,6 +12,10 @@ import {
   Settings,
   Zap,
 } from 'lucide-react'
+import { useAuth } from '@/lib/use-auth'
+import { useQuery } from '@tanstack/react-query'
+import { CACHE_TIME } from '@/lib/query-cache'
+import { UpgradeModal } from '@/components/upgrade-modal'
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -28,6 +33,16 @@ export function Sidebar({
   onMobileClose: () => void
 }) {
   const pathname = usePathname()
+  const { user } = useAuth()
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+
+  const { data: quotaRes } = useQuery({
+    queryKey: ['quota'],
+    queryFn: () => fetch('/api/settings/quota').then((r) => r.json()),
+    staleTime: CACHE_TIME.stats,
+    enabled: user?.plan === 'free',
+  })
+  const quota = quotaRes?.data
 
   return (
     <>
@@ -91,12 +106,57 @@ export function Sidebar({
           })}
         </nav>
 
-        <div className="border-t border-gray-200/80 px-5 py-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Workspace</p>
-          <p className="mt-1 text-xs text-gray-500">
-            Focused email triage, task extraction, and digest review.
-          </p>
+        <div className="border-t border-gray-200/80 px-4 py-4">
+          {user?.plan === 'pro' ? (
+            <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2.5">
+              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600">
+                <Zap className="h-3.5 w-3.5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-blue-700">Pro plan</p>
+                <p className="text-[10px] text-blue-500">Unlimited access</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {quota && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-gray-400">Classification</span>
+                    <span className="text-[10px] font-medium text-gray-500">
+                      {quota.classify.used}/{quota.classify.limit}
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all',
+                        quota.classify.used / quota.classify.limit >= 0.9
+                          ? 'bg-red-400'
+                          : quota.classify.used / quota.classify.limit >= 0.7
+                            ? 'bg-amber-400'
+                            : 'bg-blue-400'
+                      )}
+                      style={{ width: `${Math.min(100, (quota.classify.used / quota.classify.limit) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={() => setUpgradeOpen(true)}
+                className="flex w-full items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-left transition-colors hover:bg-blue-100"
+              >
+                <Zap className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-blue-700">Upgrade to Pro</p>
+                  <p className="truncate text-[10px] text-blue-500">Remove all limits</p>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
+
+        <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} />
       </aside>
     </>
   )

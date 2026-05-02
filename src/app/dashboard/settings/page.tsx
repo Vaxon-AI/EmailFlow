@@ -31,7 +31,10 @@ import {
   Trash2,
   Unplug,
   User,
+  Zap,
+  BarChart2,
 } from 'lucide-react'
+import { UpgradeModal } from '@/components/upgrade-modal'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
@@ -165,6 +168,7 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SettingsSection>('account')
   const [timezonePickerOpen, setTimezonePickerOpen] = useState(false)
   const [timezoneSearch, setTimezoneSearch] = useState('')
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [deviceTimezone] = useState<string | null>(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || null
@@ -184,6 +188,13 @@ export default function SettingsPage() {
     queryFn: () => fetch('/api/auth/me?details=full').then((r) => r.json()),
     staleTime: CACHE_TIME.auth,
   })
+
+  const { data: quotaRes } = useQuery({
+    queryKey: ['quota'],
+    queryFn: () => fetch('/api/settings/quota').then((r) => r.json()),
+    staleTime: CACHE_TIME.stats,
+  })
+  const quota = quotaRes?.data
 
   const currentUser: CurrentUser | null = meRes?.user || meRes?.data || null
   const syncData = stats?.data?.sync
@@ -301,6 +312,116 @@ export default function SettingsPage() {
               currentSessionId={currentUser?.currentSessionId || null}
               onLogoutCurrent={() => logout()}
             />
+
+            {/* Plan & Usage */}
+            <Card className="border-white/80 bg-white/95 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <BarChart2 className="h-4 w-4 text-blue-700" />
+                  Plan &amp; Usage
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {user?.plan === 'pro' ? (
+                      <Badge className="gap-1.5 bg-blue-600 text-white hover:bg-blue-600">
+                        <Zap className="h-3 w-3" />
+                        Pro
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-gray-200 text-gray-600">Free</Badge>
+                    )}
+                    <span className="text-sm text-gray-500">
+                      {user?.plan === 'pro' ? 'Unlimited access to all features' : 'Monthly usage limits apply'}
+                    </span>
+                  </div>
+                  {user?.plan !== 'pro' && (
+                    <button
+                      onClick={() => setUpgradeOpen(true)}
+                      className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+                    >
+                      <Zap className="h-3.5 w-3.5" />
+                      Upgrade to Pro
+                    </button>
+                  )}
+                </div>
+
+                {quota && user?.plan !== 'pro' && (
+                  <div className="space-y-4 rounded-2xl border border-gray-200/80 bg-gray-50/70 p-4">
+                    {/* Classification quota */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">Email classification</span>
+                        <span className="text-sm tabular-nums text-gray-500">
+                          {quota.classify.used} / {quota.classify.limit}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className={cn(
+                            'h-full rounded-full transition-all',
+                            quota.classify.used / quota.classify.limit >= 0.9
+                              ? 'bg-red-500'
+                              : quota.classify.used / quota.classify.limit >= 0.7
+                                ? 'bg-amber-500'
+                                : 'bg-blue-500'
+                          )}
+                          style={{ width: `${Math.min(100, (quota.classify.used / quota.classify.limit) * 100)}%` }}
+                        />
+                      </div>
+                      {quota.classify.used >= quota.classify.limit && (
+                        <p className="text-xs text-red-600">Limit reached. Upgrade to Pro for unlimited classification.</p>
+                      )}
+                    </div>
+
+                    {/* Extract-to-task quota */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">Extract to task</span>
+                        <span className="text-sm tabular-nums text-gray-500">
+                          {quota.extract.used} / {quota.extract.limit}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className={cn(
+                            'h-full rounded-full transition-all',
+                            quota.extract.used / quota.extract.limit >= 1
+                              ? 'bg-red-500'
+                              : quota.extract.used / quota.extract.limit >= 0.67
+                                ? 'bg-amber-500'
+                                : 'bg-blue-500'
+                          )}
+                          style={{ width: `${Math.min(100, (quota.extract.used / quota.extract.limit) * 100)}%` }}
+                        />
+                      </div>
+                      {quota.extract.used >= quota.extract.limit && (
+                        <p className="text-xs text-red-600">Limit reached. Upgrade to Pro for unlimited extractions.</p>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-gray-400">
+                      Resets on {new Date(quota.classify.resetAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                )}
+
+                {user?.plan === 'pro' && (
+                  <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600">
+                      <Zap className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-blue-800">Pro plan active</p>
+                      <p className="text-xs text-blue-600">All features unlocked with no usage limits.</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} />
+
             <Card className="border-white/80 bg-white/95 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
