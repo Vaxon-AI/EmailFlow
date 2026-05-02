@@ -192,6 +192,7 @@ function toSessionUser(user: {
 
 export async function createUserSession(input: {
   userId: string
+  userEmail?: string
   remember?: boolean
   request: Request
   sendNewDeviceAlert?: boolean
@@ -268,12 +269,7 @@ export async function createUserSession(input: {
       },
     })
 
-    const user = await tx.user.findUnique({
-      where: { id: input.userId },
-      select: { email: true },
-    })
-
-    return { session, userEmail: user?.email || null }
+    return { session, userEmail: input.userEmail ?? null }
   })
 
   if (sendNewDeviceAlert) {

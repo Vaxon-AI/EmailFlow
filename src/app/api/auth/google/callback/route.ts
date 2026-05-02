@@ -240,6 +240,7 @@ export async function GET(req: NextRequest) {
 
     const { rawToken } = await createUserSession({
       userId: targetUserId,
+      userEmail: gmailEmail,
       request: req,
       sendNewDeviceAlert: false,
     })

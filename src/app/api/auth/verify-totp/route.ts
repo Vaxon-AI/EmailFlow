@@ -57,6 +57,7 @@ export async function POST(req: Request) {
     const remember = Boolean(payload.remember)
     const { rawToken, isNewDevice } = await createUserSession({
       userId: user.id,
+      userEmail: user.email,
       remember,
       request: req,
     })

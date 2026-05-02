@@ -41,6 +41,7 @@ export async function POST(req: Request) {
 
     const { rawToken } = await createUserSession({
       userId: user.id,
+      userEmail: user.email,
       request: req,
       sendNewDeviceAlert: false,
     })
