@@ -351,37 +351,39 @@ type SessionWithUser = Prisma.SessionGetPayload<{ include: typeof SESSION_INCLUD
 
 /** Resolve which session record to use for the given token hash, handling rotation replay. */
 async function resolveSession(hash: string, now: Date): Promise<SessionWithUser | null> {
-  // Primary: token is the current active token
-  const primary = await prisma.session.findUnique({ where: { tokenHash: hash }, include: SESSION_INCLUDE })
-  if (primary) return primary
-
-  // Secondary: token was recently rotated — look up by previousTokenHash
-  const rotated = await prisma.session.findFirst({
-    where: { previousTokenHash: hash },
+  // Single query covers both the active-token case and the rotation-grace-period case.
+  const session = await prisma.session.findFirst({
+    where: { OR: [{ tokenHash: hash }, { previousTokenHash: hash }] },
     include: SESSION_INCLUDE,
   })
 
-  if (!rotated || !rotated.rotatedAt) return null
+  if (!session) return null
 
-  const ageMs = now.getTime() - rotated.rotatedAt.getTime()
+  // Primary match: token is still the current active token
+  if (session.tokenHash === hash) return session
+
+  // Secondary match: token was recently rotated
+  if (!session.rotatedAt) return null
+
+  const ageMs = now.getTime() - session.rotatedAt.getTime()
 
   if (ageMs <= ROTATION_GRACE_PERIOD_MS) {
     // Concurrent request that raced with the rotation — allow through using the new session
-    return rotated
+    return session
   }
 
   // Old token submitted well after rotation — possible session hijack
   await prisma.session.updateMany({
-    where: { userId: rotated.userId, status: ACTIVE_STATUS },
+    where: { userId: session.userId, status: ACTIVE_STATUS },
     data: { status: REVOKED_STATUS, revokedAt: now },
   })
 
   queueSuspiciousActivityAlert({
-    userId: rotated.userId,
-    userEmail: rotated.user.email,
+    userId: session.userId,
+    userEmail: session.user.email,
     reason: 'rotated_token_replay',
-    ipAddress: rotated.ipAddress,
-    deviceName: rotated.deviceName,
+    ipAddress: session.ipAddress,
+    deviceName: session.deviceName,
   })
 
   return null

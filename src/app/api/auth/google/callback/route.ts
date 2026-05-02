@@ -32,17 +32,27 @@ export async function GET(req: NextRequest) {
     }
 
     // --- Token exchange ---
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        redirect_uri: GOOGLE_REDIRECT_URI,
-        grant_type: 'authorization_code',
-      }),
-    })
+    const tokenController = new AbortController()
+    const tokenTimeout = setTimeout(() => tokenController.abort(), 10_000)
+    let tokenRes: Response
+    try {
+      tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: GOOGLE_CLIENT_ID,
+          client_secret: GOOGLE_CLIENT_SECRET,
+          redirect_uri: GOOGLE_REDIRECT_URI,
+          grant_type: 'authorization_code',
+        }),
+        signal: tokenController.signal,
+      })
+    } catch {
+      return NextResponse.redirect(new URL(`${errorBase}?gmail_error=token_exchange_failed`, APP_URL))
+    } finally {
+      clearTimeout(tokenTimeout)
+    }
 
     const tokenData = await tokenRes.json()
 
@@ -60,9 +70,19 @@ export async function GET(req: NextRequest) {
     }
 
     // --- Fetch Google profile ---
-    const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
+    const profileController = new AbortController()
+    const profileTimeout = setTimeout(() => profileController.abort(), 10_000)
+    let profileRes: Response
+    try {
+      profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: profileController.signal,
+      })
+    } catch {
+      return NextResponse.redirect(new URL(`${errorBase}?gmail_error=userinfo_failed`, APP_URL))
+    } finally {
+      clearTimeout(profileTimeout)
+    }
 
     const profileData = await profileRes.json()
 

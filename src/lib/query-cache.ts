@@ -1,7 +1,7 @@
 export const CACHE_TIME = {
   auth: 5 * 60 * 1000,
-  stats: 60 * 1000,
-  list: 60 * 1000,
+  stats: 5 * 60 * 1000,
+  list: 5 * 60 * 1000,
   detail: 2 * 60 * 1000,
   taxonomy: 10 * 60 * 1000,
 } as const

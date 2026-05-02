@@ -29,46 +29,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!isAuthenticated) return
 
-    const prefetchWorkspace = () => {
-      void queryClient.prefetchQuery({
-        queryKey: ['dashboard-summary'],
-        queryFn: () => fetch('/api/dashboard/summary').then((r) => r.json()),
-        staleTime: CACHE_TIME.stats,
-      })
-      void queryClient.prefetchQuery({
-        queryKey: ['tasks', '', 'priority'],
-        queryFn: () => fetch('/api/tasks?status=&sort=priority&limit=50').then((r) => r.json()),
-        staleTime: CACHE_TIME.list,
-      })
-      void queryClient.prefetchQuery({
-        queryKey: ['projects'],
-        queryFn: () => fetch('/api/projects').then((r) => r.json()),
-        staleTime: CACHE_TIME.list,
-      })
-      void queryClient.prefetchQuery({
-        queryKey: ['emails', 1],
-        queryFn: () => fetch('/api/emails?page=1&limit=50').then((r) => r.json()),
-        staleTime: CACHE_TIME.list,
-      })
-      void queryClient.prefetchQuery({
-        queryKey: ['digests'],
-        queryFn: () => fetch('/api/digest?limit=20').then((r) => r.json()),
-        staleTime: CACHE_TIME.list,
-      })
-    }
-
-    const browserWindow = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
-      cancelIdleCallback?: (id: number) => void
-    }
-
-    if (browserWindow.requestIdleCallback && browserWindow.cancelIdleCallback) {
-      const idleId = browserWindow.requestIdleCallback(prefetchWorkspace, { timeout: 3000 })
-      return () => browserWindow.cancelIdleCallback?.(idleId)
-    }
-
-    const timeoutId = globalThis.setTimeout(prefetchWorkspace, 1000)
-    return () => globalThis.clearTimeout(timeoutId)
+    void queryClient.prefetchQuery({
+      queryKey: ['tasks', '', 'priority'],
+      queryFn: () => fetch('/api/tasks?status=&sort=priority&limit=50').then((r) => r.json()),
+      staleTime: CACHE_TIME.list,
+    })
+    void queryClient.prefetchQuery({
+      queryKey: ['projects'],
+      queryFn: () => fetch('/api/projects').then((r) => r.json()),
+      staleTime: CACHE_TIME.list,
+    })
+    void queryClient.prefetchQuery({
+      queryKey: ['emails', 1],
+      queryFn: () => fetch('/api/emails?page=1&limit=50').then((r) => r.json()),
+      staleTime: CACHE_TIME.list,
+    })
+    void queryClient.prefetchQuery({
+      queryKey: ['digests'],
+      queryFn: () => fetch('/api/digest?limit=20').then((r) => r.json()),
+      staleTime: CACHE_TIME.list,
+    })
   }, [isAuthenticated, queryClient])
 
   if (!isLoading && !isAuthenticated) {
