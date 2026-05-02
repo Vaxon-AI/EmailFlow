@@ -102,6 +102,15 @@ export function SignInContent() {
             </svg>
             <span className="flex-1">Continue with Google</span>
           </a>
+          <div className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5 text-sm text-gray-400">
+            <span className="flex-1">Continue with Microsoft</span>
+            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">Coming soon</span>
+          </div>
+
+          <div className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5 text-sm text-gray-400">
+            <span className="flex-1">Continue with Apple</span>
+            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">Coming soon</span>
+          </div>
         </div>
 
         <div className="mb-4 flex items-center gap-3">
