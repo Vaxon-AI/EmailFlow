@@ -11,7 +11,7 @@
     "lint": "eslint",
     "seed": "npx tsx prisma/seed.ts",
     "test": "vitest run",
-    "test:unit": "vitest run src/lib/__tests__ src/ai/utils/__tests__ src/repositories/__tests__ src/services/__tests__ src/workflows/__tests__",
+    "test:unit": "vitest run src/lib/__tests__ src/ai/utils/__tests__ src/ai/skills/__tests__ src/repositories/__tests__ src/services/__tests__ src/workflows/__tests__",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
