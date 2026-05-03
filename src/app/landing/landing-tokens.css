@@ -1,0 +1,61 @@
+/* Cinematic landing tokens — scoped to .landing-cine, references app font vars from globals.css */
+
+.landing-cine {
+  --ef-base: #F4F6FB;
+  --ef-surface: #FFFFFF;
+  --ef-surface-2: #EAEEF7;
+  --ef-surface-3: #DCE2F0;
+  --ef-line: #D1D8E8;
+  --ef-line-soft: #E3E8F2;
+
+  --ef-ink: #0A1024;
+  --ef-ink-dim: #2C3754;
+  --ef-ink-mute: #6A7593;
+  --ef-ink-faint: #A5AEC6;
+
+  --ef-signal: #1E4BE0;
+  --ef-signal-dim: #3E6AD6;
+  --ef-warn: #F5B547;
+  --ef-crit: #FF6B5B;
+
+  /* Type — point at the app's existing system font stack from globals.css */
+  --ff-serif: var(--font-jakarta);
+  --ff-mono: var(--font-jetbrains);
+  --ff-sans: var(--font-inter);
+
+  background: var(--ef-base);
+  color: var(--ef-ink);
+  font-family: var(--ff-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.landing-cine .mono { font-family: var(--ff-mono); font-feature-settings: "ss01", "cv11"; }
+.landing-cine .serif { font-family: var(--ff-serif); }
+.landing-cine .sans { font-family: var(--ff-sans); }
+
+.landing-cine .label {
+  font-family: var(--ff-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ef-ink-mute);
+  font-weight: 500;
+}
+
+.landing-cine .rule { height: 1px; background: var(--ef-line); }
+.landing-cine .rule-soft { height: 1px; background: var(--ef-line-soft); }
+
+.landing-cine ::selection {
+  background: var(--ef-signal);
+  color: #ffffff;
+}
+
+@keyframes landingScrollHint {
+  0% { transform: translateY(-16px); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(48px); opacity: 0; }
+}
+
+@keyframes landingPulseDot {
+  50% { opacity: 0.3; }
+}
