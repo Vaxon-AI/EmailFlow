@@ -118,7 +118,7 @@ function getScheduleDuration(startDate: string, dueDate: string) {
   return `${days} day${days === 1 ? '' : 's'}`
 }
 
-// 获取某项的子任务（下一级）
+// Get direct children of an item (next level down)
 function getDirectChildren(items: ChecklistItem[], parentId: string): ChecklistItem[] {
   const parentIndex = items.findIndex(i => i.id === parentId)
   if (parentIndex < 0) return []
@@ -137,13 +137,13 @@ function getDirectChildren(items: ChecklistItem[], parentId: string): ChecklistI
   return children
 }
 
-// 判断是否有子任务
+// Check whether an item has any children
 function hasChildren(items: ChecklistItem[], itemId: string): boolean {
   const itemIndex = items.findIndex(i => i.id === itemId)
   if (itemIndex < 0 || itemIndex >= items.length - 1) return false
 
   const item = items[itemIndex]
-  // 检查后续是否有子级（level > item.level，且是第一个这样的项）
+  // Check whether a subsequent item is a child (level > item.level)
   for (let i = itemIndex + 1; i < items.length; i++) {
     if (items[i].level > item.level) {
       return true
@@ -154,7 +154,7 @@ function hasChildren(items: ChecklistItem[], itemId: string): boolean {
   return false
 }
 
-// 删除项目及其所有后代
+// Delete an item and all its descendants
 function deleteItemWithChildren(items: ChecklistItem[], itemId: string): ChecklistItem[] {
   const itemIndex = items.findIndex(i => i.id === itemId)
   if (itemIndex < 0) return items
@@ -172,7 +172,7 @@ function deleteItemWithChildren(items: ChecklistItem[], itemId: string): Checkli
   return result
 }
 
-// 检查所有子任务是否完成（递归）
+// Recursively check whether all children are completed
 function areAllChildrenCompleted(items: ChecklistItem[], itemId: string): boolean {
   const children = getDirectChildren(items, itemId)
   if (children.length === 0) return true
@@ -245,7 +245,7 @@ export default function TaskDetailPage() {
         }))
         setChecklistItems(itemsWithStatus)
 
-        // 默认展开所有有子任务的项目
+        // Expand all items that have children by default
         const expandedByDefault = new Set<string>()
         itemsWithStatus.forEach((item) => {
           if (hasChildren(itemsWithStatus, item.id)) {
@@ -343,7 +343,7 @@ export default function TaskDetailPage() {
       item.id === id ? { ...item, completed: !item.completed } : item
     )
 
-    // 自动完成父任务：如果所有子任务都完成，父任务也标记为完成
+    // Auto-complete parent: if all children are done, mark the parent complete too
     const item = next.find(i => i.id === id)
     if (item?.completed) {
       for (let i = next.length - 1; i >= 0; i--) {
@@ -355,7 +355,7 @@ export default function TaskDetailPage() {
         }
       }
 
-      // 如果刚勾选的是"waiting for reply"条目，直接完成 task
+      // If the item just checked is the "waiting for reply" entry, complete the task immediately
       if (waitingItemIdRef.current && id === waitingItemIdRef.current) {
         waitingItemIdRef.current = null
         setChecklistItems(next)
@@ -368,7 +368,7 @@ export default function TaskDetailPage() {
     setChecklistItems(next)
     autoSaveChecklist(next)
 
-    // 所有条目都完成且 task 未完成 → 弹完成确认弹窗
+    // All items done and task not yet complete → show completion confirmation dialog
     const allDone = next.length > 0 && next.every(i => i.completed)
     const taskNotDone = editStatus !== 'completed' && editStatus !== 'dismissed'
     if (allDone && taskNotDone) {
@@ -449,7 +449,7 @@ export default function TaskDetailPage() {
 
     const prevItem = checklistItems[itemIndex - 1]
 
-    // 只能变成前一项的下一级，且最多到level 2
+    // Can only become one level deeper than the previous item, max level 2
     const newLevel = prevItem.level + 1
     if (newLevel > 2) return
 
@@ -965,21 +965,20 @@ export default function TaskDetailPage() {
                     const itemHasChildren = hasChildren(checklistItems, item.id)
                     const childrenCount = getDirectChildren(checklistItems, item.id).length
 
-                    // 检查是否应该显示这个项目
-                    // 规则：顶层项目或其祖先项目都已展开
+                    // Determine visibility: show if top-level or all ancestors are expanded
                     const shouldShow = (() => {
                       if (item.level === 0) return true
-                      // 向上查找所有父项目，检查是否都展开
+                      // Walk up to find all parent items and check they are expanded
                       for (let i = idx - 1; i >= 0; i--) {
                         const ancestor = checklistItems[i]
                         if (ancestor.level < item.level) {
-                          // 找到了父级
+                          // Found a parent
                           if (ancestor.level === item.level - 1) {
                             return expandedItems.has(ancestor.id)
                           }
-                          // 继续向上找
+                          // Keep looking upward
                         } else if (ancestor.level === 0) {
-                          // 到顶了，没找到父项
+                          // Reached the top without finding the direct parent
                           return false
                         }
                       }

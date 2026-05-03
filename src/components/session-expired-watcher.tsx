@@ -17,10 +17,10 @@ export function SessionExpiredWatcher() {
       // Toast is already visible
       if (activeToastId.current !== null) return
 
-      const id = toast.error('登录已失效，请重新登录', {
+      const id = toast.error('Session expired. Please sign in again.', {
         duration: Infinity,
         action: {
-          label: '重新登录',
+          label: 'Sign in',
           onClick: () => {
             activeToastId.current = null
             router.push('/auth/signin')
