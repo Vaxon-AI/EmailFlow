@@ -81,6 +81,7 @@ export default function EmailDetailPage() {
   const [replyDraft, setReplyDraft] = useState('')
   const [generatingReply, setGeneratingReply] = useState(false)
   const [savingReply, setSavingReply] = useState(false)
+  const [extracting, setExtracting] = useState(false)
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['email', emailId],
@@ -217,6 +218,31 @@ export default function EmailDetailPage() {
       showError('Failed to unlink task')
     } finally {
       setUnlinkingTaskId(null)
+    }
+  }
+
+  const handleExtractToTask = async () => {
+    if (extracting) return
+    setExtracting(true)
+    try {
+      const res = await fetch('/api/emails/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', emailIds: [emailId] }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        showError(json?.error?.message || 'Failed to extract task')
+        return
+      }
+      toast.success('Task extraction started — it will appear in Linked Tasks shortly.')
+      queryClient.invalidateQueries({ queryKey: ['email', emailId] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
+    } catch {
+      showError('Failed to extract task')
+    } finally {
+      setExtracting(false)
     }
   }
 
@@ -563,14 +589,30 @@ export default function EmailDetailPage() {
                     Linked Tasks
                     <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">{taskLinks.length}</span>
                   </CardTitle>
-                  <Button
-                    size="sm"
-                    onClick={() => setShowCreateModal(true)}
-                    className="h-8 gap-1.5 bg-blue-600 px-3 hover:bg-blue-700"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Create
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {email.awaitingReview && email.classification === 'action' && (
+                      <Button
+                        size="sm"
+                        onClick={handleExtractToTask}
+                        disabled={extracting}
+                        className="h-8 gap-1.5 px-3"
+                      >
+                        {extracting
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Sparkles className="h-3.5 w-3.5" />}
+                        Extract to Task
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowCreateModal(true)}
+                      className="h-8 gap-1.5 px-3"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Create
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -632,7 +674,9 @@ export default function EmailDetailPage() {
                   <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4">
                     <p className="text-sm font-medium text-slate-700">No linked tasks yet</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Create a task here to keep this email connected to work that follows from it.
+                      {email.awaitingReview && email.classification === 'action'
+                        ? 'Click "Extract to Task" to let AI extract and create a task from this email.'
+                        : 'Create a task here to keep this email connected to work that follows from it.'}
                     </p>
                   </div>
                 )}
