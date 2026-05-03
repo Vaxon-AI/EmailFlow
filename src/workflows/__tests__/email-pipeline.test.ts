@@ -510,12 +510,19 @@ describe('processEmail — error handling', () => {
     await expect(processEmail('user-1', makeEmail())).resolves.toBeDefined()
   })
 
-  it('returns uncertain when extractTask throws', async () => {
+  it('preserves the saved classification when extractTask throws (no rollback)', async () => {
+    // classifyEmail succeeded earlier in the pipeline → updateClassification
+    // wrote 'action' to the DB. extractTask then fails. The pipeline must NOT
+    // mark the email as failed/uncertain — that would regress an already
+    // classified email back to "needs review".
     vi.mocked(ai.extractTask).mockRejectedValue(new Error('extraction failed'))
 
     const result = await processEmail('user-1', makeEmail())
 
-    expect(result.classification).toBe('uncertain')
+    expect(result.classification).toBe('action')
     expect(result.taskCreated).toBe(false)
+    // markClassificationFailed must not be called when classification has
+    // already been persisted.
+    expect(emailRepo.markClassificationFailed).not.toHaveBeenCalled()
   })
 })

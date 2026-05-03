@@ -687,6 +687,14 @@ export async function processEmail(
     taskStatus?: 'pending' | 'confirmed'
   }
 ): Promise<PipelineResult> {
+  // Tracks whether classification has been persisted to the DB.
+  // Once true, a later step failure must NOT overwrite the saved
+  // classification with markClassificationFailed (the historical bug
+  // where action emails regressed to uncertain "Classification failed"
+  // when extractTask / scorePriority threw).
+  let classificationSaved = false
+  let savedCategory: string | null = null
+  let savedConfidence = 0
   try {
   // ── 0. Pre-filter (rule-based, no AI) ─────────────────────
   const rawBodyForCheck = email.bodyFull || email.bodyPreview
@@ -697,6 +705,7 @@ export async function processEmail(
       reasoning: 'Email body too short to classify',
       isWorkRelated: false,
     })
+    classificationSaved = true
     return {
       emailId: email.id,
       classification: 'uncertain',
@@ -715,6 +724,7 @@ export async function processEmail(
       reasoning: preFilter.reasoning!,
       isWorkRelated: preFilter.isWorkRelated!,
     })
+    classificationSaved = true
 
     return {
       emailId: email.id,
@@ -758,6 +768,9 @@ export async function processEmail(
   if (email.awaitingReview) {
     if (classification.category === 'action') {
       await emailRepo.saveClassificationFields(email.id, classification)
+      classificationSaved = true
+      savedCategory = classification.category
+      savedConfidence = classification.confidence
       return {
         emailId: email.id,
         classification: classification.category,
@@ -771,6 +784,9 @@ export async function processEmail(
   }
 
   await emailRepo.updateClassification(email.id, classification)
+  classificationSaved = true
+  savedCategory = classification.category
+  savedConfidence = classification.confidence
 
   let currentThreadMemory: ThreadMemory | null = existingThreadMemory
   let currentMatterMemory: MatterMemory | null = existingMatterMemory
@@ -933,17 +949,38 @@ export async function processEmail(
     reviewCandidate,
   }
   } catch (err) {
-    console.error('[processEmail]', email.id, err)
-    Sentry.captureException(err, { tags: { action: 'processEmail' }, extra: { userId } })
-    try {
-      await emailRepo.markClassificationFailed(email.id)
-    } catch (dbErr) {
-      console.error('[processEmail] failed to mark email as failed', email.id, dbErr)
+    const stage = classificationSaved ? 'post-classify' : 'classify'
+    console.error(`[processEmail] ${stage} error for ${email.id}:`, err)
+    Sentry.captureException(err, {
+      tags: { action: 'processEmail', stage },
+      extra: { userId },
+    })
+
+    if (!classificationSaved) {
+      // Real classify failure — safe to mark the email as failed since no
+      // classification has been persisted yet.
+      try {
+        await emailRepo.markClassificationFailed(email.id)
+      } catch (dbErr) {
+        console.error('[processEmail] failed to mark email as failed', email.id, dbErr)
+      }
+      return {
+        emailId: email.id,
+        classification: 'uncertain',
+        confidence: 0,
+        taskCreated: false,
+        skippedByRule: false,
+      }
     }
+
+    // Classification already saved — a later step (thread memory / matter /
+    // extract / score / task creation) threw. Leave the saved classification
+    // alone so the email does not regress in the UI. The user can manually
+    // trigger task extraction from the email detail page if needed.
     return {
       emailId: email.id,
-      classification: 'uncertain',
-      confidence: 0,
+      classification: savedCategory ?? 'uncertain',
+      confidence: savedConfidence,
       taskCreated: false,
       skippedByRule: false,
     }

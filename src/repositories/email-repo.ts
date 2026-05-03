@@ -141,9 +141,14 @@ export async function dismissStaleReviewEmails(olderThanDays = 15) {
   return count
 }
 
+// Marks an email as having failed classification.
+// Defensive guard: only updates emails whose processingStatus is still 'pending',
+// so a later pipeline-step failure can never overwrite an already-saved
+// classification. (Without this, a Gemini 429 in extractTask would regress
+// an already-classified action email back to "uncertain — Classification failed".)
 export async function markClassificationFailed(emailId: string) {
-  return prisma.email.update({
-    where: { id: emailId },
+  return prisma.email.updateMany({
+    where: { id: emailId, processingStatus: 'pending' },
     data: {
       classification: 'uncertain',
       classConfidence: 0,

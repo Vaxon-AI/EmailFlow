@@ -155,14 +155,14 @@ describe('updateClassification', () => {
 })
 
 describe('markClassificationFailed', () => {
-  it('sets processingStatus to "failed" and classification to "uncertain"', async () => {
-    mockPrismaEmail.update.mockResolvedValue({} as any)
+  it('sets processingStatus to "failed" and classification to "uncertain" only on pending emails', async () => {
+    mockPrismaEmail.updateMany.mockResolvedValue({ count: 1 })
 
     await markClassificationFailed('email-1')
 
-    expect(mockPrismaEmail.update).toHaveBeenCalledWith(
+    expect(mockPrismaEmail.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'email-1' },
+        where: { id: 'email-1', processingStatus: 'pending' },
         data: expect.objectContaining({
           processingStatus: 'failed',
           classification: 'uncertain',
@@ -170,6 +170,17 @@ describe('markClassificationFailed', () => {
         }),
       })
     )
+  })
+
+  it('does not affect emails whose processingStatus is already done (defensive)', async () => {
+    mockPrismaEmail.updateMany.mockResolvedValue({ count: 0 })
+
+    await markClassificationFailed('email-already-done')
+
+    // The where clause must include processingStatus: 'pending' so an
+    // already-classified email is not regressed by a later step failure.
+    const call = mockPrismaEmail.updateMany.mock.calls.at(-1)?.[0]
+    expect(call?.where).toEqual({ id: 'email-already-done', processingStatus: 'pending' })
   })
 })
 

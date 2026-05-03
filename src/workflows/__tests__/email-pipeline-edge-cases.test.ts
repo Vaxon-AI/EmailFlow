@@ -422,8 +422,10 @@ describe('processEmail — null or empty subject', () => {
 // AI extractTask returns partial / malformed fields
 //
 // If extractTask returns missing or null fields the pipeline must not crash.
-// The outer try/catch must absorb any downstream TypeError and return
-// uncertain + markClassificationFailed — the email must never be stuck.
+// The outer try/catch must absorb any downstream TypeError and return a
+// defined result. Crucially, when classification has already been saved,
+// the catch must NOT call markClassificationFailed — that would regress
+// an already-classified email back to "uncertain — Classification failed".
 // ---------------------------------------------------------------------------
 
 describe('processEmail — extractTask returns partial fields', () => {
@@ -447,22 +449,25 @@ describe('processEmail — extractTask returns partial fields', () => {
     expect(result.emailId).toBe('email-1')
   })
 
-  it('calls markClassificationFailed if extractTask returns null fields that crash downstream', async () => {
-    // Simulate malformed AI output that causes a TypeError in scorePriority
+  it('does NOT call markClassificationFailed when extractTask crashes (classification already saved)', async () => {
+    // Simulate malformed AI output that causes a TypeError in downstream steps
     vi.mocked(ai.extractTask).mockResolvedValue(null as any)
 
     await processEmail('user-1', makeEmail())
 
-    // The outer catch must have fired — email must be marked failed, not stuck in pending
-    expect(emailRepo.markClassificationFailed).toHaveBeenCalledWith('email-1')
+    // classifyEmail succeeded and updateClassification was called — the saved
+    // classification must NOT be rolled back by the post-classify catch path.
+    expect(emailRepo.markClassificationFailed).not.toHaveBeenCalled()
   })
 
-  it('returns uncertain classification when extractTask returns null', async () => {
+  it('returns a defined result when extractTask returns null', async () => {
     vi.mocked(ai.extractTask).mockResolvedValue(null as any)
 
     const result = await processEmail('user-1', makeEmail())
 
-    expect(result.classification).toBe('uncertain')
+    // The post-classify catch returns a placeholder result, but the DB still
+    // holds the real classification (preserved by the early `await emailRepo.updateClassification`).
+    expect(result).toBeDefined()
     expect(result.taskCreated).toBe(false)
   })
 })
