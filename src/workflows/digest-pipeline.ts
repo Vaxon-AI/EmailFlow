@@ -2,6 +2,7 @@ import * as taskRepo from '@/repositories/task-repo'
 import * as emailRepo from '@/repositories/email-repo'
 import * as digestRepo from '@/repositories/digest-repo'
 import { prisma } from '@/lib/prisma'
+import { generateAIDigest } from '@/ai/skills/generate-digest'
 
 // ============================================================
 // Digest Pipeline — template-based, no AI required
@@ -221,20 +222,25 @@ function isAfterSunday20InTz(now: Date, tz: string): boolean {
   return now.getTime() >= sun20.getTime()
 }
 
-async function resolveTimezone(userId: string, override?: string): Promise<string> {
-  if (override) return override
+async function resolveUserContext(userId: string, timezoneOverride?: string): Promise<{ tz: string; plan: string }> {
   try {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } })
-    return user?.timezone || 'UTC'
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true, plan: true },
+    })
+    return {
+      tz: timezoneOverride || user?.timezone || 'UTC',
+      plan: user?.plan || 'free',
+    }
   } catch {
-    return 'UTC'
+    return { tz: timezoneOverride || 'UTC', plan: 'free' }
   }
 }
 
 // ── Public API ───────────────────────────────────────────────
 
 export async function createDailyDigest(userId: string, timezone?: string) {
-  const tz = await resolveTimezone(userId, timezone)
+  const { tz, plan } = await resolveUserContext(userId, timezone)
   const now = new Date()
   const start = startOfTodayInTz(now, tz)
   const end = now
@@ -259,10 +265,23 @@ export async function createDailyDigest(userId: string, timezone?: string) {
     taskPending: pending.length,
   }
 
-  const content = buildDailyContent({
-    action, awareness, uncertain, ignored, confirmed, pending,
-    date: fmtDate(start),
-  })
+  const dateLabel = fmtDate(start)
+  let content: string
+  if (plan === 'pro') {
+    try {
+      content = await generateAIDigest({
+        period: 'daily',
+        dateLabel,
+        emails: { action, awareness, uncertain, ignored },
+        tasks: { confirmed, pending },
+      })
+    } catch (err) {
+      console.warn('[digest-pipeline] AI daily digest failed for user, falling back to template:', err)
+      content = buildDailyContent({ action, awareness, uncertain, ignored, confirmed, pending, date: dateLabel })
+    }
+  } else {
+    content = buildDailyContent({ action, awareness, uncertain, ignored, confirmed, pending, date: dateLabel })
+  }
 
   return digestRepo.createDigest({
     userId,
@@ -275,7 +294,7 @@ export async function createDailyDigest(userId: string, timezone?: string) {
 }
 
 export async function createWeeklyDigest(userId: string, timezone?: string) {
-  const tz = await resolveTimezone(userId, timezone)
+  const { tz, plan } = await resolveUserContext(userId, timezone)
   const now = new Date()
   const start = startOfWeekInTz(now, tz)
   const end = now
@@ -323,7 +342,31 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
   }
 
   const weekLabel = `${fmtShort(start)} – ${fmtShort(end)}`
-  const content = buildWeeklyContent({ byDay, confirmed, pending, weekLabel })
+  let content: string
+  if (plan === 'pro') {
+    try {
+      content = await generateAIDigest({
+        period: 'weekly',
+        weekLabel,
+        byDay: byDay.map((d) => ({
+          dateLabel: fmtShort(d.date),
+          counts: {
+            action: d.action.length,
+            awareness: d.awareness.length,
+            uncertain: d.uncertain.length,
+            ignored: d.ignored.length,
+          },
+          actionEmails: d.action,
+        })),
+        tasks: { confirmed, pending },
+      })
+    } catch (err) {
+      console.warn('[digest-pipeline] AI weekly digest failed for user, falling back to template:', err)
+      content = buildWeeklyContent({ byDay, confirmed, pending, weekLabel })
+    }
+  } else {
+    content = buildWeeklyContent({ byDay, confirmed, pending, weekLabel })
+  }
 
   return digestRepo.createDigest({
     userId,
