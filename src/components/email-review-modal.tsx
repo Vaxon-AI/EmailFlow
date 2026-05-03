@@ -46,6 +46,7 @@ export function EmailReviewModal({ open, onClose }: Props) {
   const queryClient = useQueryClient()
   const [processing, setProcessing] = useState<Set<string>>(new Set())
   const [done, setDone] = useState<Set<string>>(new Set())
+  const [extracting, setExtracting] = useState<Set<string>>(new Set())
   const [generatingCount, setGeneratingCount] = useState(0)
   const [createdCount, setCreatedCount] = useState(0)
   const [timedOutCount, setTimedOutCount] = useState(0)
@@ -56,6 +57,7 @@ export function EmailReviewModal({ open, onClose }: Props) {
     queryKey: ['pending-review'],
     queryFn: fetchPendingEmails,
     enabled: open,
+    refetchOnWindowFocus: false,
   })
 
   useEffect(() => {
@@ -69,6 +71,7 @@ export function EmailReviewModal({ open, onClose }: Props) {
     setGeneratingCount(0)
     setCreatedCount(0)
     setTimedOutCount(0)
+    setExtracting(new Set())
   }, [open])
 
   const invalidateAll = useCallback(() => {
@@ -87,13 +90,15 @@ export function EmailReviewModal({ open, onClose }: Props) {
     })
 
   const handleExtract = async (emailId: string) => {
-    if (processing.has(emailId)) return
+    if (processing.has(emailId) || extracting.has(emailId)) return
     markProcessing(emailId, true)
     try {
       await submitReview('approve', [emailId])
-      setDone((prev) => new Set(prev).add(emailId))
-      invalidateAll()
+      // Keep email visible in list while task is being generated
+      queryClient.invalidateQueries({ queryKey: ['emails'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setGeneratingCount((c) => c + 1)
+      setExtracting((prev) => new Set(prev).add(emailId))
 
       const timer = setInterval(async () => {
         try {
@@ -103,8 +108,12 @@ export function EmailReviewModal({ open, onClose }: Props) {
             const poll = pendingPolls.current.get(emailId)
             if (poll) { clearInterval(poll.timer); clearTimeout(poll.timeout) }
             pendingPolls.current.delete(emailId)
+            setExtracting((prev) => { const next = new Set(prev); next.delete(emailId); return next })
             setGeneratingCount((c) => Math.max(0, c - 1))
             setCreatedCount((c) => c + 1)
+            setDone((prev) => new Set(prev).add(emailId))
+            queryClient.invalidateQueries({ queryKey: ['pending-review'] })
+            queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
             if (successTimerRef.current) clearTimeout(successTimerRef.current)
             successTimerRef.current = setTimeout(() => setCreatedCount(0), 6000)
           }
@@ -114,6 +123,7 @@ export function EmailReviewModal({ open, onClose }: Props) {
       const timeout = setTimeout(() => {
         clearInterval(timer)
         pendingPolls.current.delete(emailId)
+        setExtracting((prev) => { const next = new Set(prev); next.delete(emailId); return next })
         setGeneratingCount((c) => Math.max(0, c - 1))
         setTimedOutCount((c) => c + 1)
         setTimeout(() => setTimedOutCount((c) => Math.max(0, c - 1)), 12000)
@@ -144,7 +154,7 @@ export function EmailReviewModal({ open, onClose }: Props) {
   const visibleEmails = emails.filter((e) => !done.has(e.id))
 
   const handleClose = () => {
-    if (done.size > 0) invalidateAll()
+    if (done.size > 0 || extracting.size > 0) invalidateAll()
     onClose()
   }
 
@@ -192,7 +202,7 @@ export function EmailReviewModal({ open, onClose }: Props) {
         ) : (
           <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1">
             {visibleEmails.map((email) => {
-              const isProcessing = processing.has(email.id)
+              const isProcessing = processing.has(email.id) || extracting.has(email.id)
               return (
                 <div
                   key={email.id}
