@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Loader2, CheckSquare, CheckCircle2 } from 'lucide-react'
+import { Loader2, CheckSquare, CheckCircle2, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -48,6 +48,7 @@ export function EmailReviewModal({ open, onClose }: Props) {
   const [done, setDone] = useState<Set<string>>(new Set())
   const [generatingCount, setGeneratingCount] = useState(0)
   const [createdCount, setCreatedCount] = useState(0)
+  const [timedOutCount, setTimedOutCount] = useState(0)
   const pendingPolls = useRef<Map<string, PendingPoll>>(new Map())
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -67,6 +68,7 @@ export function EmailReviewModal({ open, onClose }: Props) {
     if (successTimerRef.current) clearTimeout(successTimerRef.current)
     setGeneratingCount(0)
     setCreatedCount(0)
+    setTimedOutCount(0)
   }, [open])
 
   const invalidateAll = useCallback(() => {
@@ -113,6 +115,8 @@ export function EmailReviewModal({ open, onClose }: Props) {
         clearInterval(timer)
         pendingPolls.current.delete(emailId)
         setGeneratingCount((c) => Math.max(0, c - 1))
+        setTimedOutCount((c) => c + 1)
+        setTimeout(() => setTimedOutCount((c) => Math.max(0, c - 1)), 12000)
       }, 45000)
 
       pendingPolls.current.set(emailId, { timer, timeout })
@@ -166,6 +170,16 @@ export function EmailReviewModal({ open, onClose }: Props) {
             <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
             <span>
               {createdCount === 1 ? 'Task created' : `${createdCount} tasks created`} — check your task list.
+            </span>
+          </div>
+        )}
+        {timedOutCount > 0 && (
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-2.5 text-sm text-amber-700">
+            <TriangleAlert className="h-4 w-4 shrink-0" />
+            <span>
+              {timedOutCount === 1
+                ? 'Task extraction is taking longer than expected — check your task list in a moment.'
+                : `${timedOutCount} tasks are taking longer than expected — check your task list in a moment.`}
             </span>
           </div>
         )}
