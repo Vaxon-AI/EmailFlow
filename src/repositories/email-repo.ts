@@ -116,7 +116,7 @@ export async function dismissReviewEmails(emailIds: string[]) {
 
 export async function findPendingReviewEmails(userId: string) {
   return prisma.email.findMany({
-    where: { userId, awaitingReview: true },
+    where: { userId, awaitingReview: true, classification: 'action' },
     select: {
       id: true,
       subject: true,

@@ -1,14 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Loader2 } from 'lucide-react'
+import { Loader2, CheckSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { getEmailClassConfig } from '@/lib/email-classification'
 
 type PendingEmail = {
   id: string
@@ -44,8 +42,8 @@ async function submitReview(action: 'approve' | 'ignore', emailIds: string[]) {
 
 export function EmailReviewModal({ open, onClose }: Props) {
   const queryClient = useQueryClient()
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [submitting, setSubmitting] = useState(false)
+  const [processing, setProcessing] = useState<Set<string>>(new Set())
+  const [done, setDone] = useState<Set<string>>(new Set())
 
   const { data: emails = [], isLoading } = useQuery({
     queryKey: ['pending-review'],
@@ -53,156 +51,116 @@ export function EmailReviewModal({ open, onClose }: Props) {
     enabled: open,
   })
 
-  const toggleSelect = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }
-
-  const toggleSelectAll = () => {
-    if (selected.size === emails.length) {
-      setSelected(new Set())
-    } else {
-      setSelected(new Set(emails.map((e) => e.id)))
-    }
-  }
-
-  const invalidateAll = () => {
+  const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['emails'] })
     queryClient.invalidateQueries({ queryKey: ['tasks'] })
     queryClient.invalidateQueries({ queryKey: ['pending-review'] })
     queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
-  }
+  }, [queryClient])
 
-  const handleAction = async (action: 'approve' | 'ignore', ids: string[]) => {
-    if (ids.length === 0) return
-    setSubmitting(true)
+  const markProcessing = (id: string, active: boolean) =>
+    setProcessing((prev) => {
+      const next = new Set(prev)
+      if (active) next.add(id)
+      else next.delete(id)
+      return next
+    })
+
+  const handleExtract = async (emailId: string) => {
+    if (processing.has(emailId)) return
+    markProcessing(emailId, true)
     try {
-      await submitReview(action, ids)
-      toast.success(action === 'approve' ? `${ids.length} email(s) approved — tasks will be created shortly` : `${ids.length} email(s) ignored`)
-      setSelected(new Set())
+      await submitReview('approve', [emailId])
+      setDone((prev) => new Set(prev).add(emailId))
+      toast.success('Task extraction started — it will appear in your task list shortly.')
       invalidateAll()
-      if (emails.length - ids.length <= 0) onClose()
     } catch {
-      toast.error('Failed to submit. Please try again.')
+      toast.error('Failed to extract task. Please try again.')
     } finally {
-      setSubmitting(false)
+      markProcessing(emailId, false)
     }
   }
 
-  const selectedIds = [...selected]
-  const allIds = emails.map((e) => e.id)
+  const handleDismiss = async (emailId: string) => {
+    if (processing.has(emailId)) return
+    markProcessing(emailId, true)
+    try {
+      await submitReview('ignore', [emailId])
+      setDone((prev) => new Set(prev).add(emailId))
+      invalidateAll()
+    } catch {
+      toast.error('Failed to dismiss. Please try again.')
+    } finally {
+      markProcessing(emailId, false)
+    }
+  }
+
+  const visibleEmails = emails.filter((e) => !done.has(e.id))
+
+  const handleClose = () => {
+    if (done.size > 0) invalidateAll()
+    onClose()
+  }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Review Synced Emails</DialogTitle>
+          <DialogTitle>Action Emails Awaiting Review</DialogTitle>
         </DialogHeader>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
           </div>
-        ) : emails.length === 0 ? (
+        ) : visibleEmails.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-500">No emails pending review.</p>
         ) : (
-          <>
-            <div className="max-h-[420px] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="border-b text-left text-xs font-medium text-slate-500">
-                    <th className="pb-2 pr-3 w-8">
-                      <input
-                        type="checkbox"
-                        checked={selected.size === emails.length && emails.length > 0}
-                        onChange={toggleSelectAll}
-                        className="rounded"
-                      />
-                    </th>
-                    <th className="pb-2 pr-3">Subject</th>
-                    <th className="pb-2 pr-3 hidden sm:table-cell">Sender</th>
-                    <th className="pb-2 pr-3 hidden sm:table-cell">Date</th>
-                    <th className="pb-2">Classification</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {emails.map((email) => {
-                    const config = getEmailClassConfig(email.classification)
-                    return (
-                      <tr
-                        key={email.id}
-                        className="cursor-pointer hover:bg-slate-50/60"
-                        onClick={() => toggleSelect(email.id)}
-                      >
-                        <td className="py-2.5 pr-3 align-middle">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(email.id)}
-                            onChange={() => toggleSelect(email.id)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="rounded"
-                          />
-                        </td>
-                        <td className="py-2.5 pr-3 align-middle">
-                          <span className="line-clamp-1 font-medium text-slate-800">{email.subject}</span>
-                        </td>
-                        <td className="py-2.5 pr-3 align-middle hidden sm:table-cell">
-                          <span className="line-clamp-1 text-slate-500">{email.sender}</span>
-                        </td>
-                        <td className="py-2.5 pr-3 align-middle hidden sm:table-cell whitespace-nowrap">
-                          <span className="text-slate-400">{format(new Date(email.receivedAt), 'MMM d')}</span>
-                        </td>
-                        <td className="py-2.5 align-middle">
-                          <Badge className={`text-xs border ${config.color}`}>
-                            {config.label}
-                          </Badge>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+          <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1">
+            {visibleEmails.map((email) => {
+              const isProcessing = processing.has(email.id)
+              return (
+                <div
+                  key={email.id}
+                  className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 transition-colors hover:border-gray-300"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-800">{email.subject}</p>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <p className="truncate text-xs text-slate-500">{email.sender?.split('<')[0]?.trim() ?? email.sender}</p>
+                      <span className="text-[10px] text-slate-300">&middot;</span>
+                      <span className="shrink-0 text-xs text-slate-400">
+                        {format(new Date(email.receivedAt), 'MMM d')}
+                      </span>
+                    </div>
+                  </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
-              <span className="text-xs text-slate-400">
-                {selected.size > 0 ? `${selected.size} selected` : `${emails.length} emails`}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={submitting || selectedIds.length === 0}
-                  onClick={() => handleAction('ignore', selectedIds)}
-                >
-                  Ignore Selected
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={submitting || selectedIds.length === 0}
-                  onClick={() => handleAction('approve', selectedIds)}
-                >
-                  Approve Selected
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={submitting || allIds.length === 0}
-                  onClick={() => handleAction('approve', allIds)}
-                >
-                  {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                  Approve All
-                </Button>
-              </div>
-            </div>
-          </>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isProcessing}
+                      onClick={() => handleDismiss(email.id)}
+                      className="h-8 text-xs text-slate-500"
+                    >
+                      Dismiss
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={isProcessing}
+                      onClick={() => handleExtract(email.id)}
+                      className="h-8 gap-1.5 text-xs"
+                    >
+                      {isProcessing
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <CheckSquare className="h-3.5 w-3.5" />}
+                      Extract to Task
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </DialogContent>
     </Dialog>

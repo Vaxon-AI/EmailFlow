@@ -751,17 +751,23 @@ export async function processEmail(
   const classification = await stepClassify(email, memoryContext)
   await updateSenderMemory(userId, email.sender, classification.category)
 
-  // In manual review mode, save classification fields but stop before task creation.
-  // The user will approve or ignore from the review modal.
+  // In manual review mode:
+  //   action emails → save classification and wait for user to trigger extraction
+  //   non-action emails → clear awaitingReview and fall through to normal pipeline
+  //                       (awareness/ignore/uncertain never create tasks anyway)
   if (email.awaitingReview) {
-    await emailRepo.saveClassificationFields(email.id, classification)
-    return {
-      emailId: email.id,
-      classification: classification.category,
-      confidence: classification.confidence,
-      taskCreated: false,
-      skippedByRule: false,
+    if (classification.category === 'action') {
+      await emailRepo.saveClassificationFields(email.id, classification)
+      return {
+        emailId: email.id,
+        classification: classification.category,
+        confidence: classification.confidence,
+        taskCreated: false,
+        skippedByRule: false,
+      }
     }
+    // Non-action: clear awaitingReview so thread memory and sender memory are updated
+    await prisma.email.update({ where: { id: email.id }, data: { awaitingReview: false } })
   }
 
   await emailRepo.updateClassification(email.id, classification)
@@ -945,22 +951,23 @@ export async function processEmail(
 }
 
 // Clears awaitingReview on an email and re-runs the full pipeline to create a task.
-// Called when the user approves an email in the manual review modal.
+// Called when the user clicks "Extract to Task" in the manual review modal.
+// Uses an atomic updateMany so concurrent clicks on the same email are harmless.
 export async function createTaskFromClassifiedEmail(
   userId: string,
   emailId: string,
   taskStatus: 'pending' | 'confirmed' = 'confirmed'
 ): Promise<PipelineResult | null> {
-  const email = await prisma.email.findUnique({
-    where: { id: emailId, userId },
-  })
-
-  if (!email || !email.awaitingReview) return null
-
-  await prisma.email.update({
-    where: { id: emailId },
+  // Atomic claim: only the first caller sees count=1; subsequent callers see count=0
+  const { count } = await prisma.email.updateMany({
+    where: { id: emailId, userId, awaitingReview: true },
     data: { awaitingReview: false },
   })
+
+  if (count === 0) return null
+
+  const email = await prisma.email.findUnique({ where: { id: emailId } })
+  if (!email) return null
 
   return processEmail(userId, {
     id: email.id,

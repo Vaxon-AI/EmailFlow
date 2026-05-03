@@ -65,6 +65,7 @@ vi.mock('@/lib/prisma', () => ({
     email: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }))
@@ -215,6 +216,7 @@ beforeEach(() => {
     awaitingReview: true,
   } as any)
   vi.mocked(prisma.email.update).mockResolvedValue({} as any)
+  vi.mocked(prisma.email.updateMany).mockResolvedValue({ count: 1 } as any)
 
 })
 
@@ -426,8 +428,8 @@ describe('processEmail — action classification (full pipeline)', () => {
   it('creates Active tasks when a manual review email is approved', async () => {
     await createTaskFromClassifiedEmail('user-1', 'email-1')
 
-    expect(prisma.email.update).toHaveBeenCalledWith({
-      where: { id: 'email-1' },
+    expect(prisma.email.updateMany).toHaveBeenCalledWith({
+      where: { id: 'email-1', userId: 'user-1', awaitingReview: true },
       data: { awaitingReview: false },
     })
     expect(taskRepo.createTask).toHaveBeenCalledWith(
