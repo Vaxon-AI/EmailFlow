@@ -33,6 +33,7 @@ model User {
   emailProviderReauthProvider String?
   isAdmin                     Boolean              @default(false)
   manualReviewMode            Boolean              @default(true)
+  hasSeenSyncSetup            Boolean              @default(false)
   plan                        String               @default("free")
   planActivatedAt             DateTime?
   classifyUsed                Int                  @default(0)

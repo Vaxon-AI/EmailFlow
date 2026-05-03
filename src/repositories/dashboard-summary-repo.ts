@@ -53,9 +53,15 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
   const momentumDays = view === 'today' ? 1 : view === 'week' ? WEEK_MOMENTUM_DAYS : MOMENTUM_DAYS
   const momentumStart = startOfUtcDay(addUtcDays(period?.start ?? now, -(momentumDays - 1)))
 
+  // Surfaces emails the AI couldn't confidently classify — these need a human
+  // judgment call. Action emails are NOT included: they live in the "pending
+  // review" amber banner on the Emails page when manual review mode is on, and
+  // including them here would double-count. Failed-classification emails are
+  // also excluded since they are technical failures, not real uncertainty.
   const attentionEmailWhere = {
-    OR: [{ classification: 'action' as const }, { classification: 'uncertain' as const }],
+    classification: 'uncertain' as const,
     taskLinks: { none: {} },
+    processingStatus: { not: 'failed' },
   }
 
   const [

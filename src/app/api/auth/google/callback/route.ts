@@ -9,6 +9,19 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
+// Returning users have already chosen a sync window — sending them through the
+// "Set your sync range" dialog every login is annoying. Only attach the
+// ?gmail_connected=1 query (which triggers the dialog client-side) for users
+// who haven't yet seen the setup.
+async function dashboardRedirectFor(userId: string): Promise<URL> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { hasSeenSyncSetup: true },
+  })
+  const path = u?.hasSeenSyncSetup ? '/dashboard' : '/dashboard?gmail_connected=1'
+  return new URL(path, APP_URL)
+}
+
 export async function GET(req: NextRequest) {
   try {
     const [user, searchParams] = [await getCurrentUser(), req.nextUrl.searchParams]
@@ -153,7 +166,7 @@ export async function GET(req: NextRequest) {
         }),
       ])
 
-      return NextResponse.redirect(new URL('/dashboard?gmail_connected=1', APP_URL))
+      return NextResponse.redirect(await dashboardRedirectFor(user.id))
     }
 
     // ----------------------------------------------------------------
@@ -246,7 +259,7 @@ export async function GET(req: NextRequest) {
     })
     await setSessionCookie(rawToken)
 
-    return NextResponse.redirect(new URL('/dashboard?gmail_connected=1', APP_URL))
+    return NextResponse.redirect(await dashboardRedirectFor(targetUserId))
   } catch (err) {
     console.error('[google callback]', err)
     return NextResponse.redirect(new URL('/auth/signup?gmail_error=server_error', APP_URL))

@@ -225,9 +225,36 @@ function EmailsContent() {
   const { user } = useAuth()
   const manualReviewMode = (user as (typeof user & { manualReviewMode?: boolean }) | null)?.manualReviewMode ?? true
   const queryClient = useQueryClient()
-  const [reviewBannerDismissed, setReviewBannerDismissed] = useState(false)
+  // Per-sync-batch ack: when the user ticks "Don't show again for this sync"
+  // in the review modal, we record the current sync batch id in sessionStorage.
+  // Banner stays hidden as long as the current batch id matches the acked one.
+  // A fresh sync produces a new batch id, so the banner reappears for new emails.
+  // Lazy initializers run once on the client; SSR returns null/'no-batch'.
+  const [ackedReviewBatchId, setAckedReviewBatchId] = useState<string | null>(() =>
+    typeof window !== 'undefined'
+      ? sessionStorage.getItem('emailflow:reviewBannerAckBatchId')
+      : null
+  )
+  const [currentReviewBatchKey] = useState<string>(() =>
+    typeof window !== 'undefined'
+      ? sessionStorage.getItem('emailflow:syncBatchId') || 'no-batch'
+      : 'no-batch'
+  )
+  const reviewBannerDismissed = ackedReviewBatchId === currentReviewBatchKey
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [showAutoModeConfirm, setShowAutoModeConfirm] = useState(false)
+
+  const ackCurrentReviewBatch = useCallback(() => {
+    if (typeof window === 'undefined') return
+    sessionStorage.setItem('emailflow:reviewBannerAckBatchId', currentReviewBatchKey)
+    setAckedReviewBatchId(currentReviewBatchKey)
+  }, [currentReviewBatchKey])
+
+  const clearReviewBannerAck = useCallback(() => {
+    if (typeof window === 'undefined') return
+    sessionStorage.removeItem('emailflow:reviewBannerAckBatchId')
+    setAckedReviewBatchId(null)
+  }, [])
 
   const updateEmailUrlFilter = useCallback((next: { tab?: Tab; classification?: EmailClassificationFilter }) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -275,7 +302,7 @@ function EmailsContent() {
         )
       }
       setShowAutoModeConfirm(false)
-      setReviewBannerDismissed(false)
+      clearReviewBannerAck()
       queryClient.invalidateQueries({ queryKey: ['auth-user'] })
       queryClient.invalidateQueries({ queryKey: ['auth-me'] })
       queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
@@ -708,40 +735,29 @@ function EmailsContent() {
         </div>
       )}
 
-      {/* Pending review banner */}
+      {/* Pending review banner — dismiss only via modal footer checkbox */}
       {!isLoading && manualReviewMode && pendingReviewCount > 0 && !reviewBannerDismissed && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
-          <button
-            onClick={() => setShowReviewModal(true)}
-            className="flex min-w-0 flex-1 items-center gap-3 text-left"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-              <Eye className="h-4 w-4 text-amber-600" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-amber-900">
-                {pendingReviewCount} email{pendingReviewCount === 1 ? '' : 's'} pending your review
-              </p>
-              <p className="text-xs text-amber-700">Tap to review — choose which emails should generate tasks.</p>
-            </div>
-          </button>
-          <button
-            onClick={() => setReviewBannerDismissed(true)}
-            className="shrink-0 rounded-full p-1.5 text-amber-500 transition-colors hover:bg-amber-100 hover:text-amber-700"
-            title="Dismiss"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        <button
+          onClick={() => setShowReviewModal(true)}
+          className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left shadow-sm transition-colors hover:bg-amber-100/70"
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <Eye className="h-4 w-4 text-amber-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-900">
+              {pendingReviewCount} email{pendingReviewCount === 1 ? '' : 's'} pending your review
+            </p>
+            <p className="text-xs text-amber-700">Tap to review — choose which emails should generate tasks.</p>
+          </div>
+        </button>
       )}
 
       {/* Review modal */}
       <EmailReviewModal
         open={showReviewModal}
-        onClose={() => {
-          setShowReviewModal(false)
-          setReviewBannerDismissed(true)
-        }}
+        onClose={() => setShowReviewModal(false)}
+        onAcknowledgeBatch={ackCurrentReviewBatch}
       />
 
       {/* Batch action bar */}

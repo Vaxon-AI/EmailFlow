@@ -156,6 +156,25 @@ function DashboardContent() {
     router.replace('/dashboard', { scroll: false })
   }, [searchParams, router])
 
+  // Strip ?gmail_connected=1 from the URL on mount once it's been read into
+  // showSyncModal state. Without this, the param lingers in the URL and any
+  // future remount (e.g. navigating back from another route in the same SPA
+  // session) re-opens the modal, which the user reported as "弹窗反复弹".
+  useEffect(() => {
+    if (searchParams.get('gmail_connected') === '1') {
+      router.replace('/dashboard', { scroll: false })
+    }
+    // Run once per mount; deps intentionally empty so a later searchParams
+    // change (e.g. setting view filter) doesn't fire this again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const markSyncSetupSeen = useCallback(() => {
+    // Fire-and-forget — failures here only mean the user might see the dialog
+    // one more time on next login, which is acceptable.
+    fetch('/api/settings/sync-setup-seen', { method: 'POST' }).catch(() => {})
+  }, [])
+
   const handleSyncSetup = useCallback(async (days: number) => {
     setSyncSetupLoading(days)
     try {
@@ -164,17 +183,19 @@ function DashboardContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ days }),
       })
+      markSyncSetupSeen()
     } finally {
       setSyncSetupLoading(null)
       setShowSyncModal(false)
       router.replace('/dashboard', { scroll: false })
     }
-  }, [router])
+  }, [router, markSyncSetupSeen])
 
   const handleSyncSkip = useCallback(() => {
+    markSyncSetupSeen()
     setShowSyncModal(false)
     router.replace('/dashboard', { scroll: false })
-  }, [router])
+  }, [router, markSyncSetupSeen])
 
   const { data: projectsRes } = useQuery<{ data?: DashboardProject[] }>({
     queryKey: ['projects'],
@@ -358,7 +379,7 @@ function DashboardContent() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-red-800">
-                {attentionEmailCount} email{attentionEmailCount > 1 ? 's' : ''} need your attention
+                {attentionEmailCount} email{attentionEmailCount > 1 ? 's' : ''} need your review
               </p>
               <p className="truncate text-xs text-red-600">
                 {attentionEmails[0]?.subject}
@@ -601,6 +622,14 @@ function DashboardContent() {
               How far back should EmailFlow pull your email? You can change this anytime in Settings.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-900">
+            <p className="font-semibold">Free plan limit</p>
+            <p className="mt-0.5 text-amber-800">
+              EmailFlow classifies up to <strong>100 emails per month</strong> on the free plan. If your inbox is busy,
+              pick a smaller window so you don&apos;t hit the cap on day one.
+            </p>
+          </div>
 
           <div className="grid gap-2">
             {([7, 15, 30] as const).map((days) => {
