@@ -29,7 +29,7 @@ import {
   Copy, RefreshCw, Save,
 } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import { EMAIL_CLASS_CONFIG, getEmailClassConfig } from '@/lib/email-classification'
@@ -82,12 +82,16 @@ export default function EmailDetailPage() {
   const [generatingReply, setGeneratingReply] = useState(false)
   const [savingReply, setSavingReply] = useState(false)
   const [extracting, setExtracting] = useState(false)
+  const [pollingForTask, setPollingForTask] = useState(false)
+  const extractToastIdRef = useRef<string | number | undefined>(undefined)
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['email', emailId],
     queryFn: () => fetch(`/api/emails/${emailId}`).then((r) => r.json()),
     staleTime: CACHE_TIME.detail,
     placeholderData: (previous) => previous,
+    refetchInterval: pollingForTask ? 2500 : false,
   })
 
   const email = res?.data
@@ -95,6 +99,20 @@ export default function EmailDetailPage() {
   useEffect(() => {
     setReplyDraft(email?.aiReplyDraft ?? '')
   }, [email?.id, email?.aiReplyDraft])
+
+  useEffect(() => {
+    if (!pollingForTask) return
+    const taskCount = (email?.taskLinks?.length ?? 0) as number
+    if (taskCount === 0) return
+    setPollingForTask(false)
+    if (pollTimeoutRef.current) { clearTimeout(pollTimeoutRef.current); pollTimeoutRef.current = null }
+    toast.success('Task created — check Linked Tasks above.', { id: extractToastIdRef.current })
+    extractToastIdRef.current = undefined
+  }, [pollingForTask, email])
+
+  useEffect(() => {
+    return () => { if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current) }
+  }, [])
 
   async function readErrorMessage(response: Response, fallback: string) {
     try {
@@ -231,8 +249,15 @@ export default function EmailDetailPage() {
         showError(json?.error?.message || 'Failed to extract task')
         return
       }
-      toast.success('Task extraction started — it will appear in Linked Tasks shortly.')
-      queryClient.invalidateQueries({ queryKey: ['email', emailId] })
+      const toastId = toast.loading('Generating your task — this may take a moment...')
+      extractToastIdRef.current = toastId
+      setPollingForTask(true)
+      pollTimeoutRef.current = setTimeout(() => {
+        setPollingForTask(false)
+        toast.dismiss(toastId)
+        toast.info('Task extraction is taking longer than expected. Refresh the page to check.', { duration: 8000 })
+        extractToastIdRef.current = undefined
+      }, 45000)
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
     } catch {

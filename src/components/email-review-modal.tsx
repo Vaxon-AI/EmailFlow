@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Loader2, CheckSquare } from 'lucide-react'
@@ -40,16 +40,28 @@ async function submitReview(action: 'approve' | 'ignore', emailIds: string[]) {
   return json
 }
 
+type PendingPoll = { toastId: string | number; timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> }
+
 export function EmailReviewModal({ open, onClose }: Props) {
   const queryClient = useQueryClient()
   const [processing, setProcessing] = useState<Set<string>>(new Set())
   const [done, setDone] = useState<Set<string>>(new Set())
+  const pendingPolls = useRef<Map<string, PendingPoll>>(new Map())
 
   const { data: emails = [], isLoading } = useQuery({
     queryKey: ['pending-review'],
     queryFn: fetchPendingEmails,
     enabled: open,
   })
+
+  useEffect(() => {
+    if (open) return
+    pendingPolls.current.forEach(({ timer, timeout }) => {
+      clearInterval(timer)
+      clearTimeout(timeout)
+    })
+    pendingPolls.current.clear()
+  }, [open])
 
   const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['emails'] })
@@ -69,13 +81,35 @@ export function EmailReviewModal({ open, onClose }: Props) {
   const handleExtract = async (emailId: string) => {
     if (processing.has(emailId)) return
     markProcessing(emailId, true)
+    const toastId = toast.loading('Generating task from email...')
     try {
       await submitReview('approve', [emailId])
       setDone((prev) => new Set(prev).add(emailId))
-      toast.success('Task extraction started — it will appear in your task list shortly.')
       invalidateAll()
+
+      const timer = setInterval(async () => {
+        try {
+          const r = await fetch(`/api/emails/${emailId}`)
+          const json = await r.json()
+          if ((json?.data?.taskLinks?.length ?? 0) > 0) {
+            const poll = pendingPolls.current.get(emailId)
+            if (poll) { clearInterval(poll.timer); clearTimeout(poll.timeout) }
+            pendingPolls.current.delete(emailId)
+            toast.success('Task created — check your task list.', { id: toastId })
+          }
+        } catch { /* ignore poll errors */ }
+      }, 2500)
+
+      const timeout = setTimeout(() => {
+        clearInterval(timer)
+        pendingPolls.current.delete(emailId)
+        toast.dismiss(toastId)
+        toast.info('Task extraction is running — check your task list shortly.', { duration: 8000 })
+      }, 45000)
+
+      pendingPolls.current.set(emailId, { toastId, timer, timeout })
     } catch {
-      toast.error('Failed to extract task. Please try again.')
+      toast.error('Failed to extract task. Please try again.', { id: toastId })
     } finally {
       markProcessing(emailId, false)
     }
