@@ -225,11 +225,7 @@ export default function EmailDetailPage() {
     if (extracting) return
     setExtracting(true)
     try {
-      const res = await fetch('/api/emails/review', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve', emailIds: [emailId] }),
-      })
+      const res = await fetch(`/api/emails/${emailId}/extract-task`, { method: 'POST' })
       if (!res.ok) {
         const json = await res.json()
         showError(json?.error?.message || 'Failed to extract task')
@@ -590,7 +586,7 @@ export default function EmailDetailPage() {
                     <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">{taskLinks.length}</span>
                   </CardTitle>
                   <div className="flex items-center gap-2">
-                    {email.awaitingReview && email.classification === 'action' && (
+                    {email.classification === 'action' && taskLinks.length === 0 && (
                       <Button
                         size="sm"
                         onClick={handleExtractToTask}
@@ -674,7 +670,7 @@ export default function EmailDetailPage() {
                   <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4">
                     <p className="text-sm font-medium text-slate-700">No linked tasks yet</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      {email.awaitingReview && email.classification === 'action'
+                      {email.classification === 'action'
                         ? 'Click "Extract to Task" to let AI extract and create a task from this email.'
                         : 'Create a task here to keep this email connected to work that follows from it.'}
                     </p>
