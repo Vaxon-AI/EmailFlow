@@ -26,7 +26,7 @@ import {
   ArrowLeft, Mail, Paperclip, Clock, ArrowUpRight,
   CheckSquare, Sparkles, Shield, Plus, Tag, X,
   UserRound, ChevronRight, FolderOpen, Pencil, Loader2, Trash2,
-  Copy, RefreshCw, Save,
+  Copy, RefreshCw, Save, CheckCircle2, TriangleAlert,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
@@ -83,7 +83,8 @@ export default function EmailDetailPage() {
   const [savingReply, setSavingReply] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [pollingForTask, setPollingForTask] = useState(false)
-  const extractToastIdRef = useRef<string | number | undefined>(undefined)
+  const [taskJustCreated, setTaskJustCreated] = useState(false)
+  const [extractionTimedOut, setExtractionTimedOut] = useState(false)
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data: res, isLoading } = useQuery({
@@ -106,8 +107,8 @@ export default function EmailDetailPage() {
     if (taskCount === 0) return
     setPollingForTask(false)
     if (pollTimeoutRef.current) { clearTimeout(pollTimeoutRef.current); pollTimeoutRef.current = null }
-    toast.success('Task created — check Linked Tasks above.', { id: extractToastIdRef.current })
-    extractToastIdRef.current = undefined
+    setTaskJustCreated(true)
+    setTimeout(() => setTaskJustCreated(false), 5000)
   }, [pollingForTask, email])
 
   useEffect(() => {
@@ -242,6 +243,7 @@ export default function EmailDetailPage() {
   const handleExtractToTask = async () => {
     if (extracting) return
     setExtracting(true)
+    setExtractionTimedOut(false)
     try {
       const res = await fetch(`/api/emails/${emailId}/extract-task`, { method: 'POST' })
       if (!res.ok) {
@@ -249,14 +251,11 @@ export default function EmailDetailPage() {
         showError(json?.error?.message || 'Failed to extract task')
         return
       }
-      const toastId = toast.loading('Generating your task — this may take a moment...')
-      extractToastIdRef.current = toastId
       setPollingForTask(true)
       pollTimeoutRef.current = setTimeout(() => {
         setPollingForTask(false)
-        toast.dismiss(toastId)
-        toast.info('Task extraction is taking longer than expected. Refresh the page to check.', { duration: 8000 })
-        extractToastIdRef.current = undefined
+        setExtractionTimedOut(true)
+        setTimeout(() => setExtractionTimedOut(false), 10000)
       }, 45000)
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
@@ -637,6 +636,24 @@ export default function EmailDetailPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
+                {pollingForTask && (
+                  <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm text-blue-700">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
+                    <span>Generating your task — this may take a moment...</span>
+                  </div>
+                )}
+                {taskJustCreated && taskLinks.length > 0 && (
+                  <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50/80 px-4 py-3 text-sm text-green-700">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                    <span>Task created successfully.</span>
+                  </div>
+                )}
+                {extractionTimedOut && (
+                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+                    <TriangleAlert className="h-4 w-4 shrink-0" />
+                    <span>Task extraction is taking longer than expected — try refreshing the page.</span>
+                  </div>
+                )}
                 {taskLinks.length ? (
                   taskLinks.map((link) => {
                   const band = getPriorityBand(link.task.priorityScore || 0)
@@ -691,7 +708,7 @@ export default function EmailDetailPage() {
                     </div>
                   )
                   })
-                ) : (
+                ) : !pollingForTask && !extractionTimedOut && (
                   <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4">
                     <p className="text-sm font-medium text-slate-700">No linked tasks yet</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">

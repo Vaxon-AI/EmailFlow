@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Loader2, CheckSquare } from 'lucide-react'
+import { Loader2, CheckSquare, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -40,13 +40,16 @@ async function submitReview(action: 'approve' | 'ignore', emailIds: string[]) {
   return json
 }
 
-type PendingPoll = { toastId: string | number; timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> }
+type PendingPoll = { timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> }
 
 export function EmailReviewModal({ open, onClose }: Props) {
   const queryClient = useQueryClient()
   const [processing, setProcessing] = useState<Set<string>>(new Set())
   const [done, setDone] = useState<Set<string>>(new Set())
+  const [generatingCount, setGeneratingCount] = useState(0)
+  const [createdCount, setCreatedCount] = useState(0)
   const pendingPolls = useRef<Map<string, PendingPoll>>(new Map())
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data: emails = [], isLoading } = useQuery({
     queryKey: ['pending-review'],
@@ -61,6 +64,9 @@ export function EmailReviewModal({ open, onClose }: Props) {
       clearTimeout(timeout)
     })
     pendingPolls.current.clear()
+    if (successTimerRef.current) clearTimeout(successTimerRef.current)
+    setGeneratingCount(0)
+    setCreatedCount(0)
   }, [open])
 
   const invalidateAll = useCallback(() => {
@@ -81,11 +87,11 @@ export function EmailReviewModal({ open, onClose }: Props) {
   const handleExtract = async (emailId: string) => {
     if (processing.has(emailId)) return
     markProcessing(emailId, true)
-    const toastId = toast.loading('Generating task from email...')
     try {
       await submitReview('approve', [emailId])
       setDone((prev) => new Set(prev).add(emailId))
       invalidateAll()
+      setGeneratingCount((c) => c + 1)
 
       const timer = setInterval(async () => {
         try {
@@ -95,7 +101,10 @@ export function EmailReviewModal({ open, onClose }: Props) {
             const poll = pendingPolls.current.get(emailId)
             if (poll) { clearInterval(poll.timer); clearTimeout(poll.timeout) }
             pendingPolls.current.delete(emailId)
-            toast.success('Task created — check your task list.', { id: toastId })
+            setGeneratingCount((c) => Math.max(0, c - 1))
+            setCreatedCount((c) => c + 1)
+            if (successTimerRef.current) clearTimeout(successTimerRef.current)
+            successTimerRef.current = setTimeout(() => setCreatedCount(0), 6000)
           }
         } catch { /* ignore poll errors */ }
       }, 2500)
@@ -103,13 +112,12 @@ export function EmailReviewModal({ open, onClose }: Props) {
       const timeout = setTimeout(() => {
         clearInterval(timer)
         pendingPolls.current.delete(emailId)
-        toast.dismiss(toastId)
-        toast.info('Task extraction is running — check your task list shortly.', { duration: 8000 })
+        setGeneratingCount((c) => Math.max(0, c - 1))
       }, 45000)
 
-      pendingPolls.current.set(emailId, { toastId, timer, timeout })
+      pendingPolls.current.set(emailId, { timer, timeout })
     } catch {
-      toast.error('Failed to extract task. Please try again.', { id: toastId })
+      toast.error('Failed to extract task. Please try again.')
     } finally {
       markProcessing(emailId, false)
     }
@@ -143,6 +151,24 @@ export function EmailReviewModal({ open, onClose }: Props) {
           <DialogTitle>Action Emails Awaiting Review</DialogTitle>
         </DialogHeader>
 
+        {generatingCount > 0 && (
+          <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-2.5 text-sm text-blue-700">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
+            <span>
+              {generatingCount === 1
+                ? 'Generating your task — this may take a moment...'
+                : `Generating ${generatingCount} tasks — this may take a moment...`}
+            </span>
+          </div>
+        )}
+        {createdCount > 0 && (
+          <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50/80 px-4 py-2.5 text-sm text-green-700">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+            <span>
+              {createdCount === 1 ? 'Task created' : `${createdCount} tasks created`} — check your task list.
+            </span>
+          </div>
+        )}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
