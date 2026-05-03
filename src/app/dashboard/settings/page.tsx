@@ -280,7 +280,7 @@ export default function SettingsPage() {
             <Card className="border-white/80 bg-white/95 shadow-sm">
               <CardContent className="flex flex-col gap-4 space-y-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
-                  <p className="text-2xl font-semibold text-gray-900">Hello, {user?.name || 'Your account'}!</p>
+                  <p className="text-2xl font-semibold text-gray-900">{user?.name || 'Your account'}</p>
                   <p className="text-sm text-gray-500">{user?.email}</p>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-800">

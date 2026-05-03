@@ -674,10 +674,10 @@ function TasksContent() {
               </div>
             )}
 
-            {/* Checklist — shown when items exist */}
-            {draftActionItems.length > 0 && (
-              <div className="space-y-2">
-                <Label>Checklist</Label>
+            {/* Checklist */}
+            <div className="space-y-2">
+              <Label>Checklist <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              {draftActionItems.length > 0 && (
                 <div className="space-y-1.5">
                   {draftActionItems.map((item, i) => (
                     <div key={i} className="flex items-center gap-2">
@@ -700,63 +700,61 @@ function TasksContent() {
                     </div>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setDraftActionItems([...draftActionItems, ''])}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Plus className="size-3.5" /> Add item
-                </button>
-              </div>
-            )}
+              )}
+              <button
+                type="button"
+                onClick={() => setDraftActionItems([...draftActionItems, ''])}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Plus className="size-3.5" /> Add item
+              </button>
+            </div>
 
-            {/* Deadline + Priority — shown when set by AI */}
-            {(draftDeadline || draftPriorityScore !== 9) && (
-              <div className="flex gap-3">
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="draft-deadline">Deadline</Label>
-                  <Input
-                    id="draft-deadline"
-                    type="date"
-                    value={draftDeadline}
-                    onChange={(e) => setDraftDeadline(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Priority</Label>
-                  <Select
-                    value={(() => {
-                      if (draftPriorityScore >= 20) return 'critical'
-                      if (draftPriorityScore >= 12) return 'high'
-                      if (draftPriorityScore >= 6) return 'medium'
-                      return 'low'
-                    })()}
-                    onValueChange={(v) => {
-                      if (!v) return
-                      const map: Record<string, { urgency: number; impact: number; score: number }> = {
-                        critical: { urgency: 5, impact: 4, score: 20 },
-                        high: { urgency: 4, impact: 4, score: 16 },
-                        medium: { urgency: 3, impact: 3, score: 9 },
-                        low: { urgency: 2, impact: 2, score: 4 },
-                      }
-                      const p = map[v]
-                      if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="critical">Critical</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            {/* Deadline + Priority */}
+            <div className="flex gap-3">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="draft-deadline">Deadline <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  id="draft-deadline"
+                  type="date"
+                  value={draftDeadline}
+                  onChange={(e) => setDraftDeadline(e.target.value)}
+                  className="h-8 text-sm"
+                />
               </div>
-            )}
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select
+                  value={(() => {
+                    if (draftPriorityScore >= 20) return 'critical'
+                    if (draftPriorityScore >= 12) return 'high'
+                    if (draftPriorityScore >= 6) return 'medium'
+                    return 'low'
+                  })()}
+                  onValueChange={(v) => {
+                    if (!v) return
+                    const map: Record<string, { urgency: number; impact: number; score: number }> = {
+                      critical: { urgency: 5, impact: 4, score: 20 },
+                      high: { urgency: 4, impact: 4, score: 16 },
+                      medium: { urgency: 3, impact: 3, score: 9 },
+                      low: { urgency: 2, impact: 2, score: 4 },
+                    }
+                    const p = map[v]
+                    if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="mt-2">

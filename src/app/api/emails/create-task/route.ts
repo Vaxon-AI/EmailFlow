@@ -7,7 +7,7 @@ import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser()
-    const { title, summary, sourceEmailId, linkedEmailIds } = await req.json()
+    const { title, summary, sourceEmailId, linkedEmailIds, urgency, impact, priorityScore, userSetDeadline, actionItems } = await req.json()
 
     if (!title || !sourceEmailId) {
       return error('BAD_REQUEST', 'Title and sourceEmailId are required', 400)
@@ -27,9 +27,11 @@ export async function POST(req: NextRequest) {
         title,
         summary: summary || '',
         status: 'pending',
-        urgency: 3,
-        impact: 3,
-        priorityScore: 9,
+        urgency: urgency ?? 3,
+        impact: impact ?? 3,
+        priorityScore: priorityScore ?? 9,
+        userSetDeadline: userSetDeadline || undefined,
+        actionItems: actionItems ? JSON.stringify(actionItems) : undefined,
       },
     })
 

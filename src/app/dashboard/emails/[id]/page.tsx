@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
   Dialog,
@@ -72,6 +72,11 @@ export default function EmailDetailPage() {
   const [taskSummary, setTaskSummary] = useState('')
   const [linkedEmailIds, setLinkedEmailIds] = useState<string[]>([])
   const [creatingTask, setCreatingTask] = useState(false)
+  const [draftDeadline, setDraftDeadline] = useState('')
+  const [draftUrgency, setDraftUrgency] = useState(3)
+  const [draftImpact, setDraftImpact] = useState(3)
+  const [draftPriorityScore, setDraftPriorityScore] = useState(9)
+  const [draftActionItems, setDraftActionItems] = useState<string[]>([])
   const [restoring, setRestoring] = useState(false)
   const [replyDraft, setReplyDraft] = useState('')
   const [generatingReply, setGeneratingReply] = useState(false)
@@ -226,6 +231,11 @@ export default function EmailDetailPage() {
           summary: taskSummary,
           sourceEmailId: emailId,
           linkedEmailIds: linkedEmailIds.length > 0 ? linkedEmailIds : [emailId],
+          urgency: draftUrgency,
+          impact: draftImpact,
+          priorityScore: draftPriorityScore,
+          userSetDeadline: draftDeadline || undefined,
+          actionItems: draftActionItems.length > 0 ? draftActionItems : undefined,
         }),
       })
 
@@ -238,6 +248,11 @@ export default function EmailDetailPage() {
         setTaskTitle('')
         setTaskSummary('')
         setLinkedEmailIds([])
+        setDraftDeadline('')
+        setDraftUrgency(3)
+        setDraftImpact(3)
+        setDraftPriorityScore(9)
+        setDraftActionItems([])
       } else {
         showError('Failed to create task')
       }
@@ -716,15 +731,15 @@ export default function EmailDetailPage() {
 
       {/* Create Task Modal */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
-          <DialogHeader className="px-6 pt-6">
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
             <DialogTitle>Create Task from Email</DialogTitle>
             <DialogDescription>
               Start a task from this message and keep the link back to the source email.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 px-6 py-5">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email-task-title">Task Title</Label>
               <Input
@@ -756,6 +771,88 @@ export default function EmailDetailPage() {
                   <span className="flex-1 truncate text-sm text-gray-700">{email.subject}</span>
                   <span className="text-xs font-medium text-blue-600">Current email</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Checklist */}
+            <div className="space-y-2">
+              <Label>Checklist <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              {draftActionItems.length > 0 && (
+                <div className="space-y-1.5">
+                  {draftActionItems.map((item, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        value={item}
+                        onChange={(e) => {
+                          const next = [...draftActionItems]
+                          next[i] = e.target.value
+                          setDraftActionItems(next)
+                        }}
+                        className="h-8 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setDraftActionItems(draftActionItems.filter((_, j) => j !== i))}
+                        className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setDraftActionItems([...draftActionItems, ''])}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Plus className="size-3.5" /> Add item
+              </button>
+            </div>
+
+            {/* Deadline + Priority */}
+            <div className="flex gap-3">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="email-task-deadline">Deadline <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  id="email-task-deadline"
+                  type="date"
+                  value={draftDeadline}
+                  onChange={(e) => setDraftDeadline(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select
+                  value={(() => {
+                    if (draftPriorityScore >= 20) return 'critical'
+                    if (draftPriorityScore >= 12) return 'high'
+                    if (draftPriorityScore >= 6) return 'medium'
+                    return 'low'
+                  })()}
+                  onValueChange={(v) => {
+                    if (!v) return
+                    const map: Record<string, { urgency: number; impact: number; score: number }> = {
+                      critical: { urgency: 5, impact: 4, score: 20 },
+                      high: { urgency: 4, impact: 4, score: 16 },
+                      medium: { urgency: 3, impact: 3, score: 9 },
+                      low: { urgency: 2, impact: 2, score: 4 },
+                    }
+                    const p = map[v]
+                    if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
