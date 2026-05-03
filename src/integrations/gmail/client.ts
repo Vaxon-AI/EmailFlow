@@ -248,25 +248,30 @@ function mapGmailLabelsToCategories(labels: string[]): NormalizedCategory[] {
 export const gmailProvider: EmailProvider = {
   name: 'gmail',
 
-  async fetchNewEmails(userId: string): Promise<EmailMessage[]> {
+  async fetchNewEmails(userId: string, options?: { since?: Date; maxResults?: number }): Promise<EmailMessage[]> {
     try {
       const auth = await getAuthenticatedClient(userId)
       const gmail = google.gmail({ version: 'v1', auth })
 
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { syncStartDate: true },
-      })
-
-      let startDate = user?.syncStartDate
-      if (!startDate) {
-        startDate = new Date()
-        startDate.setDate(startDate.getDate() - 7)
-
-        await prisma.user.update({
+      let startDate: Date
+      if (options?.since) {
+        startDate = options.since
+      } else {
+        const user = await prisma.user.findUnique({
           where: { id: userId },
-          data: { syncStartDate: startDate },
+          select: { syncStartDate: true },
         })
+
+        if (user?.syncStartDate) {
+          startDate = user.syncStartDate
+        } else {
+          startDate = new Date()
+          startDate.setDate(startDate.getDate() - 7)
+          await prisma.user.update({
+            where: { id: userId },
+            data: { syncStartDate: startDate },
+          })
+        }
       }
 
       const afterStr = Math.floor(startDate.getTime() / 1000).toString()
@@ -280,10 +285,15 @@ export const gmailProvider: EmailProvider = {
         ).map((e) => e.gmailMessageId)
       )
 
+      // Cap at the Gmail page size (100). Caller may request fewer when the
+      // user's free-plan quota is nearly exhausted, to avoid storing emails
+      // that will never be classified.
+      const maxResults = Math.max(1, Math.min(options?.maxResults ?? 100, 100))
+
       const listRes = await gmail.users.messages.list({
         userId: 'me',
         q: `after:${afterStr}`,
-        maxResults: 100,
+        maxResults,
       })
 
       const messageIds = (listRes.data.messages || [])

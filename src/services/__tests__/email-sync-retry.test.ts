@@ -44,6 +44,11 @@ vi.mock('@/workflows', () => ({
   processEmail: vi.fn(),
 }))
 
+vi.mock('@/lib/quota', () => ({
+  getClassifyRemaining: vi.fn().mockResolvedValue(Infinity),
+  incrementClassifyUsed: vi.fn().mockResolvedValue(undefined),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------

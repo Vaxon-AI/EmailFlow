@@ -27,6 +27,8 @@ export async function POST() {
       failedCount: phase1.failedCount,
       pendingFailedCount: phase1.pendingFailedCount,
       syncBatchId: phase1.syncBatchId,
+      quotaLimited: phase1.quotaLimited,
+      quotaRemaining: phase1.quotaRemaining === Infinity ? null : phase1.quotaRemaining,
       // true when new emails were stored and AI will classify them in the background
       processing: phase1.storedEmails.length > 0,
     })

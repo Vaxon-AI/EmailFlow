@@ -36,12 +36,28 @@ export interface EmailMessage {
 
 export type NormalizedCategory = 'spam' | 'promotions' | 'social' | 'updates'
 
+export interface FetchNewEmailsOptions {
+  /**
+   * If provided, fetch emails received after this date.
+   * If omitted, falls back to the user's persisted syncStartDate
+   * (created on first sync, defaults to 7 days ago).
+   */
+  since?: Date
+
+  /**
+   * Hard cap on number of messages requested from the provider.
+   * Used to keep AI quota and DB writes bounded for free-plan users.
+   * Default: provider-specific (Gmail uses 100, the API page size).
+   */
+  maxResults?: number
+}
+
 export interface EmailProvider {
   /** Unique name for this provider (e.g. 'gmail', 'outlook') */
   name: string
 
-  /** Fetch new emails since N days ago, excluding already-known message IDs */
-  fetchNewEmails(userId: string, sinceDays: number): Promise<EmailMessage[]>
+  /** Fetch new emails (excluding already-known message IDs). */
+  fetchNewEmails(userId: string, options?: FetchNewEmailsOptions): Promise<EmailMessage[]>
 
   /** Disconnect the provider and clean up tokens */
   disconnect(userId: string): Promise<void>

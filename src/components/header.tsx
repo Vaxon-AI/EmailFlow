@@ -36,6 +36,10 @@ interface SyncResultData {
   pendingFailedCount: number
   // True when new emails were stored — AI pipeline is running in the background
   processing: boolean
+  // True when this sync hit the free-plan classify quota cap
+  quotaLimited?: boolean
+  // Remaining classify quota (null for paid plans)
+  quotaRemaining?: number | null
   errorMessage?: string
   recoveryHint?: string
 }
@@ -88,6 +92,8 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         pendingFailedCount: number
         syncBatchId: string
         processing: boolean
+        quotaLimited?: boolean
+        quotaRemaining?: number | null
       } | undefined
 
       const processing = syncData?.processing ?? false
@@ -104,6 +110,8 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         failedCount: syncData?.failedCount ?? 0,
         pendingFailedCount: syncData?.pendingFailedCount ?? 0,
         processing,
+        quotaLimited: syncData?.quotaLimited,
+        quotaRemaining: syncData?.quotaRemaining,
       })
       setSyncResultOpen(true)
 
@@ -223,7 +231,10 @@ interface SyncResultDialogProps {
 function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
   if (!result) return null
 
-  const { ok, code, syncedCount, skippedCount, failedCount, pendingFailedCount, processing, errorMessage, recoveryHint } = result
+  const {
+    ok, code, syncedCount, skippedCount, failedCount, pendingFailedCount,
+    processing, errorMessage, recoveryHint, quotaLimited, quotaRemaining,
+  } = result
 
   const isPartial = ok && (failedCount > 0 || pendingFailedCount > 0)
 
@@ -270,6 +281,18 @@ function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
               <li className="flex items-center gap-2 text-blue-600 pt-0.5">
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                 <span>Classifying emails and extracting tasks...</span>
+              </li>
+            )}
+            {quotaLimited && (
+              <li className="mt-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
+                <span className="font-medium">Free plan limit reached.</span>{' '}
+                {quotaRemaining === 0
+                  ? 'No more emails can be classified this month.'
+                  : `Only ${quotaRemaining} email${quotaRemaining === 1 ? '' : 's'} left to classify this month.`}{' '}
+                <a href="mailto:support@emailflow.ai?subject=Pro plan early access" className="font-semibold underline hover:text-amber-900">
+                  Upgrade to Pro
+                </a>{' '}
+                for unlimited classification.
               </li>
             )}
           </ul>

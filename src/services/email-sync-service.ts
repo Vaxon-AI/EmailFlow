@@ -88,6 +88,10 @@ export interface Phase1Result {
   failedCount: number
   pendingFailedCount: number
   syncBatchId: string
+  /** True when the Gmail fetch was capped by the user's remaining classify quota. */
+  quotaLimited: boolean
+  /** Remaining classify quota at the start of this sync (Infinity for paid plans). */
+  quotaRemaining: number
   // Passed to syncEmailsPhase2 — not included in the HTTP response
   storedEmails: StoredEmail[]
 }
@@ -97,7 +101,7 @@ export interface Phase1Result {
 // Called by the route handler. Returns before AI runs.
 // ============================================================
 
-export async function syncEmailsPhase1(userId: string, sinceDays: number = 7): Promise<Phase1Result> {
+export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
   try {
   const t0 = Date.now()
   const syncBatchId = `sync-${Date.now()}`
@@ -118,10 +122,35 @@ export async function syncEmailsPhase1(userId: string, sinceDays: number = 7): P
     )
   }
 
+  // Cap Gmail fetch by the user's remaining classify quota. Without this cap,
+  // a free user with quota=6 would still pull 100 messages from Gmail; the 94
+  // that Phase 2 can't classify would sit in DB as 'pending' until fixStuckEmails
+  // marks them failed — wasting storage and confusing the user.
+  const quotaRemaining = await getClassifyRemaining(userId)
+  const fetchCap = quotaRemaining === Infinity ? 100 : Math.min(quotaRemaining, 100)
+  const quotaLimited = quotaRemaining !== Infinity && quotaRemaining < 100
+
+  if (fetchCap === 0) {
+    console.log(`[sync] phase1 quota=0, skipping Gmail fetch entirely`)
+    await userRepo.updateLastSync(userId)
+    const pendingFailedCount = await failedRepo.countPendingFailures(userId)
+    return {
+      totalFetched: 0,
+      syncedCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      pendingFailedCount,
+      syncBatchId,
+      quotaLimited: true,
+      quotaRemaining: 0,
+      storedEmails: [],
+    }
+  }
+
   // 1) Fetch new emails from Gmail
   const tFetch = Date.now()
-  const messages = await gmailProvider.fetchNewEmails(userId, sinceDays)
-  console.log(`[sync] fetchNewEmails: ${Date.now() - tFetch}ms, count=${messages.length}`)
+  const messages = await gmailProvider.fetchNewEmails(userId, { maxResults: fetchCap })
+  console.log(`[sync] fetchNewEmails: ${Date.now() - tFetch}ms, count=${messages.length}, cap=${fetchCap}`)
 
   // 2) Store emails one-by-one so a single failure cannot prevent
   //    updateLastSync from running.  Promise.all would reject on the
@@ -136,8 +165,13 @@ export async function syncEmailsPhase1(userId: string, sinceDays: number = 7): P
   for (const message of messages) {
     try {
       const { email, wasCreated } = await emailRepo.storeEmail({ userId, message, syncBatchId })
-      storedEmails.push(email)
       if (wasCreated) {
+        // Only newly inserted emails feed Phase 2. Already-stored emails were
+        // either classified by a previous sync (no need to redo) or are stuck
+        // 'pending' from a crashed prior run (handled by fixStuckEmails). Re-running
+        // the AI pipeline on them wastes quota and can cause the same email to
+        // be re-classified multiple times.
+        storedEmails.push(email)
         syncedCount++
         newEmailIds.push(email.id)
       } else {
@@ -181,7 +215,17 @@ export async function syncEmailsPhase1(userId: string, sinceDays: number = 7): P
 
   console.log(`[sync] phase1 total: ${Date.now() - t0}ms`)
 
-  return { totalFetched: messages.length, syncedCount, skippedCount, failedCount, pendingFailedCount, syncBatchId, storedEmails }
+  return {
+    totalFetched: messages.length,
+    syncedCount,
+    skippedCount,
+    failedCount,
+    pendingFailedCount,
+    syncBatchId,
+    quotaLimited,
+    quotaRemaining,
+    storedEmails,
+  }
   } catch (err) {
     console.error('[syncEmailsPhase1]', err)
     Sentry.captureException(err, { tags: { action: 'syncEmailsPhase1' }, extra: { userId } })
@@ -235,7 +279,12 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
           awaitingReview: (email as StoredEmail & { awaitingReview?: boolean }).awaitingReview ?? false,
         })
 
-        await incrementClassifyUsed(userId)
+        // Only count emails that actually invoked the AI classifier. Rule-based
+        // pre-filter skips (spam / promotions / body-too-short) never call the
+        // model, so they shouldn't burn the user's monthly quota.
+        if (!result.skippedByRule) {
+          await incrementClassifyUsed(userId)
+        }
 
         if (result?.reviewCandidate) {
           reviewItems.push(result.reviewCandidate)

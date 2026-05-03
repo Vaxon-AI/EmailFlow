@@ -44,6 +44,11 @@ vi.mock('@/workflows', () => ({
   processEmail: vi.fn(),
 }))
 
+vi.mock('@/lib/quota', () => ({
+  getClassifyRemaining: vi.fn().mockResolvedValue(Infinity),
+  incrementClassifyUsed: vi.fn().mockResolvedValue(undefined),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -301,6 +306,8 @@ describe('Phase1Result — field stability', () => {
     expect(result).toHaveProperty('failedCount')
     expect(result).toHaveProperty('pendingFailedCount')
     expect(result).toHaveProperty('syncBatchId')
+    expect(result).toHaveProperty('quotaLimited')
+    expect(result).toHaveProperty('quotaRemaining')
     expect(result).toHaveProperty('storedEmails')
   })
 

@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 
 export const FREE_CLASSIFY_LIMIT = 100
-export const FREE_EXTRACT_LIMIT = 3
+export const FREE_EXTRACT_LIMIT = 10
 const QUOTA_PERIOD_MS = 30 * 24 * 60 * 60 * 1000
 
 async function maybeResetQuota(userId: string): Promise<void> {
