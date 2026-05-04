@@ -54,8 +54,9 @@ type BatchStatus = {
 }
 
 type Tab = 'needs_review' | 'tracked' | 'fyi' | 'all'
+type EmailBucket = Exclude<Tab, 'all'>
+type AllMailFilter = EmailBucket | 'all'
 type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
-type EmailClassificationFilter = EmailClassification | 'all'
 
 type LinkedTask = {
   id: string
@@ -102,12 +103,41 @@ const fyiPriority: Record<string, number> = {
 }
 
 const VALID_TABS = new Set<Tab>(['needs_review', 'tracked', 'fyi', 'all'])
-const VALID_CLASSIFICATION_FILTERS = new Set<EmailClassificationFilter>(['all', 'action', 'awareness', 'ignore', 'uncertain'])
+const VALID_ALL_MAIL_FILTERS = new Set<AllMailFilter>(['all', 'needs_review', 'tracked', 'fyi'])
+
+function isNeedsActionPageEmail(email: EmailItem) {
+  return (
+    (email.classification === 'action' || email.classification === 'uncertain') &&
+    email.actioned !== true
+  )
+}
+
+function isUncertainEmail(email: EmailItem) {
+  return email.classification === 'uncertain' && email.actioned !== true
+}
+
+function canGenerateTaskFromEmail(email: EmailItem) {
+  return email.classification === 'action' && email.actioned !== true
+}
+
+function isTrackedEmail(email: EmailItem) {
+  return email.actioned === true
+}
+
+function isFyiEmail(email: EmailItem) {
+  return email.classification === 'awareness'
+}
+
+function matchesEmailBucket(email: EmailItem, bucket: EmailBucket) {
+  if (bucket === 'needs_review') return isNeedsActionPageEmail(email)
+  if (bucket === 'tracked') return isTrackedEmail(email)
+  return isFyiEmail(email)
+}
 
 type FilterEmailsOptions = {
   emails: EmailItem[]
   tab: Tab
-  classification: string
+  allMailFilter: AllMailFilter
   accountFilter: string
   searchQuery: string
   dateRange?: DateRange
@@ -116,30 +146,17 @@ type FilterEmailsOptions = {
 function filterEmails({
   emails,
   tab,
-  classification,
+  allMailFilter,
   accountFilter,
   searchQuery,
   dateRange,
 }: FilterEmailsOptions) {
   let result = emails
 
-  if (tab === 'needs_review') {
-    // (action OR uncertain) AND actioned=false — emails the user still needs
-    // to look at, regardless of whether AI was sure or unsure.
-    result = result.filter((email) =>
-      (email.classification === 'action' || email.classification === 'uncertain') &&
-      email.actioned !== true
-    )
-  } else if (tab === 'tracked') {
-    // Anything the user (or system) has handled — task created, or dismissed
-    // to ignore. Includes any classification value.
-    result = result.filter((email) => email.actioned === true)
-  } else if (tab === 'fyi') {
-    result = result.filter((email) => email.classification === 'awareness')
-  }
-
-  if (classification !== 'all') {
-    result = result.filter((email) => email.classification === classification)
+  if (tab !== 'all') {
+    result = result.filter((email) => matchesEmailBucket(email, tab))
+  } else if (allMailFilter !== 'all') {
+    result = result.filter((email) => matchesEmailBucket(email, allMailFilter))
   }
 
   if (accountFilter !== 'all') {
@@ -188,11 +205,16 @@ function parseEmailTab(value: string | null): Tab {
   return value && VALID_TABS.has(value as Tab) ? (value as Tab) : 'needs_review'
 }
 
-function parseEmailClassification(value: string | null, tab: Tab): EmailClassificationFilter {
+function parseAllMailFilter(value: string | null, legacyClassification: string | null, tab: Tab): AllMailFilter {
   if (tab !== 'all') return 'all'
-  return value && VALID_CLASSIFICATION_FILTERS.has(value as EmailClassificationFilter)
-    ? (value as EmailClassificationFilter)
-    : 'all'
+  if (value && VALID_ALL_MAIL_FILTERS.has(value as AllMailFilter)) {
+    return value as AllMailFilter
+  }
+
+  if (legacyClassification === 'action' || legacyClassification === 'uncertain') return 'needs_review'
+  if (legacyClassification === 'awareness') return 'fyi'
+  if (legacyClassification === 'ignore') return 'tracked'
+  return 'all'
 }
 
 export default function EmailsPage() {
@@ -208,7 +230,7 @@ function EmailsContent() {
   const searchParams = useSearchParams()
   const focusIdentityId = searchParams.get('identity') ?? undefined
   const [tab, setTab] = useState<Tab>(() => parseEmailTab(searchParams.get('tab')))
-  const classification = parseEmailClassification(searchParams.get('classification'), tab)
+  const allMailFilter = parseAllMailFilter(searchParams.get('filter'), searchParams.get('classification'), tab)
   const [accountFilter, setAccountFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -266,19 +288,21 @@ function EmailsContent() {
     setTab(parseEmailTab(searchParams.get('tab')))
   }, [searchParams])
 
-  const updateEmailUrlFilter = useCallback((next: { tab?: Tab; classification?: EmailClassificationFilter }) => {
+  const updateEmailUrlFilter = useCallback((next: { tab?: Tab; allMailFilter?: AllMailFilter }) => {
     // Use window.location.search instead of searchParams to always read the
     // current URL — avoids stale closure when the user clicks faster than React
     // can re-render after a router.replace call.
     const params = new URLSearchParams(window.location.search)
     if (next.tab) {
       params.set('tab', next.tab)
+      params.delete('filter')
       params.delete('classification')
     }
-    if (next.classification) {
+    if (next.allMailFilter) {
       params.set('tab', 'all')
-      if (next.classification === 'all') params.delete('classification')
-      else params.set('classification', next.classification)
+      params.delete('classification')
+      if (next.allMailFilter === 'all') params.delete('filter')
+      else params.set('filter', next.allMailFilter)
     }
     const query = params.toString()
     router.replace(query ? `/dashboard/emails?${query}` : '/dashboard/emails', { scroll: false })
@@ -368,7 +392,7 @@ function EmailsContent() {
     onError: (err: Error) => toast.error(err.message),
   })
 
-  // Batch generate tasks: queues a pipeline pass for action/uncertain emails
+  // Batch generate tasks: queues a pipeline pass for Needs Action emails
   // and respects extract quota. Server caps the queue at remaining quota and
   // tells us how many got queued vs skipped.
   const bulkGenerateTasksMutation = useMutation({
@@ -390,7 +414,7 @@ function EmailsContent() {
     onSuccess: (data) => {
       const parts: string[] = []
       if (data.queued > 0) parts.push(`Queued ${data.queued} task${data.queued === 1 ? '' : 's'}`)
-      if (data.skippedIneligible > 0) parts.push(`${data.skippedIneligible} skipped (not action/uncertain)`)
+      if (data.skippedIneligible > 0) parts.push(`${data.skippedIneligible} skipped (not Needs Action)`)
       if (data.skippedQuota > 0) parts.push(`${data.skippedQuota} skipped (quota limit)`)
 
       const msg = parts.join(' — ') || 'Nothing to do'
@@ -512,11 +536,11 @@ function EmailsContent() {
     return Array.from(set)
   }, [emails])
 
-  // Client-side filtering: tab -> classification -> account -> search
+  // Client-side filtering: tab/all-mail bucket -> account -> search
   const filtered = filterEmails({
     emails,
     tab,
-    classification,
+    allMailFilter,
     accountFilter,
     searchQuery,
     dateRange,
@@ -526,15 +550,13 @@ function EmailsContent() {
   // const { needsAttention, hasTaskEmails } = useMemo(() => { ... }, [filtered, tab])
 
   // Counts for tab badges
-  const needsReviewCount = emails.filter((e) =>
-    (e.classification === 'action' || e.classification === 'uncertain') && e.actioned !== true
-  ).length
-  const trackedCount = emails.filter((e) => e.actioned === true).length
-  const infoCount = emails.filter((e) => e.classification === 'awareness').length
+  const needsActionCount = emails.filter(isNeedsActionPageEmail).length
+  const trackedCount = emails.filter(isTrackedEmail).length
+  const infoCount = emails.filter(isFyiEmail).length
   const pendingCount = emails.filter((e) => e.processingStatus === 'pending').length
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'needs_review', label: 'Needs Review', count: needsReviewCount },
+    { key: 'needs_review', label: 'Needs Action', count: needsActionCount },
     { key: 'tracked', label: 'Tracked', count: trackedCount },
     { key: 'fyi', label: 'FYI', count: infoCount },
     { key: 'all', label: 'All Mail', count: emails.length },
@@ -702,6 +724,20 @@ function EmailsContent() {
               )}
             </div>
 
+            {/* Product bucket filter - only meaningful on All Mail tab */}
+            {tab === 'all' && (
+              <SegmentedControl
+                value={allMailFilter}
+                onChange={(nextFilter) => updateEmailUrlFilter({ allMailFilter: nextFilter })}
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'needs_review', label: 'Needs Action' },
+                  { value: 'tracked', label: 'Tracked' },
+                  { value: 'fyi', label: 'FYI' },
+                ]}
+              />
+            )}
+
             {accounts.length > 1 && (
               <SegmentedControl
                 value={accountFilter}
@@ -803,7 +839,7 @@ function EmailsContent() {
         </div>
       )}
 
-      {/* Pending review banner — clicking switches to Needs Review tab where
+      {/* Pending review banner - clicking switches to Needs Action tab where
           the user can triage with the same batch UI (Generate Tasks / Ignore /
           Change Project). The dedicated review modal was removed; the tab is
           now the single source of truth. */}
@@ -825,7 +861,7 @@ function EmailsContent() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-amber-900">
-                {pendingReviewCount} email{pendingReviewCount === 1 ? '' : 's'} pending your review
+                {pendingReviewCount} email{pendingReviewCount === 1 ? '' : 's'} ready for action review
               </p>
               <p className="text-xs text-amber-700">Tap to triage — generate tasks or ignore in bulk.</p>
             </div>
@@ -842,13 +878,13 @@ function EmailsContent() {
 
       {/* Batch action bar */}
       {selectedIds.size > 0 && (() => {
-        // Generate Tasks only operates on action/uncertain emails — disable
+        // Generate Tasks only operates on action emails - uncertain emails
+        // need a human classification before task extraction.
         // the button when none of the selected items qualify so the user
         // doesn't fire a request that's a 100% no-op.
         const selectedEmails = filtered.filter((e) => selectedIds.has(e.id))
-        const eligibleForGenerate = selectedEmails.filter(
-          (e) => (e.classification === 'action' || e.classification === 'uncertain') && e.actioned !== true
-        ).length
+        const eligibleForGenerate = selectedEmails.filter(canGenerateTaskFromEmail).length
+        const uncertainSelected = selectedEmails.filter(isUncertainEmail).length
         const generating = bulkGenerateTasksMutation.isPending
         const ignoring = bulkIgnoreMutation.isPending
         const ids = [...selectedIds]
@@ -867,11 +903,16 @@ function EmailsContent() {
               className="h-7 gap-1 text-xs"
               disabled={eligibleForGenerate === 0 || generating || ignoring}
               onClick={() => bulkGenerateTasksMutation.mutate(ids)}
-              title={eligibleForGenerate === 0 ? 'No action or uncertain emails selected' : `Extract tasks from ${eligibleForGenerate} email${eligibleForGenerate === 1 ? '' : 's'}`}
+              title={eligibleForGenerate === 0 ? 'No Needs Action emails selected' : `Extract tasks from ${eligibleForGenerate} email${eligibleForGenerate === 1 ? '' : 's'}`}
             >
               {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
               Generate Tasks{eligibleForGenerate > 0 && eligibleForGenerate < selectedIds.size ? ` (${eligibleForGenerate})` : ''}
             </Button>
+            {uncertainSelected > 0 && (
+              <span className="text-xs text-amber-700">
+                {uncertainSelected} uncertain email{uncertainSelected === 1 ? '' : 's'} skipped until you confirm the classification.
+              </span>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -1178,10 +1219,7 @@ function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onT
     )
   }
 
-  const attentionCount = (list: EmailItem[]) =>
-    list.filter(
-      (e) => (e.classification === 'action' || e.classification === 'uncertain') && !(e.taskLinks?.length ?? 0)
-    ).length
+  const attentionCount = (list: EmailItem[]) => list.filter(isNeedsActionPageEmail).length
 
   const ungroupedIds = ungrouped.map((e) => e.id)
   const allUngroupedSel = ungroupedIds.length > 0 && ungroupedIds.every((id) => selectedIds.has(id))
@@ -1333,9 +1371,7 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
 }) {
   const matter = email.matter ?? null
   const linkedTasks = email.taskLinks?.map((link) => link.task).filter((t): t is LinkedTask => t != null) || []
-  const needsAttention =
-    (email.classification === 'action' || email.classification === 'uncertain') &&
-    linkedTasks.length === 0
+  const needsAttention = isNeedsActionPageEmail(email)
 
   return (
     <div className={`group flex items-center gap-3 rounded-xl border px-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:shadow-sm ${

@@ -14,7 +14,7 @@ export async function POST(
     const email = await emailRepo.findEmailById(user.id, emailId)
     if (!email) return error('NOT_FOUND', 'Email not found', 404)
     if (email.classification !== 'action') {
-      return error('INVALID_STATE', 'Email must be classified as action', 400)
+      return error('INVALID_STATE', 'Confirm this email as Needs Action before extracting a task', 400)
     }
 
     // Prevent duplicate if an active task is already linked

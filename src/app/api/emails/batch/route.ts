@@ -79,14 +79,14 @@ export async function POST(req: Request) {
     }
 
     if (action === 'generate_tasks') {
-      // Only action/uncertain emails make sense for task generation. Awareness
-      // and ignore are filtered out server-side; client UI also disables the
+      // Only action emails can generate tasks. Uncertain emails need a human
+      // classification first; client UI also disables/skips them, but we
       // button for those, but we double-check to be safe.
       const eligible = await prisma.email.findMany({
         where: {
           id: { in: ids },
           userId: user.id,
-          classification: { in: ['action', 'uncertain'] },
+          classification: 'action',
           actioned: false,
         },
         select: {

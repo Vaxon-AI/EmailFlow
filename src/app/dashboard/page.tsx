@@ -354,7 +354,6 @@ function DashboardContent() {
   const totalTasks = completedTasks + pendingTaskCount + confirmedTaskCount
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
   const emailData = s?.emails ?? { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, linkedAction: 0, needsReview: 0, tracked: 0 }
-  const allTimeEmailData = allTimeStats?.emails ?? emailData
   const allTimeCompletedTasks = allTimeStats?.tasks.completed ?? completedTasks
   const allTimeOpenTasks = (allTimeTasks?.confirmedCount ?? confirmedTaskCount) + (allTimeTasks?.pendingCount ?? pendingTaskCount)
   const confirmedTasks = summary?.tasks.confirmedPreview ?? []
@@ -513,7 +512,7 @@ function DashboardContent() {
               title="Emails Processed"
               value={emailData.total}
               icon={<Mail className="h-4 w-4 text-blue-600" />}
-              detail={`${emailData.needsReview} need review, ${allTimeEmailData.total} total`}
+              detail={`${emailData.needsReview} need action, ${emailData.uncertain} uncertain`}
               href={dashboardLink('/dashboard/emails', { tab: 'all' })}
             />
             <StatCard
@@ -580,7 +579,7 @@ function DashboardContent() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
-                  <BarRow label="Needs Review" value={emailData.needsReview} max={emailData.total} color="bg-red-400" href={dashboardLink('/dashboard/emails', { tab: 'needs_review' })} />
+                  <BarRow label="Needs Action" value={emailData.needsReview} max={emailData.total} color="bg-red-400" href={dashboardLink('/dashboard/emails', { tab: 'needs_review' })} />
                   <BarRow label="Tracked" value={emailData.tracked} max={emailData.total} color="bg-green-400" href={dashboardLink('/dashboard/emails', { tab: 'tracked' })} />
                   <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-blue-400" href={dashboardLink('/dashboard/emails', { tab: 'fyi' })} />
                   <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" href={dashboardLink('/dashboard/emails', { tab: 'all', classification: 'ignore' })} />

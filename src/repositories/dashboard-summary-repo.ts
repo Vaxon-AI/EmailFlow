@@ -17,8 +17,7 @@ type DashboardStats = {
     ignore: number
     uncertain: number
     linkedAction: number
-    // New buckets driven by classification × actioned axis. needsReview and
-    // tracked together replace the old "Needs Action / Needs Review" split.
+    // Backward-compatible field name: now represents Needs Action page emails.
     needsReview: number  // (action OR uncertain) AND actioned=false
     tracked: number      // actioned=true (regardless of classification)
   }
@@ -64,14 +63,8 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
   const momentumDays = view === 'today' ? 1 : view === 'week' ? WEEK_MOMENTUM_DAYS : MOMENTUM_DAYS
   const momentumStart = startOfUtcDay(addUtcDays(period?.start ?? now, -(momentumDays - 1)))
 
-  // The "Needs Review" bucket: emails that need a human eye. Combines two
-  // groups that were previously split:
-  //   1. action emails the user hasn't yet turned into a task (actioned=false)
-  //   2. uncertain emails the AI couldn't confidently classify
-  // Once a task is created (or the user dismisses to ignore), actioned=true
-  // and the email moves to Tracked / Ignored, exiting this bucket.
-  // Failed-classification emails are excluded as technical failures, not real
-  // pending work.
+  // Needs Action page: action emails ready for extraction plus uncertain
+  // emails that need user confirmation before task generation.
   const attentionEmailWhere: Prisma.EmailWhereInput = {
     classification: { in: ['action', 'uncertain'] },
     actioned: false,

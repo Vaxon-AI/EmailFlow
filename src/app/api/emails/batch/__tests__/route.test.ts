@@ -193,10 +193,9 @@ describe('POST /api/emails/batch', () => {
       actioned: false,
     })
 
-    it('queues processEmail for eligible action/uncertain emails and burns one extract per email', async () => {
+    it('queues processEmail for eligible action emails and burns one extract per email', async () => {
       mockEmail.findMany.mockResolvedValue([
         eligibleEmail('e1'),
-        eligibleEmail('e2', 'uncertain'),
       ] as never)
       mockGetExtractRemaining.mockResolvedValue(10)
       mockProcessEmail.mockResolvedValue({} as never)
@@ -206,17 +205,20 @@ describe('POST /api/emails/batch', () => {
       expect(res.status).toBe(200)
       const body = await res.json()
       expect(body.data).toEqual({
-        queued: 2,
-        skippedIneligible: 0,
+        queued: 1,
+        skippedIneligible: 1,
         skippedQuota: 0,
         quotaExhausted: false,
       })
-      expect(mockIncrementExtractUsed).toHaveBeenCalledTimes(2)
+      expect(mockEmail.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ classification: 'action' }),
+      }))
+      expect(mockIncrementExtractUsed).toHaveBeenCalledTimes(1)
       // Pipeline runs via after() — our mock executes the callback immediately
-      expect(mockProcessEmail).toHaveBeenCalledTimes(2)
+      expect(mockProcessEmail).toHaveBeenCalledTimes(1)
     })
 
-    it('skips ids that are not action/uncertain (DB filtering)', async () => {
+    it('skips ids that are not Needs Action (DB filtering)', async () => {
       // findMany returns only the eligible subset — the route trusts the DB filter
       mockEmail.findMany.mockResolvedValue([eligibleEmail('e1')] as never)
       mockGetExtractRemaining.mockResolvedValue(10)

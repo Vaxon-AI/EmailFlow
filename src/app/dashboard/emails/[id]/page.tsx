@@ -269,6 +269,10 @@ export default function EmailDetailPage() {
 
   const handleExtractToTask = async () => {
     if (extracting) return
+    if (email?.classification !== 'action') {
+      showError('AI is uncertain about this email. Confirm it as Needs Action before extracting a task.')
+      return
+    }
     setExtracting(true)
     setExtractionTimedOut(false)
     try {
@@ -376,6 +380,7 @@ export default function EmailDetailPage() {
   const taskLinks = (email.taskLinks ?? []) as EmailTaskLink[]
   const canShowReplyDraft = email.classification === 'action' || taskLinks.length > 0 || !!email.aiReplyDraft
   const canGenerateReply = email.retentionStatus !== 'PURGED'
+  const canExtractTask = email.classification === 'action' && taskLinks.length === 0
 
   return (
     <div className="animate-in fade-in duration-200">
@@ -385,7 +390,7 @@ export default function EmailDetailPage() {
           Back to inbox
         </Button>
         {/* Ignore = soft delete: collapses the email into the ignore bucket so
-            it stops showing up in Needs Review / All. DB row stays so Gmail
+            it stops showing up in Needs Action / All. DB row stays so Gmail
             sync dedup is unaffected. Hidden once already actioned to avoid a
             confusing no-op click. */}
         {!email.actioned && email.classification !== 'ignore' && (
@@ -655,7 +660,7 @@ export default function EmailDetailPage() {
                     <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">{taskLinks.length}</span>
                   </CardTitle>
                   <div className="flex items-center gap-2">
-                    {email.classification === 'action' && taskLinks.length === 0 && (
+                    {canExtractTask && (
                       <Button
                         size="sm"
                         onClick={handleExtractToTask}
@@ -697,6 +702,17 @@ export default function EmailDetailPage() {
                   <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
                     <TriangleAlert className="h-4 w-4 shrink-0" />
                     <span>Task extraction is taking longer than expected — try refreshing the page.</span>
+                  </div>
+                )}
+                {email.classification === 'uncertain' && taskLinks.length === 0 && !pollingForTask && !extractionTimedOut && (
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800">
+                    <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="font-medium">AI is uncertain about this email.</p>
+                      <p className="mt-0.5 text-xs leading-5 text-amber-700">
+                        Confirm it as Needs Action before extracting a task, or mark it as FYI/ignored if no work is needed.
+                      </p>
+                    </div>
                   </div>
                 )}
                 {taskLinks.length ? (
@@ -759,6 +775,8 @@ export default function EmailDetailPage() {
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                       {email.classification === 'action'
                         ? 'Click "Extract to Task" to let AI extract and create a task from this email.'
+                        : email.classification === 'uncertain'
+                          ? 'AI could not confidently classify this email yet, so task extraction is paused until you confirm it.'
                         : 'Create a task here to keep this email connected to work that follows from it.'}
                     </p>
                   </div>

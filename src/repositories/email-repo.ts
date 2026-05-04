@@ -109,7 +109,7 @@ export async function approveReviewEmails(emailIds: string[]) {
 // User-driven "I don't want to deal with this" — equivalent to soft-delete.
 // Collapses the email into the ignore bucket: classification flips to 'ignore'
 // and actioned=true marks it user-handled (so dashboard counts and the
-// Needs Review tab stop surfacing it). The DB row stays intact so the next
+// Needs Action tab stops surfacing it). The DB row stays intact so the next
 // Gmail sync still sees the message ID and won't re-pull it.
 export async function dismissReviewEmails(emailIds: string[]) {
   if (emailIds.length === 0) return
