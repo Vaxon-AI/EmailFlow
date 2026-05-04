@@ -106,11 +106,44 @@ export async function approveReviewEmails(emailIds: string[]) {
   })
 }
 
+// User-driven "I don't want to deal with this" — equivalent to soft-delete.
+// Collapses the email into the ignore bucket: classification flips to 'ignore'
+// and actioned=true marks it user-handled (so dashboard counts and the
+// Needs Review tab stop surfacing it). The DB row stays intact so the next
+// Gmail sync still sees the message ID and won't re-pull it.
 export async function dismissReviewEmails(emailIds: string[]) {
   if (emailIds.length === 0) return
   return prisma.email.updateMany({
     where: { id: { in: emailIds } },
-    data: { awaitingReview: false, processingStatus: 'dismissed' },
+    data: {
+      classification: 'ignore',
+      actioned: true,
+      awaitingReview: false,
+    },
+  })
+}
+
+// Bulk soft-delete used by the emails page batch toolbar. Same semantics as
+// dismissReviewEmails but scoped by userId for safety, since this is callable
+// from the batch API on arbitrary email IDs.
+export async function bulkIgnoreEmails(userId: string, emailIds: string[]) {
+  if (emailIds.length === 0) return { count: 0 }
+  return prisma.email.updateMany({
+    where: { id: { in: emailIds }, userId },
+    data: {
+      classification: 'ignore',
+      actioned: true,
+      awaitingReview: false,
+    },
+  })
+}
+
+// Marks one email as actioned. Called from the pipeline after a task is
+// successfully created and from the manual extract-task flow.
+export async function markActioned(emailId: string) {
+  return prisma.email.updateMany({
+    where: { id: emailId },
+    data: { actioned: true },
   })
 }
 
@@ -129,6 +162,8 @@ export async function findPendingReviewEmails(userId: string) {
   })
 }
 
+// Auto-dismisses review emails that have been sitting in the queue too long.
+// Same collapse-into-ignore semantics as user-driven dismiss.
 export async function dismissStaleReviewEmails(olderThanDays = 15) {
   const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000)
   const { count } = await prisma.email.updateMany({
@@ -136,7 +171,11 @@ export async function dismissStaleReviewEmails(olderThanDays = 15) {
       awaitingReview: true,
       receivedAt: { lt: cutoff },
     },
-    data: { awaitingReview: false, processingStatus: 'dismissed' },
+    data: {
+      classification: 'ignore',
+      actioned: true,
+      awaitingReview: false,
+    },
   })
   return count
 }
@@ -218,6 +257,7 @@ export async function findEmailsPaginated(
         receivedAt: true,
         classification: true,
         processingStatus: true,
+        actioned: true,
         accountEmail: true,
         hasAttachments: true,
         threadId: true,

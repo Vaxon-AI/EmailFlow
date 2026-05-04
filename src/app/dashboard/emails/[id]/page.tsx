@@ -26,7 +26,7 @@ import {
   ArrowLeft, Mail, Paperclip, Clock, ArrowUpRight,
   CheckSquare, Sparkles, Shield, Plus, Tag, X,
   UserRound, ChevronRight, FolderOpen, Pencil, Loader2, Trash2,
-  Copy, RefreshCw, Save, CheckCircle2, TriangleAlert,
+  Copy, RefreshCw, Save, CheckCircle2, TriangleAlert, EyeOff,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
@@ -240,6 +240,33 @@ export default function EmailDetailPage() {
     }
   }
 
+  const [ignoring, setIgnoring] = useState(false)
+  const handleIgnore = async () => {
+    if (ignoring) return
+    setIgnoring(true)
+    try {
+      const res = await fetch('/api/emails/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [emailId], action: 'ignore' }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        showError(json?.error?.message || 'Failed to ignore email')
+        return
+      }
+      toast.success('Email ignored')
+      queryClient.invalidateQueries({ queryKey: ['email', emailId] })
+      queryClient.invalidateQueries({ queryKey: ['emails'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      router.push('/dashboard/emails')
+    } catch {
+      showError('Failed to ignore email')
+    } finally {
+      setIgnoring(false)
+    }
+  }
+
   const handleExtractToTask = async () => {
     if (extracting) return
     setExtracting(true)
@@ -352,10 +379,28 @@ export default function EmailDetailPage() {
 
   return (
     <div className="animate-in fade-in duration-200">
-      <Button variant="ghost" onClick={() => router.push('/dashboard/emails')} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
-        <ArrowLeft className="h-4 w-4" />
-        Back to inbox
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={() => router.push('/dashboard/emails')} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
+          <ArrowLeft className="h-4 w-4" />
+          Back to inbox
+        </Button>
+        {/* Ignore = soft delete: collapses the email into the ignore bucket so
+            it stops showing up in Needs Review / All. DB row stays so Gmail
+            sync dedup is unaffected. Hidden once already actioned to avoid a
+            confusing no-op click. */}
+        {!email.actioned && email.classification !== 'ignore' && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleIgnore}
+            disabled={ignoring}
+            className="gap-1.5 text-gray-600 hover:bg-gray-50"
+          >
+            {ignoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <EyeOff className="h-3.5 w-3.5" />}
+            Ignore
+          </Button>
+        )}
+      </div>
       <div className="mx-auto max-w-6xl space-y-5">
         <PageHeader
           title={email.subject}

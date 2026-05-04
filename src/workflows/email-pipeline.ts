@@ -936,6 +936,14 @@ export async function processEmail(
     await matterMemoryRepo.linkPrimaryTask(currentMatterMemory.id, primaryTaskId)
   }
 
+  // ── 14. Mark email as actioned ──────────────────────
+  // Any email that ends up linked to a task (newly created or merged into an
+  // existing similar task) has been "handled" — actioned=true takes it out
+  // of the Needs Review bucket and into Tracked.
+  if (taskIds.length > 0) {
+    await emailRepo.markActioned(email.id)
+  }
+
   if (reviewCandidate) reviewCandidate.taskId = primaryTaskId
 
   return {

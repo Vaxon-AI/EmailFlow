@@ -133,6 +133,7 @@ model Email {
   processingStatus String          @default("done")
   syncBatchId      String?
   awaitingReview   Boolean         @default(false)
+  actioned         Boolean         @default(false)
   aiReplyDraft      String?
   aiReplyGeneratedAt DateTime?
   aiReplyEditedAt   DateTime?
@@ -146,6 +147,7 @@ model Email {
   @@index([userId, syncBatchId])
   @@index([userId, retentionStatus, receivedAt(sort: Desc)])
   @@index([userId, awaitingReview, receivedAt(sort: Desc)])
+  @@index([userId, actioned, classification])
 }
 
 model Task {

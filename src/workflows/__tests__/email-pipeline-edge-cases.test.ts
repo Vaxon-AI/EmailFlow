@@ -29,6 +29,8 @@ vi.mock('@/ai', () => ({
 vi.mock('@/repositories/email-repo', () => ({
   updateClassification: vi.fn(),
   markClassificationFailed: vi.fn(),
+  saveClassificationFields: vi.fn(),
+  markActioned: vi.fn(),
 }))
 
 vi.mock('@/repositories/task-repo', () => ({

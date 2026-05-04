@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   CheckSquare, Paperclip, Mail,
-  Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap, Eye,
+  Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap, Eye, EyeOff,
 } from 'lucide-react'
 import { Suspense, useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
@@ -29,9 +29,9 @@ import { getEmailClassConfig } from '@/lib/email-classification'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { BatchReassignModal } from '@/components/batch-reassign-modal'
 import { InlineEditableName } from '@/components/inline-editable-name'
-import { EmailReviewModal } from '@/components/email-review-modal'
 import { useAuth } from '@/lib/use-auth'
 import { CACHE_TIME } from '@/lib/query-cache'
+import { toast } from 'sonner'
 
 // ---------------------------------------------------------------------------
 // Sync batch types
@@ -53,7 +53,7 @@ type BatchStatus = {
   actionEmails: BatchActionEmail[]
 }
 
-type Tab = 'needs_action' | 'fyi' | 'uncertain' | 'all'
+type Tab = 'needs_review' | 'tracked' | 'fyi' | 'all'
 type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
 type EmailClassificationFilter = EmailClassification | 'all'
 
@@ -74,6 +74,7 @@ type EmailItem = {
   receivedAt: string
   classification?: EmailClassification | null
   processingStatus?: string | null
+  actioned?: boolean
   taskLinks?: EmailTaskLink[]
   accountEmail?: string | null
   hasAttachments?: boolean | null
@@ -100,7 +101,7 @@ const fyiPriority: Record<string, number> = {
   ignore: 1,
 }
 
-const VALID_TABS = new Set<Tab>(['needs_action', 'fyi', 'uncertain', 'all'])
+const VALID_TABS = new Set<Tab>(['needs_review', 'tracked', 'fyi', 'all'])
 const VALID_CLASSIFICATION_FILTERS = new Set<EmailClassificationFilter>(['all', 'action', 'awareness', 'ignore', 'uncertain'])
 
 type FilterEmailsOptions = {
@@ -122,14 +123,19 @@ function filterEmails({
 }: FilterEmailsOptions) {
   let result = emails
 
-  if (tab === 'needs_action') {
+  if (tab === 'needs_review') {
+    // (action OR uncertain) AND actioned=false — emails the user still needs
+    // to look at, regardless of whether AI was sure or unsure.
     result = result.filter((email) =>
-      email.classification === 'action' || (email.taskLinks?.length ?? 0) > 0
+      (email.classification === 'action' || email.classification === 'uncertain') &&
+      email.actioned !== true
     )
+  } else if (tab === 'tracked') {
+    // Anything the user (or system) has handled — task created, or dismissed
+    // to ignore. Includes any classification value.
+    result = result.filter((email) => email.actioned === true)
   } else if (tab === 'fyi') {
     result = result.filter((email) => email.classification === 'awareness')
-  } else if (tab === 'uncertain') {
-    result = result.filter((email) => email.classification === 'uncertain')
   }
 
   if (classification !== 'all') {
@@ -179,7 +185,7 @@ function filterEmails({
 }
 
 function parseEmailTab(value: string | null): Tab {
-  return value && VALID_TABS.has(value as Tab) ? (value as Tab) : 'needs_action'
+  return value && VALID_TABS.has(value as Tab) ? (value as Tab) : 'needs_review'
 }
 
 function parseEmailClassification(value: string | null, tab: Tab): EmailClassificationFilter {
@@ -241,7 +247,6 @@ function EmailsContent() {
       : 'no-batch'
   )
   const reviewBannerDismissed = ackedReviewBatchId === currentReviewBatchKey
-  const [showReviewModal, setShowReviewModal] = useState(false)
   const [showAutoModeConfirm, setShowAutoModeConfirm] = useState(false)
 
   const ackCurrentReviewBatch = useCallback(() => {
@@ -330,6 +335,74 @@ function EmailsContent() {
     })
 
   const clearSelection = () => setSelectedIds(new Set())
+
+  // Batch ignore: collapses selected emails into the ignore bucket
+  // (classification='ignore', actioned=true). DB rows stay so Gmail sync
+  // dedup remains intact — selected emails just disappear from the default
+  // tabs and end up in All + classification=ignore.
+  const bulkIgnoreMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const res = await fetch('/api/emails/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'ignore' }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to ignore emails')
+      return json.data as { affected: number }
+    },
+    onSuccess: (data) => {
+      toast.success(`Ignored ${data.affected} email${data.affected === 1 ? '' : 's'}`)
+      clearSelection()
+      queryClient.invalidateQueries({ queryKey: ['emails'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  // Batch generate tasks: queues a pipeline pass for action/uncertain emails
+  // and respects extract quota. Server caps the queue at remaining quota and
+  // tells us how many got queued vs skipped.
+  const bulkGenerateTasksMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const res = await fetch('/api/emails/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'generate_tasks' }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to queue tasks')
+      return json.data as {
+        queued: number
+        skippedIneligible: number
+        skippedQuota: number
+        quotaExhausted: boolean
+      }
+    },
+    onSuccess: (data) => {
+      const parts: string[] = []
+      if (data.queued > 0) parts.push(`Queued ${data.queued} task${data.queued === 1 ? '' : 's'}`)
+      if (data.skippedIneligible > 0) parts.push(`${data.skippedIneligible} skipped (not action/uncertain)`)
+      if (data.skippedQuota > 0) parts.push(`${data.skippedQuota} skipped (quota limit)`)
+
+      const msg = parts.join(' — ') || 'Nothing to do'
+      if (data.quotaExhausted || data.skippedQuota > 0) {
+        toast.warning(msg)
+      } else if (data.queued > 0) {
+        toast.success(msg)
+      } else {
+        toast.info(msg)
+      }
+      clearSelection()
+      // The pipeline runs in `after()`; refresh after a short delay so the
+      // user sees Tracked count tick up.
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['emails'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      }, 1500)
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
 
   const bulkToggle = useCallback((ids: string[], select: boolean) => {
     setSelectedIds((prev) => {
@@ -445,17 +518,17 @@ function EmailsContent() {
   // const { needsAttention, hasTaskEmails } = useMemo(() => { ... }, [filtered, tab])
 
   // Counts for tab badges
-  const needsActionCount = emails.filter((e) =>
-    e.classification === 'action' || (e.taskLinks?.length ?? 0) > 0
+  const needsReviewCount = emails.filter((e) =>
+    (e.classification === 'action' || e.classification === 'uncertain') && e.actioned !== true
   ).length
+  const trackedCount = emails.filter((e) => e.actioned === true).length
   const infoCount = emails.filter((e) => e.classification === 'awareness').length
-  const uncertainCount = emails.filter((e) => e.classification === 'uncertain').length
   const pendingCount = emails.filter((e) => e.processingStatus === 'pending').length
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'needs_action', label: 'Needs Action', count: needsActionCount },
+    { key: 'needs_review', label: 'Needs Review', count: needsReviewCount },
+    { key: 'tracked', label: 'Tracked', count: trackedCount },
     { key: 'fyi', label: 'FYI', count: infoCount },
-    { key: 'uncertain', label: 'Needs Review', count: uncertainCount },
     { key: 'all', label: 'All Mail', count: emails.length },
   ]
 
@@ -735,49 +808,96 @@ function EmailsContent() {
         </div>
       )}
 
-      {/* Pending review banner — dismiss only via modal footer checkbox */}
+      {/* Pending review banner — clicking switches to Needs Review tab where
+          the user can triage with the same batch UI (Generate Tasks / Ignore /
+          Change Project). The dedicated review modal was removed; the tab is
+          now the single source of truth. */}
       {!isLoading && manualReviewMode && pendingReviewCount > 0 && !reviewBannerDismissed && (
-        <button
-          onClick={() => setShowReviewModal(true)}
-          className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left shadow-sm transition-colors hover:bg-amber-100/70"
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-            <Eye className="h-4 w-4 text-amber-600" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-amber-900">
-              {pendingReviewCount} email{pendingReviewCount === 1 ? '' : 's'} pending your review
-            </p>
-            <p className="text-xs text-amber-700">Tap to review — choose which emails should generate tasks.</p>
-          </div>
-        </button>
-      )}
-
-      {/* Review modal */}
-      <EmailReviewModal
-        open={showReviewModal}
-        onClose={() => setShowReviewModal(false)}
-        onAcknowledgeBatch={ackCurrentReviewBatch}
-      />
-
-      {/* Batch action bar */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-2.5 shadow-sm">
-          <span className="text-sm font-medium text-blue-700">{selectedIds.size} selected</span>
-          {selectedIds.size < filtered.length && (
-            <button onClick={selectAll} className="text-xs text-blue-500 hover:text-blue-700 hover:underline">
-              Select all {filtered.length}
-            </button>
-          )}
-          <div className="flex-1" />
-          <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setShowBatchReassign(true)}>
-            <FolderOpen className="h-3 w-3" /> Change Project
-          </Button>
-          <button onClick={clearSelection} className="ml-1 rounded p-1 text-blue-400 hover:bg-blue-100 hover:text-blue-600">
-            <X className="h-3.5 w-3.5" />
+        <div className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+          <button
+            onClick={() => {
+              ackCurrentReviewBatch()
+              if (tab !== 'needs_review') updateEmailUrlFilter({ tab: 'needs_review' })
+            }}
+            className="flex flex-1 items-center gap-3 text-left transition-colors hover:opacity-80"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+              <Eye className="h-4 w-4 text-amber-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-amber-900">
+                {pendingReviewCount} email{pendingReviewCount === 1 ? '' : 's'} pending your review
+              </p>
+              <p className="text-xs text-amber-700">Tap to triage — generate tasks or ignore in bulk.</p>
+            </div>
+          </button>
+          <button
+            onClick={ackCurrentReviewBatch}
+            className="shrink-0 rounded-full p-1.5 text-amber-500 transition-colors hover:bg-amber-100 hover:text-amber-700"
+            title="Hide for this sync"
+          >
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}
+
+      {/* Batch action bar */}
+      {selectedIds.size > 0 && (() => {
+        // Generate Tasks only operates on action/uncertain emails — disable
+        // the button when none of the selected items qualify so the user
+        // doesn't fire a request that's a 100% no-op.
+        const selectedEmails = filtered.filter((e) => selectedIds.has(e.id))
+        const eligibleForGenerate = selectedEmails.filter(
+          (e) => (e.classification === 'action' || e.classification === 'uncertain') && e.actioned !== true
+        ).length
+        const generating = bulkGenerateTasksMutation.isPending
+        const ignoring = bulkIgnoreMutation.isPending
+        const ids = [...selectedIds]
+        return (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-2.5 shadow-sm">
+            <span className="text-sm font-medium text-blue-700">{selectedIds.size} selected</span>
+            {selectedIds.size < filtered.length && (
+              <button onClick={selectAll} className="text-xs text-blue-500 hover:text-blue-700 hover:underline">
+                Select all {filtered.length}
+              </button>
+            )}
+            <div className="flex-1" />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-xs"
+              disabled={eligibleForGenerate === 0 || generating || ignoring}
+              onClick={() => bulkGenerateTasksMutation.mutate(ids)}
+              title={eligibleForGenerate === 0 ? 'No action or uncertain emails selected' : `Extract tasks from ${eligibleForGenerate} email${eligibleForGenerate === 1 ? '' : 's'}`}
+            >
+              {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+              Generate Tasks{eligibleForGenerate > 0 && eligibleForGenerate < selectedIds.size ? ` (${eligibleForGenerate})` : ''}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-xs"
+              disabled={generating || ignoring}
+              onClick={() => bulkIgnoreMutation.mutate(ids)}
+            >
+              {ignoring ? <Loader2 className="h-3 w-3 animate-spin" /> : <EyeOff className="h-3 w-3" />}
+              Ignore
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-xs"
+              disabled={generating || ignoring}
+              onClick={() => setShowBatchReassign(true)}
+            >
+              <FolderOpen className="h-3 w-3" /> Change Project
+            </Button>
+            <button onClick={clearSelection} className="ml-1 rounded p-1 text-blue-400 hover:bg-blue-100 hover:text-blue-600">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )
+      })()}
 
       {/* Reassign Project Modal */}
       <ReassignProjectModal

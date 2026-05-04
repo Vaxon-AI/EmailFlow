@@ -10,7 +10,18 @@ type PriorityCounts = {
 }
 
 type DashboardStats = {
-  emails: { total: number; action: number; awareness: number; ignore: number; uncertain: number; linkedAction: number }
+  emails: {
+    total: number
+    action: number
+    awareness: number
+    ignore: number
+    uncertain: number
+    linkedAction: number
+    // New buckets driven by classification × actioned axis. needsReview and
+    // tracked together replace the old "Needs Action / Needs Review" split.
+    needsReview: number  // (action OR uncertain) AND actioned=false
+    tracked: number      // actioned=true (regardless of classification)
+  }
   tasks: { total: number; pending: number; confirmed: number; completed: number; dismissed: number }
   sync: {
     lastSyncAt: Date | null | undefined
@@ -53,20 +64,25 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
   const momentumDays = view === 'today' ? 1 : view === 'week' ? WEEK_MOMENTUM_DAYS : MOMENTUM_DAYS
   const momentumStart = startOfUtcDay(addUtcDays(period?.start ?? now, -(momentumDays - 1)))
 
-  // Surfaces emails the AI couldn't confidently classify — these need a human
-  // judgment call. Action emails are NOT included: they live in the "pending
-  // review" amber banner on the Emails page when manual review mode is on, and
-  // including them here would double-count. Failed-classification emails are
-  // also excluded since they are technical failures, not real uncertainty.
-  const attentionEmailWhere = {
-    classification: 'uncertain' as const,
-    taskLinks: { none: {} },
+  // The "Needs Review" bucket: emails that need a human eye. Combines two
+  // groups that were previously split:
+  //   1. action emails the user hasn't yet turned into a task (actioned=false)
+  //   2. uncertain emails the AI couldn't confidently classify
+  // Once a task is created (or the user dismisses to ignore), actioned=true
+  // and the email moves to Tracked / Ignored, exiting this bucket.
+  // Failed-classification emails are excluded as technical failures, not real
+  // pending work.
+  const attentionEmailWhere: Prisma.EmailWhereInput = {
+    classification: { in: ['action', 'uncertain'] },
+    actioned: false,
     processingStatus: { not: 'failed' },
   }
 
   const [
     emailGroups,
     linkedActionEmails,
+    needsReviewCount,
+    trackedCount,
     taskGroups,
     aiTaskGroups,
     dueOrOverdueCount,
@@ -81,6 +97,8 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     actionMomentumEmails,
     allTimeEmailGroupsRaw,
     allTimeLinkedActionEmailsRaw,
+    allTimeNeedsReviewCountRaw,
+    allTimeTrackedCountRaw,
     allTimeTaskGroupsRaw,
     allTimeAiTaskGroupsRaw,
     allTimeTasksRaw,
@@ -96,6 +114,12 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
         classification: 'action',
         taskLinks: { some: {} },
       },
+    }),
+    prisma.email.count({
+      where: { ...emailWhere, ...attentionEmailWhere },
+    }),
+    prisma.email.count({
+      where: { ...emailWhere, actioned: true },
     }),
     prisma.task.groupBy({
       by: ['status'],
@@ -194,6 +218,12 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       : prisma.email.count({ where: { ...baseEmailWhere, classification: 'action', taskLinks: { some: {} } } }),
     isAllView
       ? Promise.resolve(null)
+      : prisma.email.count({ where: { ...baseEmailWhere, ...attentionEmailWhere } }),
+    isAllView
+      ? Promise.resolve(null)
+      : prisma.email.count({ where: { ...baseEmailWhere, actioned: true } }),
+    isAllView
+      ? Promise.resolve(null)
       : prisma.task.groupBy({ by: ['status'], where: baseTaskWhere, _count: { id: true } }),
     isAllView
       ? Promise.resolve(null)
@@ -226,13 +256,15 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
 
   const allTimeEmailGroups = allTimeEmailGroupsRaw ?? emailGroups
   const allTimeLinkedActionEmails = allTimeLinkedActionEmailsRaw ?? linkedActionEmails
+  const allTimeNeedsReviewCount = allTimeNeedsReviewCountRaw ?? needsReviewCount
+  const allTimeTrackedCount = allTimeTrackedCountRaw ?? trackedCount
   const allTimeTaskGroups = allTimeTaskGroupsRaw ?? taskGroups
   const allTimeAiTaskGroups = allTimeAiTaskGroupsRaw ?? aiTaskGroups
   const allTimeTasks = allTimeTasksRaw ?? tasks
   const allTimeAttentionEmails = allTimeAttentionEmailsRaw ?? attentionEmails
   const allTimeAttentionEmailCount = allTimeAttentionEmailCountRaw ?? attentionEmails.length
 
-  const stats = buildStats(emailGroups, linkedActionEmails, taskGroups, userInfo)
+  const stats = buildStats(emailGroups, linkedActionEmails, needsReviewCount, trackedCount, taskGroups, userInfo)
   const taskSummary = {
     ...buildTaskSummary(tasks, stats.tasks, aiTaskGroups, period, now),
     upcomingCount: dueOrOverdueCount,
@@ -245,7 +277,14 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     period?.start,
     filters.timezoneOffset ?? 0
   )
-  const allTimeStats = buildStats(allTimeEmailGroups, allTimeLinkedActionEmails, allTimeTaskGroups, userInfo)
+  const allTimeStats = buildStats(
+    allTimeEmailGroups,
+    allTimeLinkedActionEmails,
+    allTimeNeedsReviewCount,
+    allTimeTrackedCount,
+    allTimeTaskGroups,
+    userInfo,
+  )
   const allTimeTaskSummary = buildTaskSummary(allTimeTasks, allTimeStats.tasks, allTimeAiTaskGroups, null, now)
   const feedback = buildFeedback(view, stats.tasks.completed, dueOrOverdueCount, overdueCount, allTimeStats.tasks)
 
@@ -361,6 +400,8 @@ async function buildEmailWhere(userId: string, filters: DashboardFilters): Promi
 function buildStats(
   emailGroups: Array<{ classification: string | null; _count: { id: number } }>,
   linkedActionEmails: number,
+  needsReviewCount: number,
+  trackedCount: number,
   taskGroups: Array<{ status: string; _count: { id: number } }>,
   userInfo: {
     lastSyncAt: Date | null
@@ -392,6 +433,8 @@ function buildStats(
       ignore: emailCount('ignore'),
       uncertain: emailCount('uncertain'),
       linkedAction: linkedActionEmails,
+      needsReview: needsReviewCount,
+      tracked: trackedCount,
     },
     tasks: {
       total: taskTotal,
