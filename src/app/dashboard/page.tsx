@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
   BarChart3,
+  CalendarIcon,
   Check,
   CheckSquare,
   Clock,
@@ -18,10 +19,12 @@ import {
   TrendingUp,
   UserRound,
 } from 'lucide-react'
+import { format } from 'date-fns'
 
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -120,6 +123,17 @@ const DASHBOARD_VIEWS: Array<{ id: DashboardView; label: string }> = [
   { id: 'today', label: 'Today' },
 ]
 
+const SYNC_PRESET_DAYS = [7, 15, 30] as const
+
+type SyncPreview = {
+  /** null for the custom-date row */
+  days: number | null
+  since: string
+  quotaImpactCount: number
+  quotaRemaining: number | null
+  wouldExceedQuota: boolean
+}
+
 export default function DashboardPage() {
   return (
     <Suspense fallback={<DashboardPageFallback />}>
@@ -137,7 +151,11 @@ function DashboardContent() {
   const selectedView = parseDashboardView(searchParams.get('view'))
   const timezoneOffset = useMemo(() => new Date().getTimezoneOffset(), [])
   const [showSyncModal, setShowSyncModal] = useState(() => searchParams.get('gmail_connected') === '1')
+  // syncSetupLoading uses days as the value for preset buttons; -1 is the
+  // sentinel for the custom-date confirm action (no real preset uses -1).
   const [syncSetupLoading, setSyncSetupLoading] = useState<number | null>(null)
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined)
+  const [customCalendarOpen, setCustomCalendarOpen] = useState(false)
 
   useEffect(() => {
     const gmailError = searchParams.get('gmail_error')
@@ -191,11 +209,57 @@ function DashboardContent() {
     }
   }, [router, markSyncSetupSeen])
 
+  const handleCustomConfirm = useCallback(async () => {
+    if (!customStartDate) return
+    setSyncSetupLoading(-1)
+    try {
+      await fetch('/api/settings/sync-range', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customDate: customStartDate.toISOString() }),
+      })
+      markSyncSetupSeen()
+    } finally {
+      setSyncSetupLoading(null)
+      setShowSyncModal(false)
+      router.replace('/dashboard', { scroll: false })
+    }
+  }, [customStartDate, router, markSyncSetupSeen])
+
   const handleSyncSkip = useCallback(() => {
     markSyncSetupSeen()
     setShowSyncModal(false)
     router.replace('/dashboard', { scroll: false })
   }, [router, markSyncSetupSeen])
+
+  // Preview "how many emails will use your quota" for each preset, fetched
+  // in parallel only while the dialog is open. resultSizeEstimate calls are
+  // cheap (one call each, no body fetch) but still skip them when not needed.
+  const { data: presetPreviews, isFetching: presetPreviewsLoading } = useQuery<SyncPreview[]>({
+    queryKey: ['sync-preview', 'presets'],
+    queryFn: async () => {
+      const responses = await Promise.all(
+        SYNC_PRESET_DAYS.map((d) =>
+          fetch(`/api/sync/preview?days=${d}`).then((r) => r.json())
+        )
+      )
+      return responses.map((r, i) => ({ days: SYNC_PRESET_DAYS[i], ...r.data }))
+    },
+    enabled: showSyncModal,
+    staleTime: 60_000,
+  })
+
+  const { data: customPreview, isFetching: customPreviewLoading } = useQuery<SyncPreview | null>({
+    queryKey: ['sync-preview', 'custom', customStartDate?.toISOString() ?? null],
+    queryFn: async () => {
+      if (!customStartDate) return null
+      const r = await fetch(`/api/sync/preview?since=${encodeURIComponent(customStartDate.toISOString())}`)
+      const json = await r.json()
+      return { days: null, ...json.data } as SyncPreview
+    },
+    enabled: showSyncModal && !!customStartDate,
+    staleTime: 60_000,
+  })
 
   const { data: projectsRes } = useQuery<{ data?: DashboardProject[] }>({
     queryKey: ['projects'],
@@ -632,27 +696,70 @@ function DashboardContent() {
           </div>
 
           <div className="grid gap-2">
-            {([7, 15, 30] as const).map((days) => {
+            {SYNC_PRESET_DAYS.map((days) => {
               const from = new Date(Date.now() - days * 86400000)
+              const preview = presetPreviews?.find((p) => p.days === days)
               return (
-                <button
+                <SyncWindowOption
                   key={days}
-                  onClick={() => handleSyncSetup(days)}
+                  title={`Last ${days} days`}
+                  fromDate={from}
+                  preview={preview}
+                  loading={!preview && presetPreviewsLoading}
+                  busy={syncSetupLoading === days}
                   disabled={syncSetupLoading !== null}
-                  className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-blue-200 hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Last {days} days</p>
-                    <p className="text-xs text-gray-500">From {from.toLocaleDateString()}</p>
-                  </div>
-                  {syncSetupLoading === days ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                  ) : (
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-200" />
-                  )}
-                </button>
+                  onClick={() => handleSyncSetup(days)}
+                />
               )
             })}
+
+            {/* Custom date picker — let users pick a start date instead of a preset */}
+            {customStartDate ? (
+              <SyncWindowOption
+                title={`From ${format(customStartDate, 'MMM d, yyyy')}`}
+                fromDate={customStartDate}
+                preview={customPreview ?? undefined}
+                loading={customPreviewLoading}
+                busy={syncSetupLoading === -1}
+                disabled={syncSetupLoading !== null}
+                onClick={handleCustomConfirm}
+                variant="custom"
+                onClear={() => setCustomStartDate(undefined)}
+              />
+            ) : (
+              <Popover open={customCalendarOpen} onOpenChange={setCustomCalendarOpen}>
+                <PopoverTrigger
+                  disabled={syncSetupLoading !== null}
+                  className="flex w-full items-center justify-between rounded-xl border border-dashed border-gray-300 bg-white p-4 text-left text-sm font-semibold text-gray-900 transition-colors hover:border-blue-300 hover:bg-blue-50/40 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span className="flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4 text-gray-500" />
+                    Pick a start date
+                  </span>
+                  <span className="text-xs font-normal text-gray-500">Custom</span>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-auto overflow-hidden rounded-2xl border border-gray-200 p-0 shadow-lg"
+                >
+                  <Calendar
+                    mode="single"
+                    captionLayout="dropdown"
+                    selected={customStartDate}
+                    onSelect={(d) => {
+                      if (d) {
+                        setCustomStartDate(d)
+                        setCustomCalendarOpen(false)
+                      }
+                    }}
+                    numberOfMonths={1}
+                    disabled={{ after: new Date() }}
+                    startMonth={new Date(2024, 0)}
+                    endMonth={new Date()}
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
 
           <button
@@ -1104,6 +1211,80 @@ function LegendDot({ color, label }: { color: string; label: string }) {
     <div className="flex items-center gap-2">
       <div className={`h-2.5 w-2.5 rounded-full ${color}`} />
       <span className="text-gray-600">{label}</span>
+    </div>
+  )
+}
+
+function SyncWindowOption({
+  title,
+  fromDate,
+  preview,
+  loading,
+  busy,
+  disabled,
+  onClick,
+  variant,
+  onClear,
+}: {
+  title: string
+  fromDate: Date
+  preview?: SyncPreview
+  loading: boolean
+  busy: boolean
+  disabled: boolean
+  onClick: () => void
+  variant?: 'preset' | 'custom'
+  onClear?: () => void
+}) {
+  const exceeds = preview?.wouldExceedQuota ?? false
+
+  const detail = loading
+    ? 'Estimating…'
+    : preview
+      ? `From ${format(fromDate, 'MMM d')} · ~${preview.quotaImpactCount} email${preview.quotaImpactCount === 1 ? '' : 's'} will use your quota`
+      : `From ${format(fromDate, 'MMM d')}`
+
+  return (
+    <div className="space-y-1">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+          exceeds
+            ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400 hover:bg-amber-50'
+            : 'border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/60'
+        }`}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            {title}
+            {exceeds ? <AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> : null}
+          </p>
+          <p className="truncate text-xs text-gray-500">{detail}</p>
+          {exceeds ? (
+            <p className="mt-0.5 text-[11px] text-amber-700">
+              Exceeds free plan limit (100/month) — upgrade or pick a smaller window.
+            </p>
+          ) : null}
+        </div>
+        <div className="ml-3 flex shrink-0 items-center gap-2">
+          {variant === 'custom' && !busy ? (
+            <Check className="h-4 w-4 text-blue-600" />
+          ) : busy ? (
+            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+          ) : (
+            <div className="h-4 w-4 rounded-full border-2 border-gray-200" />
+          )}
+        </div>
+      </button>
+      {onClear && !busy ? (
+        <button
+          onClick={onClear}
+          className="ml-1 text-[11px] text-gray-400 transition-colors hover:text-gray-600"
+        >
+          Pick a different date
+        </button>
+      ) : null}
     </div>
   )
 }

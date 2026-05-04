@@ -52,12 +52,29 @@ export interface FetchNewEmailsOptions {
   maxResults?: number
 }
 
+export interface PreviewCount {
+  /**
+   * Approximate count of emails in the window that will burn AI quota
+   * (Gmail Primary tab, future: Outlook Focused inbox). Backed by the
+   * provider's native count estimate (Gmail's resultSizeEstimate / Graph's
+   * @odata.count) — accurate to ±5–10%, no body fetch, no pagination.
+   */
+  quotaImpactCount: number
+}
+
 export interface EmailProvider {
   /** Unique name for this provider (e.g. 'gmail', 'outlook') */
   name: string
 
   /** Fetch new emails (excluding already-known message IDs). */
   fetchNewEmails(userId: string, options?: FetchNewEmailsOptions): Promise<EmailMessage[]>
+
+  /**
+   * Returns approximate count of "real" emails in the window for the pre-sync
+   * preview UI. Used to show the user how much of their monthly quota a given
+   * time window would consume before they commit to syncing it.
+   */
+  previewCount(userId: string, options: { since: Date }): Promise<PreviewCount>
 
   /** Disconnect the provider and clean up tokens */
   disconnect(userId: string): Promise<void>

@@ -392,6 +392,50 @@ export const gmailProvider: EmailProvider = {
     }
   },
 
+  async previewCount(userId: string, { since }: { since: Date }): Promise<{ quotaImpactCount: number }> {
+    try {
+      const auth = await getAuthenticatedClient(userId)
+      const gmail = google.gmail({ version: 'v1', auth })
+      const afterStr = Math.floor(since.getTime() / 1000).toString()
+
+      // resultSizeEstimate is Gmail's native approximate-count field — one
+      // lightweight API call, no body fetch, no pagination. We restrict to
+      // category:primary because the AI quota burn aligns with what pre-filter
+      // *doesn't* drop (promotions/social/updates/spam are auto-ignored).
+      const res = await gmail.users.messages.list({
+        userId: 'me',
+        q: `after:${afterStr} category:primary`,
+        maxResults: 1,
+      })
+
+      return { quotaImpactCount: res.data.resultSizeEstimate ?? 0 }
+    } catch (error) {
+      if (error instanceof AppError) throw error
+
+      if (isInvalidCredentialError(error)) {
+        await markProviderReauthRequired(userId, 'gmail', 'access_token_invalid')
+        throw new AppError(
+          'PROVIDER_REAUTH_REQUIRED',
+          'Your Gmail connection has expired. Please reconnect it to continue syncing.',
+          401,
+          { provider: 'gmail', reason: 'access_token_invalid' },
+        )
+      }
+
+      if (isTemporaryProviderError(error)) {
+        throw new AppError(
+          'SYNC_TEMPORARY_ERROR',
+          'Gmail is temporarily unavailable. Please try again shortly.',
+          503,
+          { provider: 'gmail' },
+        )
+      }
+
+      console.error('[gmail] previewCount failed', { userId, error: getErrorText(error) })
+      throw new AppError('SYNC_FAILED', 'Failed to preview Gmail right now.', 500, { provider: 'gmail' })
+    }
+  },
+
   async disconnect(userId: string): Promise<void> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
