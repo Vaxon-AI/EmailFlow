@@ -692,21 +692,6 @@ function EmailsContent() {
               )}
             </div>
 
-            {/* Classification filter — only meaningful on All Mail tab */}
-            {tab === 'all' && (
-              <SegmentedControl
-                value={classification}
-                onChange={(nextClassification) => updateEmailUrlFilter({ classification: nextClassification })}
-                options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'action', label: 'Needs Action' },
-                  { value: 'awareness', label: 'FYI' },
-                  { value: 'ignore', label: 'Ignored' },
-                  { value: 'uncertain', label: 'Needs Review' },
-                ]}
-              />
-            )}
-
             {accounts.length > 1 && (
               <SegmentedControl
                 value={accountFilter}
