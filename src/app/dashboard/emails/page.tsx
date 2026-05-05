@@ -207,7 +207,7 @@ function EmailsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const focusIdentityId = searchParams.get('identity') ?? undefined
-  const tab = parseEmailTab(searchParams.get('tab'))
+  const [tab, setTab] = useState<Tab>(() => parseEmailTab(searchParams.get('tab')))
   const classification = parseEmailClassification(searchParams.get('classification'), tab)
   const [accountFilter, setAccountFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -261,8 +261,16 @@ function EmailsContent() {
     setAckedReviewBatchId(null)
   }, [])
 
+  // Keep local tab state in sync with URL for browser back/forward navigation
+  useEffect(() => {
+    setTab(parseEmailTab(searchParams.get('tab')))
+  }, [searchParams])
+
   const updateEmailUrlFilter = useCallback((next: { tab?: Tab; classification?: EmailClassificationFilter }) => {
-    const params = new URLSearchParams(searchParams.toString())
+    // Use window.location.search instead of searchParams to always read the
+    // current URL — avoids stale closure when the user clicks faster than React
+    // can re-render after a router.replace call.
+    const params = new URLSearchParams(window.location.search)
     if (next.tab) {
       params.set('tab', next.tab)
       params.delete('classification')
@@ -274,7 +282,7 @@ function EmailsContent() {
     }
     const query = params.toString()
     router.replace(query ? `/dashboard/emails?${query}` : '/dashboard/emails', { scroll: false })
-  }, [router, searchParams])
+  }, [router])
 
   const { data: pendingReviewData } = useQuery({
     queryKey: ['pending-review-count'],
@@ -545,6 +553,8 @@ function EmailsContent() {
         <SegmentedControl
           value={tab}
           onChange={(nextTab) => {
+            setTab(nextTab)
+            setPage(1)
             updateEmailUrlFilter({ tab: nextTab })
           }}
           options={tabs.map(({ key, label, count }) => ({
@@ -802,7 +812,11 @@ function EmailsContent() {
           <button
             onClick={() => {
               ackCurrentReviewBatch()
-              if (tab !== 'needs_review') updateEmailUrlFilter({ tab: 'needs_review' })
+              if (tab !== 'needs_review') {
+                setTab('needs_review')
+                setPage(1)
+                updateEmailUrlFilter({ tab: 'needs_review' })
+              }
             }}
             className="flex flex-1 items-center gap-3 text-left transition-colors hover:opacity-80"
           >
