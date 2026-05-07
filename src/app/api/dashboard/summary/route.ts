@@ -7,7 +7,7 @@ import { getDashboardSummary } from '@/repositories/dashboard-summary-repo'
 const EMPTY_SUMMARY = {
   view: 'all',
   stats: {
-    emails: { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, linkedAction: 0 },
+    emails: { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, linkedAction: 0, needsReview: 0, tracked: 0, unclassified: 0 },
     tasks: { total: 0, pending: 0, confirmed: 0, completed: 0, dismissed: 0 },
     sync: {
       lastSyncAt: null,

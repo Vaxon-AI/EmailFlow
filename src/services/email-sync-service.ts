@@ -262,7 +262,14 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
       : storedEmails.slice(0, remaining)
 
     if (emailsToProcess.length < storedEmails.length) {
-      console.log(`[sync] phase2 quota: ${storedEmails.length - emailsToProcess.length} email(s) skipped (free plan limit reached)`)
+      const skippedIds = storedEmails.slice(emailsToProcess.length).map((e) => e.id)
+      console.log(`[sync] phase2 quota: ${skippedIds.length} email(s) skipped (free plan limit reached)`)
+      // Mark them with a distinct status so:
+      //   1. fixStuckEmails (filters by 'pending') won't sweep them to 'uncertain'
+      //   2. UI can surface them in a dedicated banner / Unclassified tab
+      // classification stays null until the user manually classifies or the
+      // monthly quota frees up.
+      await emailRepo.markQuotaSkipped(skippedIds)
     }
 
     for (const email of emailsToProcess) {

@@ -55,8 +55,9 @@ type BatchStatus = {
 
 // Each tab is a mutually-exclusive bucket — no "All Mail" tab anymore. Needs
 // Action / Tracked / FYI cover the everyday mail; Ignored is the catch-all
-// for AI-classified ignore + user-dismissed soft-deletes.
-type Tab = 'needs_review' | 'tracked' | 'fyi' | 'ignored'
+// for AI-classified ignore + user-dismissed soft-deletes. Unclassified only
+// appears when there are quota-skipped emails awaiting manual classification.
+type Tab = 'needs_review' | 'tracked' | 'fyi' | 'ignored' | 'unclassified'
 type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
 
 type LinkedTask = {
@@ -103,7 +104,7 @@ const fyiPriority: Record<string, number> = {
   ignore: 1,
 }
 
-const VALID_TABS = new Set<Tab>(['needs_review', 'tracked', 'fyi', 'ignored'])
+const VALID_TABS = new Set<Tab>(['needs_review', 'tracked', 'fyi', 'ignored', 'unclassified'])
 
 function isNeedsActionPageEmail(email: EmailItem) {
   return (
@@ -132,10 +133,15 @@ function isIgnoredEmail(email: EmailItem) {
   return email.classification === 'ignore'
 }
 
+function isUnclassifiedEmail(email: EmailItem) {
+  return !email.classification && email.processingStatus === 'quota_skipped'
+}
+
 function matchesEmailTab(email: EmailItem, tab: Tab) {
   if (tab === 'needs_review') return isNeedsActionPageEmail(email)
   if (tab === 'tracked') return isTrackedEmail(email)
   if (tab === 'fyi') return isFyiEmail(email)
+  if (tab === 'unclassified') return isUnclassifiedEmail(email)
   return isIgnoredEmail(email)
 }
 
@@ -510,7 +516,7 @@ function EmailsContent() {
   const { data: res, isLoading } = useQuery({
     queryKey: ['emails', page],
     queryFn: () =>
-      fetch(`/api/emails?page=${page}&limit=50`).then((r) => r.json()),
+      fetch(`/api/emails?page=${page}&limit=2000`).then((r) => r.json()),
     staleTime: CACHE_TIME.list,
     placeholderData: (previous) => previous,
   })
@@ -541,6 +547,7 @@ function EmailsContent() {
   const trackedCount = emails.filter(isTrackedEmail).length
   const infoCount = emails.filter(isFyiEmail).length
   const ignoredCount = emails.filter(isIgnoredEmail).length
+  const unclassifiedCount = emails.filter(isUnclassifiedEmail).length
   const pendingCount = emails.filter((e) => e.processingStatus === 'pending').length
 
   const tabs: { key: Tab; label: string; count: number }[] = [
@@ -548,6 +555,7 @@ function EmailsContent() {
     { key: 'tracked', label: 'Tracked', count: trackedCount },
     { key: 'fyi', label: 'FYI', count: infoCount },
     { key: 'ignored', label: 'Ignored', count: ignoredCount },
+    ...(unclassifiedCount > 0 ? [{ key: 'unclassified' as Tab, label: 'Unclassified', count: unclassifiedCount }] : []),
   ]
 
   return (
@@ -557,6 +565,31 @@ function EmailsContent() {
         description="Review incoming emails, grouped by matter and linked tasks."
         meta={`${meta?.totalCount || 0} emails across ${accounts.length || 1} account${accounts.length !== 1 ? 's' : ''}`}
       />
+
+      {unclassifiedCount > 0 && tab !== 'unclassified' && (
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm">
+          <div className="min-w-0">
+            <p className="font-medium text-amber-900">
+              {unclassifiedCount} email{unclassifiedCount === 1 ? '' : 's'} awaiting classification
+            </p>
+            <p className="mt-0.5 text-xs text-amber-800">
+              Free plan limit reached this month. Open any of them to classify manually, or upgrade to Pro for automatic classification.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+            onClick={() => {
+              setTab('unclassified')
+              setPage(1)
+              updateEmailUrlFilter({ tab: 'unclassified' })
+            }}
+          >
+            View
+          </Button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div>

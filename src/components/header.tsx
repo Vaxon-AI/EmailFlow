@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/use-auth'
 import { ApiClientError, isSessionFailureCode } from '@/lib/api-client'
 import {
@@ -48,8 +48,10 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const { user, logout } = useAuth()
   const queryClient = useQueryClient()
   const pathname = usePathname()
+  const router = useRouter()
   const [syncResult, setSyncResult] = useState<SyncResultData | null>(null)
   const [syncResultOpen, setSyncResultOpen] = useState(false)
+  const [checkingSyncState, setCheckingSyncState] = useState(false)
 
   const segments = pathname.split('/').filter(Boolean)
   const currentSection = segments[1] ? segments[1].replace(/-/g, ' ') : 'dashboard'
@@ -182,14 +184,39 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
+            onClick={async () => {
+              if (syncMutation.isPending || checkingSyncState) return
+              setCheckingSyncState(true)
+              try {
+                const res = await fetch('/api/sync/state')
+                if (!res.ok) {
+                  // Fall back to firing the sync directly so the button still works
+                  syncMutation.mutate()
+                  return
+                }
+                const json = await res.json()
+                const kind: 'never' | 'fresh' | 'stale' = json?.data?.state?.kind ?? 'never'
+                if (kind === 'fresh') {
+                  // Active user — incremental sync from lastSyncAt forward, no modal
+                  syncMutation.mutate()
+                } else {
+                  // Stale or first-time — open the dashboard's setup modal so the
+                  // user can pick a window before we sync
+                  router.push('/dashboard?show_sync=stale')
+                }
+              } catch {
+                syncMutation.mutate()
+              } finally {
+                setCheckingSyncState(false)
+              }
+            }}
+            disabled={syncMutation.isPending || checkingSyncState}
             title={syncMutation.isPending ? 'Syncing...' : 'Sync emails'}
             className={cn(
               'rounded-full border border-transparent p-2 text-gray-400 transition-colors hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40'
             )}
           >
-            <RefreshCw className={cn('h-4 w-4', syncMutation.isPending && 'animate-spin')} />
+            <RefreshCw className={cn('h-4 w-4', (syncMutation.isPending || checkingSyncState) && 'animate-spin')} />
           </button>
 
           <DropdownMenu>
@@ -287,10 +314,10 @@ function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
               <li className="mt-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
                 <span className="font-medium">Free plan limit reached.</span>{' '}
                 {quotaRemaining === 0
-                  ? 'No more emails can be classified this month.'
-                  : `Only ${quotaRemaining} email${quotaRemaining === 1 ? '' : 's'} left to classify this month.`}{' '}
+                  ? 'Newly synced emails are sitting in the Unclassified tab — open any of them to classify manually, or '
+                  : `Only ${quotaRemaining} email${quotaRemaining === 1 ? '' : 's'} left to classify this month. `}
                 <a href="mailto:support@emailflow.ai?subject=Pro plan early access" className="font-semibold underline hover:text-amber-900">
-                  Upgrade to Pro
+                  upgrade to Pro
                 </a>{' '}
                 for unlimited classification.
               </li>

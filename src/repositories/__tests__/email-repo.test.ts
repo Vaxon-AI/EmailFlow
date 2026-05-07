@@ -11,6 +11,7 @@ vi.mock('@/lib/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
+      count: vi.fn(),
     },
   },
 }))
@@ -25,6 +26,8 @@ import {
   updateClassification,
   markClassificationFailed,
   fixStuckEmails,
+  markQuotaSkipped,
+  countQuotaSkipped,
 } from '../email-repo'
 
 // ---------------------------------------------------------------------------
@@ -217,5 +220,46 @@ describe('fixStuckEmails', () => {
     const call = (mockPrismaEmail.updateMany as ReturnType<typeof vi.fn>).mock.calls[0][0]
     // null userId means the where object should NOT contain a userId key
     expect(call.where).not.toHaveProperty('userId')
+  })
+
+  it('does NOT touch quota_skipped rows (only filters status: pending)', async () => {
+    mockPrismaEmail.updateMany.mockResolvedValue({ count: 0 })
+    await fixStuckEmails('user-1')
+    const call = (mockPrismaEmail.updateMany as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(call.where.processingStatus).toBe('pending')
+  })
+})
+
+describe('markQuotaSkipped', () => {
+  it('updates the listed email ids to processingStatus: quota_skipped', async () => {
+    mockPrismaEmail.updateMany.mockResolvedValue({ count: 3 })
+
+    const count = await markQuotaSkipped(['e1', 'e2', 'e3'])
+
+    expect(count).toBe(3)
+    expect(mockPrismaEmail.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['e1', 'e2', 'e3'] } },
+      data: { processingStatus: 'quota_skipped' },
+    })
+  })
+
+  it('short-circuits to 0 when given an empty list (no DB call)', async () => {
+    const count = await markQuotaSkipped([])
+    expect(count).toBe(0)
+    expect(mockPrismaEmail.updateMany).not.toHaveBeenCalled()
+  })
+})
+
+describe('countQuotaSkipped', () => {
+  it('counts emails with processingStatus: quota_skipped and classification: null', async () => {
+    const mockCount = vi.mocked(prisma.email.count)
+    mockCount.mockResolvedValue(7 as never)
+
+    const result = await countQuotaSkipped('user-7')
+
+    expect(result).toBe(7)
+    expect(mockCount).toHaveBeenCalledWith({
+      where: { userId: 'user-7', processingStatus: 'quota_skipped', classification: null },
+    })
   })
 })

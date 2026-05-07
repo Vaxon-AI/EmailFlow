@@ -35,7 +35,7 @@ describe('GET /api/sync/preview', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthUser.mockResolvedValue({ id: 'user-1' } as never)
-    mockPreviewCount.mockResolvedValue({ quotaImpactCount: 42 })
+    mockPreviewCount.mockResolvedValue({ quotaImpactCount: 42, capped: false })
     mockGetRemaining.mockResolvedValue(80)
   })
 
@@ -52,7 +52,7 @@ describe('GET /api/sync/preview', () => {
   })
 
   it('flags wouldExceedQuota when impact > remaining', async () => {
-    mockPreviewCount.mockResolvedValue({ quotaImpactCount: 150 })
+    mockPreviewCount.mockResolvedValue({ quotaImpactCount: 150, capped: false })
     mockGetRemaining.mockResolvedValue(80)
 
     const res = await GET(getRequest('?days=30'))
@@ -60,8 +60,17 @@ describe('GET /api/sync/preview', () => {
     expect(body.data.wouldExceedQuota).toBe(true)
   })
 
+  it('forwards the capped flag from the provider for "500+" UI', async () => {
+    mockPreviewCount.mockResolvedValue({ quotaImpactCount: 500, capped: true })
+
+    const res = await GET(getRequest('?days=30'))
+    const body = await res.json()
+    expect(body.data.capped).toBe(true)
+    expect(body.data.quotaImpactCount).toBe(500)
+  })
+
   it('treats Infinity remaining (pro plan) as null and never exceeds', async () => {
-    mockPreviewCount.mockResolvedValue({ quotaImpactCount: 1000 })
+    mockPreviewCount.mockResolvedValue({ quotaImpactCount: 1000, capped: false })
     mockGetRemaining.mockResolvedValue(Infinity)
 
     const res = await GET(getRequest('?days=30'))

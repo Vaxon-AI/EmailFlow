@@ -54,12 +54,15 @@ export interface FetchNewEmailsOptions {
 
 export interface PreviewCount {
   /**
-   * Approximate count of emails in the window that will burn AI quota
-   * (Gmail Primary tab, future: Outlook Focused inbox). Backed by the
-   * provider's native count estimate (Gmail's resultSizeEstimate / Graph's
-   * @odata.count) — accurate to ±5–10%, no body fetch, no pagination.
+   * Count of emails in the window that will burn AI quota (Gmail Primary,
+   * future: Outlook Focused). Counted by paging through messages.list ids
+   * up to a soft cap — exact when under the cap, equal to the cap when
+   * over it. We don't trust resultSizeEstimate: empirically returns a
+   * placeholder (~201) for many accounts when maxResults is small.
    */
   quotaImpactCount: number
+  /** True when the count hit the soft cap and there are more pages. UI shows "500+". */
+  capped: boolean
 }
 
 export interface EmailProvider {

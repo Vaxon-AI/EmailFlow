@@ -198,6 +198,27 @@ export async function markClassificationFailed(emailId: string) {
   })
 }
 
+// Marks the given emails with processingStatus='quota_skipped' so the UI can
+// surface them and fixStuckEmails (which filters status='pending') won't sweep
+// them. classification stays null — the user can classify manually, or the
+// next sync after a quota refresh can reclassify them.
+export async function markQuotaSkipped(emailIds: string[]): Promise<number> {
+  if (emailIds.length === 0) return 0
+  const { count } = await prisma.email.updateMany({
+    where: { id: { in: emailIds } },
+    data: { processingStatus: 'quota_skipped' },
+  })
+  return count
+}
+
+// Counts emails that the AI pipeline couldn't classify because the user's
+// classify quota was exhausted. Used for the Emails-page banner / tab.
+export async function countQuotaSkipped(userId: string): Promise<number> {
+  return prisma.email.count({
+    where: { userId, processingStatus: 'quota_skipped', classification: null },
+  })
+}
+
 // Finds emails stuck in 'pending' for longer than staleAfterMs and marks them failed.
 // Returns the number of emails fixed.
 export async function fixStuckEmails(userId: string | null, staleAfterMs = 2 * 60 * 1000): Promise<number> {

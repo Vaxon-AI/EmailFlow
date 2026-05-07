@@ -20,6 +20,7 @@ type DashboardStats = {
     // Backward-compatible field name: now represents Needs Action page emails.
     needsReview: number  // (action OR uncertain) AND actioned=false
     tracked: number      // actioned=true (regardless of classification)
+    unclassified: number // classification=null (quota_skipped) — surfaced separately
   }
   tasks: { total: number; pending: number; confirmed: number; completed: number; dismissed: number }
   sync: {
@@ -412,7 +413,11 @@ function buildStats(
   const taskCount = (status: string) =>
     taskGroups.find((group) => group.status === status)?._count.id ?? 0
 
-  const emailTotal = emailGroups.reduce((sum, group) => sum + group._count.id, 0)
+  const unclassifiedTotal = emailCount(null)
+  // Classified emails are visible in the inbox tabs; unclassified (quota-skipped)
+  // sit in a separate banner/tab. Keep them out of the headline "total" so the
+  // dashboard count matches what the user sees on the Emails page.
+  const emailTotal = emailGroups.reduce((sum, group) => sum + group._count.id, 0) - unclassifiedTotal
   const taskTotal = taskGroups.reduce((sum, group) => sum + group._count.id, 0)
   const pending = taskCount('pending')
   const completed = taskCount('completed')
@@ -428,6 +433,7 @@ function buildStats(
       linkedAction: linkedActionEmails,
       needsReview: needsReviewCount,
       tracked: trackedCount,
+      unclassified: unclassifiedTotal,
     },
     tasks: {
       total: taskTotal,

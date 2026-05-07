@@ -4,7 +4,7 @@ import { getAuthUser, success } from '@/lib/api-helpers'
 import * as statsRepo from '@/repositories/stats-repo'
 
 const EMPTY_STATS = {
-  emails: { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0 },
+  emails: { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, unclassified: 0 },
   tasks: { total: 0, pending: 0, completed: 0, dismissed: 0 },
   sync: {
     lastSyncAt: null,

@@ -34,7 +34,7 @@ export async function GET(req: Request) {
       since = new Date(Date.now() - days * 86_400_000)
     }
 
-    const [{ quotaImpactCount }, quotaRemaining] = await Promise.all([
+    const [preview, quotaRemaining] = await Promise.all([
       gmailProvider.previewCount(user.id, { since }),
       getClassifyRemaining(user.id),
     ])
@@ -43,9 +43,10 @@ export async function GET(req: Request) {
 
     return success({
       since: since.toISOString(),
-      quotaImpactCount,
+      quotaImpactCount: preview.quotaImpactCount,
+      capped: preview.capped,
       quotaRemaining: remaining,
-      wouldExceedQuota: remaining !== null && quotaImpactCount > remaining,
+      wouldExceedQuota: remaining !== null && preview.quotaImpactCount > remaining,
     })
   } catch (err) {
     return errorFromException(err, 'SYNC_PREVIEW_FAILED', 'Failed to preview sync window', 500)

@@ -10,15 +10,18 @@ const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 // Returning users have already chosen a sync window — sending them through the
-// "Set your sync range" dialog every login is annoying. Only attach the
-// ?gmail_connected=1 query (which triggers the dialog client-side) for users
-// who haven't yet seen the setup.
+// "Set your sync range" dialog every login is annoying. Skip the dialog if any
+// of these signal the user has been set up before:
+//   - hasSeenSyncSetup explicitly true (clicked any modal action)
+//   - syncStartDate set (user picked a window in Settings, bypassing modal)
+//   - lastSyncAt set (any prior successful sync)
 async function dashboardRedirectFor(userId: string): Promise<URL> {
   const u = await prisma.user.findUnique({
     where: { id: userId },
-    select: { hasSeenSyncSetup: true },
+    select: { hasSeenSyncSetup: true, syncStartDate: true, lastSyncAt: true },
   })
-  const path = u?.hasSeenSyncSetup ? '/dashboard' : '/dashboard?gmail_connected=1'
+  const isSetUp = !!(u?.hasSeenSyncSetup || u?.syncStartDate || u?.lastSyncAt)
+  const path = isSetUp ? '/dashboard' : '/dashboard?gmail_connected=1'
   return new URL(path, APP_URL)
 }
 

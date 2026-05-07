@@ -392,23 +392,37 @@ export const gmailProvider: EmailProvider = {
     }
   },
 
-  async previewCount(userId: string, { since }: { since: Date }): Promise<{ quotaImpactCount: number }> {
+  async previewCount(userId: string, { since }: { since: Date }): Promise<{ quotaImpactCount: number; capped: boolean }> {
     try {
       const auth = await getAuthenticatedClient(userId)
       const gmail = google.gmail({ version: 'v1', auth })
       const afterStr = Math.floor(since.getTime() / 1000).toString()
 
-      // resultSizeEstimate is Gmail's native approximate-count field — one
-      // lightweight API call, no body fetch, no pagination. We restrict to
-      // category:primary because the AI quota burn aligns with what pre-filter
-      // *doesn't* drop (promotions/social/updates/spam are auto-ignored).
-      const res = await gmail.users.messages.list({
-        userId: 'me',
-        q: `after:${afterStr} category:primary`,
-        maxResults: 1,
-      })
+      // We can't trust resultSizeEstimate — empirically returns a sentinel
+      // (~201) for many accounts when maxResults is small. Page through ids
+      // ourselves and count exactly, capped at SOFT_CAP. category:primary
+      // matches what pre-filter doesn't drop (promotions/social/updates are
+      // auto-ignored without burning AI quota).
+      const SOFT_CAP = 500
+      let count = 0
+      let pageToken: string | undefined
+      let capped = false
+      do {
+        const res = await gmail.users.messages.list({
+          userId: 'me',
+          q: `after:${afterStr} category:primary`,
+          maxResults: 500,
+          pageToken,
+        })
+        count += res.data.messages?.length ?? 0
+        pageToken = res.data.nextPageToken ?? undefined
+        if (count >= SOFT_CAP) {
+          capped = !!pageToken
+          break
+        }
+      } while (pageToken)
 
-      return { quotaImpactCount: res.data.resultSizeEstimate ?? 0 }
+      return { quotaImpactCount: count, capped }
     } catch (error) {
       if (error instanceof AppError) throw error
 

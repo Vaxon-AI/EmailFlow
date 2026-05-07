@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 // ============================================================
 
 type DashboardStats = {
-  emails: { total: number; action: number; awareness: number; ignore: number; uncertain: number }
+  emails: { total: number; action: number; awareness: number; ignore: number; uncertain: number; unclassified: number }
   tasks: { total: number; pending: number; completed: number; dismissed: number }
   sync: {
     lastSyncAt: Date | null | undefined
@@ -60,7 +60,10 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
   const taskCount = (status: string) =>
     taskGroups.find((g) => g.status === status)?._count.id ?? 0
 
-  const emailTotal = emailGroups.reduce((sum, g) => sum + g._count.id, 0)
+  const unclassifiedTotal = emailCount(null)
+  // Headline total excludes unclassified (quota-skipped) so it matches what's
+  // visible in the inbox tabs. unclassified is reported separately.
+  const emailTotal = emailGroups.reduce((sum, g) => sum + g._count.id, 0) - unclassifiedTotal
   const taskTotal = taskGroups.reduce((sum, g) => sum + g._count.id, 0)
 
   const stats: DashboardStats = {
@@ -70,6 +73,7 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
       awareness: emailCount('awareness'),
       ignore: emailCount('ignore'),
       uncertain: emailCount('uncertain'),
+      unclassified: unclassifiedTotal,
     },
     tasks: {
       total: taskTotal,

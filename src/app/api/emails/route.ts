@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
     const url = req.nextUrl
     const page = parseInt(url.searchParams.get('page') || '1')
-    const limit = parseInt(url.searchParams.get('limit') || '20')
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 2000)
     const classification = url.searchParams.get('classification') || undefined
 
     const { emails, total } = await emailRepo.findEmailsPaginated(user.id, {

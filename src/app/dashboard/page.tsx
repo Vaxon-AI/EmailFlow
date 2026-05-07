@@ -74,6 +74,7 @@ type DashboardStats = {
     linkedAction: number
     needsReview: number
     tracked: number
+    unclassified?: number
   }
   tasks: { total: number; pending: number; confirmed: number; completed: number; dismissed: number }
   sync: {
@@ -139,6 +140,8 @@ type SyncPreview = {
   days: number | null
   since: string
   quotaImpactCount: number
+  /** True when the count hit the soft cap; UI shows "500+" */
+  capped?: boolean
   quotaRemaining: number | null
   wouldExceedQuota: boolean
 }
@@ -159,9 +162,12 @@ function DashboardContent() {
   const selectedProjectIds = useMemo(() => parseContextParam(searchParams, 'project'), [searchParams])
   const selectedView = parseDashboardView(searchParams.get('view'))
   const timezoneOffset = useMemo(() => new Date().getTimezoneOffset(), [])
-  const [showSyncModal, setShowSyncModal] = useState(() => searchParams.get('gmail_connected') === '1')
+  const [showSyncModal, setShowSyncModal] = useState(() =>
+    searchParams.get('gmail_connected') === '1' || searchParams.get('show_sync') === 'stale'
+  )
   // syncSetupLoading uses days as the value for preset buttons; -1 is the
-  // sentinel for the custom-date confirm action (no real preset uses -1).
+  // sentinel for the custom-date confirm action; -2 is the sentinel for
+  // "to last sync" (stale-aware preset). No real preset uses negative days.
   const [syncSetupLoading, setSyncSetupLoading] = useState<number | null>(null)
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined)
   const [customCalendarOpen, setCustomCalendarOpen] = useState(false)
@@ -183,12 +189,13 @@ function DashboardContent() {
     router.replace('/dashboard', { scroll: false })
   }, [searchParams, router])
 
-  // Strip ?gmail_connected=1 from the URL on mount once it's been read into
-  // showSyncModal state. Without this, the param lingers in the URL and any
-  // future remount (e.g. navigating back from another route in the same SPA
-  // session) re-opens the modal, which the user reported as "弹窗反复弹".
+  // Strip ?gmail_connected=1 / ?show_sync=stale from the URL on mount once
+  // they've been read into showSyncModal state. Without this, the param
+  // lingers and any future remount (e.g. navigating back from another route
+  // in the same SPA session) re-opens the modal — what the user reported
+  // as "弹窗反复弹".
   useEffect(() => {
-    if (searchParams.get('gmail_connected') === '1') {
+    if (searchParams.get('gmail_connected') === '1' || searchParams.get('show_sync') === 'stale') {
       router.replace('/dashboard', { scroll: false })
     }
     // Run once per mount; deps intentionally empty so a later searchParams
@@ -241,6 +248,24 @@ function DashboardContent() {
     router.replace('/dashboard', { scroll: false })
   }, [router, markSyncSetupSeen])
 
+  // Stale-aware preset: set sync window to the user's last sync moment, so we
+  // pick up exactly the gap (no double-fetch, no over-fetch).
+  const handleSyncToLastSync = useCallback(async (lastSyncIso: string) => {
+    setSyncSetupLoading(-2)
+    try {
+      await fetch('/api/settings/sync-range', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customDate: lastSyncIso }),
+      })
+      markSyncSetupSeen()
+    } finally {
+      setSyncSetupLoading(null)
+      setShowSyncModal(false)
+      router.replace('/dashboard', { scroll: false })
+    }
+  }, [router, markSyncSetupSeen])
+
   // Preview "how many emails will use your quota" for each preset, fetched
   // in parallel only while the dialog is open. resultSizeEstimate calls are
   // cheap (one call each, no body fetch) but still skip them when not needed.
@@ -267,6 +292,33 @@ function DashboardContent() {
       return { days: null, ...json.data } as SyncPreview
     },
     enabled: showSyncModal && !!customStartDate,
+    staleTime: 60_000,
+  })
+
+  // Sync state classifies the user as never / fresh / stale to drive modal copy
+  // and the "To your last sync" preset (only meaningful when stale).
+  const { data: syncStateRes } = useQuery<{ data: { state: { kind: string; lastSyncAt?: string; daysSince?: number }; syncStartDate: string | null } }>({
+    queryKey: ['sync-state'],
+    queryFn: () => fetch('/api/sync/state').then((r) => r.json()),
+    enabled: showSyncModal,
+    staleTime: 30_000,
+  })
+  const syncState = syncStateRes?.data?.state
+  const isStale = syncState?.kind === 'stale'
+  const lastSyncAtIso = syncState?.kind === 'fresh' || syncState?.kind === 'stale' ? syncState.lastSyncAt : undefined
+  const daysSinceLastSync = isStale && typeof syncState?.daysSince === 'number' ? syncState.daysSince : 0
+  const staleAnchor: 7 | 15 | 30 = daysSinceLastSync < 15 ? 7 : daysSinceLastSync < 30 ? 15 : 30
+
+  // For stale users, fetch a preview of "from your last sync to now" alongside the anchor preset.
+  const { data: lastSyncPreview, isFetching: lastSyncPreviewLoading } = useQuery<SyncPreview | null>({
+    queryKey: ['sync-preview', 'last-sync', lastSyncAtIso ?? null],
+    queryFn: async () => {
+      if (!lastSyncAtIso) return null
+      const r = await fetch(`/api/sync/preview?since=${encodeURIComponent(lastSyncAtIso)}`)
+      const json = await r.json()
+      return { days: null, ...json.data } as SyncPreview
+    },
+    enabled: showSyncModal && isStale && !!lastSyncAtIso,
     staleTime: 60_000,
   })
 
@@ -584,6 +636,14 @@ function DashboardContent() {
                   <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-blue-400" href={dashboardLink('/dashboard/emails', { tab: 'fyi' })} />
                   <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" href={dashboardLink('/dashboard/emails', { tab: 'ignored' })} />
                 </div>
+                {(emailData.unclassified ?? 0) > 0 && (
+                  <Link
+                    href={dashboardLink('/dashboard/emails', { tab: 'unclassified' })}
+                    className="mt-2.5 block rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] text-amber-800 transition-colors hover:bg-amber-50"
+                  >
+                    +{emailData.unclassified} awaiting classification (free quota reached)
+                  </Link>
+                )}
               </CardContent>
             </Card>
 
@@ -686,12 +746,23 @@ function DashboardContent() {
         </CardContent>
       </Card>
       {/* First-login sync setup modal */}
-      <Dialog open={showSyncModal} onOpenChange={setShowSyncModal}>
+      <Dialog
+        open={showSyncModal}
+        onOpenChange={(v) => {
+          setShowSyncModal(v)
+          // Mark seen on ANY close (Escape, click-outside, etc.) so we don't
+          // re-pester the user on next login. The handlers below also call
+          // markSyncSetupSeen — that's fine, the API is idempotent.
+          if (!v) markSyncSetupSeen()
+        }}
+      >
         <DialogContent showCloseButton={false} className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Set your sync range</DialogTitle>
+            <DialogTitle>{isStale ? 'Welcome back' : 'Set your sync range'}</DialogTitle>
             <DialogDescription>
-              How far back should EmailFlow pull your email? You can change this anytime in Settings.
+              {isStale
+                ? `It’s been ${daysSinceLastSync} days since your last sync. Pick a window to catch up.`
+                : 'How far back should EmailFlow pull your email? You can change this anytime in Settings.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -704,22 +775,51 @@ function DashboardContent() {
           </div>
 
           <div className="grid gap-2">
-            {SYNC_PRESET_DAYS.map((days) => {
-              const from = new Date(Date.now() - days * 86400000)
-              const preview = presetPreviews?.find((p) => p.days === days)
-              return (
+            {isStale ? (
+              <>
+                {/* Anchor preset (7/15/30 days, picked by daysSince) */}
                 <SyncWindowOption
-                  key={days}
-                  title={`Last ${days} days`}
-                  fromDate={from}
-                  preview={preview}
-                  loading={!preview && presetPreviewsLoading}
-                  busy={syncSetupLoading === days}
+                  key={staleAnchor}
+                  title={`Last ${staleAnchor} days`}
+                  fromDate={new Date(Date.now() - staleAnchor * 86400000)}
+                  preview={presetPreviews?.find((p) => p.days === staleAnchor)}
+                  loading={!presetPreviews?.find((p) => p.days === staleAnchor) && presetPreviewsLoading}
+                  busy={syncSetupLoading === staleAnchor}
                   disabled={syncSetupLoading !== null}
-                  onClick={() => handleSyncSetup(days)}
+                  onClick={() => handleSyncSetup(staleAnchor)}
                 />
-              )
-            })}
+                {/* "To your last sync" — fills the exact gap */}
+                {lastSyncAtIso && (
+                  <SyncWindowOption
+                    key="last-sync"
+                    title={`To your last sync (${daysSinceLastSync} days ago)`}
+                    fromDate={new Date(lastSyncAtIso)}
+                    preview={lastSyncPreview ?? undefined}
+                    loading={lastSyncPreviewLoading}
+                    busy={syncSetupLoading === -2}
+                    disabled={syncSetupLoading !== null}
+                    onClick={() => handleSyncToLastSync(lastSyncAtIso)}
+                  />
+                )}
+              </>
+            ) : (
+              SYNC_PRESET_DAYS.map((days) => {
+                const from = new Date(Date.now() - days * 86400000)
+                const preview = presetPreviews?.find((p) => p.days === days)
+                return (
+                  <SyncWindowOption
+                    key={days}
+                    title={`Last ${days} days`}
+                    fromDate={from}
+                    preview={preview}
+                    loading={!preview && presetPreviewsLoading}
+                    busy={syncSetupLoading === days}
+                    disabled={syncSetupLoading !== null}
+                    onClick={() => handleSyncSetup(days)}
+                  />
+                )
+              })
+            )}
 
             {/* Custom date picker — let users pick a start date instead of a preset */}
             {customStartDate ? (
@@ -1246,10 +1346,13 @@ function SyncWindowOption({
 }) {
   const exceeds = preview?.wouldExceedQuota ?? false
 
+  const countLabel = preview
+    ? `~${preview.quotaImpactCount}${preview.capped ? '+' : ''} email${preview.quotaImpactCount === 1 && !preview.capped ? '' : 's'} will use your quota`
+    : ''
   const detail = loading
     ? 'Estimating…'
     : preview
-      ? `From ${format(fromDate, 'MMM d')} · ~${preview.quotaImpactCount} email${preview.quotaImpactCount === 1 ? '' : 's'} will use your quota`
+      ? `From ${format(fromDate, 'MMM d')} · ${countLabel}`
       : `From ${format(fromDate, 'MMM d')}`
 
   return (
