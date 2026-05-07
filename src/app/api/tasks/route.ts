@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser()
 
-    const { title, summary, actionItems, userSetDeadline, urgency, impact, priorityScore, projectId, source } = await req.json()
+    const { title, summary, actionItems, userSetDeadline, urgency, impact, priorityScore, projectId, source, emailIds } = await req.json()
 
     if (!title) {
       return error('BAD_REQUEST', 'Title is required', 400)
@@ -89,6 +89,19 @@ export async function POST(req: NextRequest) {
         matterId,
       },
     })
+
+    if (Array.isArray(emailIds) && emailIds.length > 0) {
+      const ownedEmails = await prisma.email.findMany({
+        where: { id: { in: emailIds }, userId: user.id },
+        select: { id: true },
+      })
+      if (ownedEmails.length > 0) {
+        await prisma.taskEmail.createMany({
+          data: ownedEmails.map((e) => ({ taskId: task.id, emailId: e.id, relationship: 'source' })),
+          skipDuplicates: true,
+        })
+      }
+    }
 
     invalidateStatsCache(user.id)
     return success(task)

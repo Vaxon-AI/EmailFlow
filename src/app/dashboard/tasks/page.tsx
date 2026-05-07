@@ -104,6 +104,41 @@ type CreateTaskResponse = {
   }
 }
 
+type TaskDraft = {
+  title: string
+  summary: string
+  actionItems: string[]
+  explicitDeadline: string | null
+  inferredDeadline: string | null
+  deadlineConfidence: number
+  urgency: number
+  impact: number
+  priorityScore: number
+  priorityReason?: string
+  splitReason: string | null
+}
+
+const PRIORITY_LEVELS: Record<string, { urgency: number; impact: number; score: number }> = {
+  critical: { urgency: 5, impact: 4, score: 20 },
+  high: { urgency: 4, impact: 4, score: 16 },
+  medium: { urgency: 3, impact: 3, score: 9 },
+  low: { urgency: 2, impact: 2, score: 4 },
+}
+
+function priorityBucketFromScore(score: number): 'critical' | 'high' | 'medium' | 'low' {
+  if (score >= 20) return 'critical'
+  if (score >= 12) return 'high'
+  if (score >= 6) return 'medium'
+  return 'low'
+}
+
+const PRIORITY_LABELS: Record<'critical' | 'high' | 'medium' | 'low', string> = {
+  critical: 'Critical',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+}
+
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'pending', label: 'AI Suggestions' },
@@ -165,7 +200,12 @@ function TasksContent() {
   const [draftImpact, setDraftImpact] = useState(3)
   const [draftPriorityScore, setDraftPriorityScore] = useState(9)
   const [draftSource, setDraftSource] = useState('manual')
+  const [selectedIdentityId, setSelectedIdentityId] = useState('')
   const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [linkedEmailIds, setLinkedEmailIds] = useState<string[]>([])
+  const [emailPickerOpen, setEmailPickerOpen] = useState(false)
+  const [emailPickerQuery, setEmailPickerQuery] = useState('')
+  const [draftCards, setDraftCards] = useState<TaskDraft[]>([])
   const queryClient = useQueryClient()
   const priorityFilterLabel = PRIORITY_OPTIONS.find((option) => option.value === priorityFilter)?.label ?? 'All priorities'
 
@@ -186,7 +226,72 @@ function TasksContent() {
     queryFn: () => fetch('/api/projects').then((r) => r.json()),
     staleTime: CACHE_TIME.list,
   })
-  const projects: { id: string; name: string; identity: { name: string } | null }[] = projectsRes?.data ?? []
+  const projects = useMemo<{ id: string; name: string; identity: { id: string; name: string } | null }[]>(
+    () => projectsRes?.data ?? [],
+    [projectsRes]
+  )
+
+  const { data: identitiesRes } = useQuery({
+    queryKey: ['identities'],
+    queryFn: () => fetch('/api/identities').then((r) => r.json()),
+    staleTime: CACHE_TIME.list,
+    enabled: showCreateModal,
+  })
+  const identities = useMemo<{ id: string; name: string }[]>(
+    () => identitiesRes?.data ?? [],
+    [identitiesRes]
+  )
+
+  const { data: recentEmailsRes } = useQuery({
+    queryKey: ['recent-emails-for-link'],
+    queryFn: () => fetch('/api/emails?page=1&limit=50').then((r) => r.json()),
+    staleTime: CACHE_TIME.list,
+    enabled: showCreateModal,
+  })
+  const recentEmails = useMemo<{
+    id: string
+    subject: string
+    sender: string
+    receivedAt: string
+    project: { id: string; name: string } | null
+  }[]>(
+    () => recentEmailsRes?.data ?? [],
+    [recentEmailsRes]
+  )
+
+  const filteredProjects = useMemo(() => {
+    if (!selectedIdentityId) return projects
+    return projects.filter((p) => p.identity?.id === selectedIdentityId)
+  }, [projects, selectedIdentityId])
+
+  const filteredEmails = useMemo(() => {
+    let list = recentEmails
+    if (selectedProjectId) {
+      list = list.filter((e) => e.project?.id === selectedProjectId)
+    } else if (selectedIdentityId) {
+      const projectIdsInIdentity = new Set(filteredProjects.map((p) => p.id))
+      list = list.filter((e) => e.project && projectIdsInIdentity.has(e.project.id))
+    }
+    const q = emailPickerQuery.trim().toLowerCase()
+    if (q) {
+      list = list.filter((e) =>
+        e.subject?.toLowerCase().includes(q) || e.sender?.toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [recentEmails, emailPickerQuery, selectedProjectId, selectedIdentityId, filteredProjects])
+
+  const linkedEmails = useMemo(
+    () => recentEmails.filter((e) => linkedEmailIds.includes(e.id)),
+    [recentEmails, linkedEmailIds]
+  )
+
+  const selectedIdentityName = selectedIdentityId
+    ? identities.find((i) => i.id === selectedIdentityId)?.name
+    : undefined
+  const selectedProjectName = selectedProjectId
+    ? projects.find((p) => p.id === selectedProjectId)?.name
+    : undefined
 
 
   const resetCreateModal = () => {
@@ -201,7 +306,12 @@ function TasksContent() {
     setDraftImpact(3)
     setDraftPriorityScore(9)
     setDraftSource('manual')
+    setSelectedIdentityId('')
     setSelectedProjectId('')
+    setLinkedEmailIds([])
+    setEmailPickerOpen(false)
+    setEmailPickerQuery('')
+    setDraftCards([])
   }
 
   const handleModalOpenChange = (open: boolean) => {
@@ -218,19 +328,39 @@ function TasksContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: extractText }),
       })
-      if (res.ok) {
-        const data = await res.json()
-        const draft = data.data
-        setTaskTitle(draft.title || '')
-        setTaskSummary(draft.summary || '')
-        setDraftActionItems(draft.actionItems || [])
-        setDraftDeadline(draft.explicitDeadline || draft.inferredDeadline || '')
-        setDraftUrgency(draft.urgency || 3)
-        setDraftImpact(draft.impact || 3)
-        setDraftPriorityScore(draft.priorityScore || 9)
-        setDraftSource('copy_text')
-      } else {
+      if (!res.ok) {
         showError('Failed to extract task')
+        return
+      }
+      const data = await res.json()
+      const tasks: TaskDraft[] = data.data?.tasks ?? []
+
+      if (tasks.length === 0) {
+        showError('No task could be extracted')
+        return
+      }
+
+      setDraftSource('copy_text')
+
+      if (tasks.length === 1) {
+        const t = tasks[0]
+        setTaskTitle(t.title || '')
+        setTaskSummary(t.summary || '')
+        setDraftActionItems(t.actionItems || [])
+        setDraftDeadline(t.explicitDeadline || t.inferredDeadline || '')
+        setDraftUrgency(t.urgency || 3)
+        setDraftImpact(t.impact || 3)
+        setDraftPriorityScore(t.priorityScore || 9)
+        setDraftCards([])
+      } else {
+        setDraftCards(tasks)
+        setTaskTitle('')
+        setTaskSummary('')
+        setDraftActionItems([])
+        setDraftDeadline('')
+        setDraftUrgency(3)
+        setDraftImpact(3)
+        setDraftPriorityScore(9)
       }
     } catch {
       showError('Failed to extract task')
@@ -239,7 +369,86 @@ function TasksContent() {
     }
   }
 
+  const updateCard = (idx: number, patch: Partial<TaskDraft>) => {
+    setDraftCards((prev) => prev.map((card, i) => (i === idx ? { ...card, ...patch } : card)))
+  }
+
+  const removeCard = (idx: number) => {
+    setDraftCards((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const createOneTask = async (payload: {
+    title: string
+    summary: string
+    actionItems: string[]
+    userSetDeadline?: string
+    urgency: number
+    impact: number
+    priorityScore: number
+    emailIds?: string[]
+  }): Promise<CreateTaskResponse> => {
+    const res = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: payload.title,
+        summary: payload.summary,
+        actionItems: payload.actionItems.length > 0 ? JSON.stringify(payload.actionItems) : undefined,
+        userSetDeadline: payload.userSetDeadline || undefined,
+        urgency: payload.urgency,
+        impact: payload.impact,
+        priorityScore: payload.priorityScore,
+        source: draftSource,
+        projectId: selectedProjectId || undefined,
+        emailIds: payload.emailIds && payload.emailIds.length > 0 ? payload.emailIds : undefined,
+      }),
+    })
+    if (!res.ok) throw new Error('Failed to create task')
+    return res.json()
+  }
+
   const handleCreateTask = async () => {
+    if (draftCards.length > 0) {
+      if (draftCards.some((c) => !c.title.trim())) {
+        toast.error('Every task needs a title')
+        return
+      }
+
+      setCreatingTask(true)
+      const results = await Promise.allSettled(
+        draftCards.map((card) =>
+          createOneTask({
+            title: card.title,
+            summary: card.summary,
+            actionItems: card.actionItems,
+            userSetDeadline: card.explicitDeadline || card.inferredDeadline || undefined,
+            urgency: card.urgency,
+            impact: card.impact,
+            priorityScore: card.priorityScore,
+          })
+        )
+      )
+      setCreatingTask(false)
+
+      const succeededCount = results.filter((r) => r.status === 'fulfilled').length
+      const failedCards = draftCards.filter((_, i) => results[i].status === 'rejected')
+
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+
+      if (failedCards.length === 0) {
+        toast.success(`${succeededCount} task${succeededCount === 1 ? '' : 's'} created`)
+        setShowCreateModal(false)
+        resetCreateModal()
+      } else if (succeededCount === 0) {
+        showError('Failed to create tasks')
+      } else {
+        toast.error(`${succeededCount} created, ${failedCards.length} failed`)
+        setDraftCards(failedCards)
+      }
+      return
+    }
+
     if (!taskTitle.trim()) {
       toast.error('Task title is required')
       return
@@ -247,32 +456,21 @@ function TasksContent() {
 
     setCreatingTask(true)
     try {
-      const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: taskTitle,
-          summary: taskSummary,
-          actionItems: draftActionItems.length > 0 ? JSON.stringify(draftActionItems) : undefined,
-          userSetDeadline: draftDeadline || undefined,
-          urgency: draftUrgency,
-          impact: draftImpact,
-          priorityScore: draftPriorityScore,
-          source: draftSource,
-          projectId: selectedProjectId || undefined,
-        }),
+      const data = await createOneTask({
+        title: taskTitle,
+        summary: taskSummary,
+        actionItems: draftActionItems,
+        userSetDeadline: draftDeadline || undefined,
+        urgency: draftUrgency,
+        impact: draftImpact,
+        priorityScore: draftPriorityScore,
+        emailIds: linkedEmailIds,
       })
-
-      if (res.ok) {
-        const data: CreateTaskResponse = await res.json()
-        queryClient.invalidateQueries({ queryKey: ['tasks'] })
-        toast.success('Task created')
-        setShowCreateModal(false)
-        resetCreateModal()
-        router.push(`/dashboard/tasks/${data.data.id}`)
-      } else {
-        showError('Failed to create task')
-      }
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      toast.success('Task created')
+      setShowCreateModal(false)
+      resetCreateModal()
+      router.push(`/dashboard/tasks/${data.data.id}`)
     } catch {
       showError('Failed to create task')
     } finally {
@@ -414,6 +612,154 @@ function TasksContent() {
     const q = params.toString()
     router.replace(q ? `/dashboard/tasks?${q}` : '/dashboard/tasks', { scroll: false })
   }, [router, searchParams])
+
+  const handleIdentityChange = (next: string) => {
+    setSelectedIdentityId(next)
+    if (selectedProjectId) {
+      const proj = projects.find((p) => p.id === selectedProjectId)
+      if (next && proj?.identity?.id !== next) setSelectedProjectId('')
+    }
+  }
+
+  const identityProjectPicker = (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-2">
+        <Label>Identity <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <Select
+          value={selectedIdentityId || '__none__'}
+          onValueChange={(v) => handleIdentityChange(v === '__none__' ? '' : (v ?? ''))}
+        >
+          <SelectTrigger className="h-9 w-full text-sm">
+            <SelectValue>
+              {selectedIdentityName ?? <span className="text-muted-foreground">Any identity</span>}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">Any identity</SelectItem>
+            {identities.map((id) => (
+              <SelectItem key={id.id} value={id.id}>{id.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Project <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <Select
+          value={selectedProjectId || '__none__'}
+          onValueChange={(v) => setSelectedProjectId(v === '__none__' ? '' : (v ?? ''))}
+        >
+          <SelectTrigger className="h-9 w-full text-sm">
+            <SelectValue>
+              {selectedProjectName ?? <span className="text-muted-foreground">Uncategorized</span>}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">Uncategorized</SelectItem>
+            {filteredProjects.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                <div className="flex flex-col py-0.5">
+                  <span className="font-medium">{p.name}</span>
+                  {p.identity && !selectedIdentityId && (
+                    <span className="text-xs text-muted-foreground">{p.identity.name}</span>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+
+  const linkedEmailPicker = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Linked emails <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <Popover open={emailPickerOpen} onOpenChange={setEmailPickerOpen}>
+          <PopoverTrigger
+            render={
+              <Button type="button" size="sm" variant="outline" className="h-7 text-xs">
+                <Mail className="mr-1 size-3.5" />
+                {linkedEmailIds.length > 0 ? `${linkedEmailIds.length} linked` : 'Link email'}
+              </Button>
+            }
+          />
+          <PopoverContent className="w-[360px] p-0" align="end">
+            <div className="space-y-2 border-b p-2">
+              {(selectedProjectName || (selectedIdentityName && !selectedProjectName)) && (
+                <div className="px-1 text-[11px] text-muted-foreground">
+                  Showing emails from{' '}
+                  <span className="font-medium text-foreground">
+                    {selectedProjectName ?? `${selectedIdentityName} projects`}
+                  </span>
+                </div>
+              )}
+              <Input
+                placeholder="Search by subject or sender..."
+                value={emailPickerQuery}
+                onChange={(e) => setEmailPickerQuery(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="max-h-[260px] overflow-y-auto">
+              {filteredEmails.length === 0 ? (
+                <div className="p-4 text-center text-xs text-muted-foreground">
+                  {recentEmails.length === 0
+                    ? 'No emails available'
+                    : selectedProjectName
+                      ? 'No emails for this project in the recent 50'
+                      : 'No emails match your search'}
+                </div>
+              ) : (
+                filteredEmails.map((e) => {
+                  const linked = linkedEmailIds.includes(e.id)
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => {
+                        setLinkedEmailIds((prev) =>
+                          prev.includes(e.id) ? prev.filter((id) => id !== e.id) : [...prev, e.id]
+                        )
+                      }}
+                      className={`flex w-full items-start gap-2 border-b border-border/50 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 ${linked ? 'bg-blue-50' : ''}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{e.subject || '(no subject)'}</div>
+                        <div className="truncate text-muted-foreground">{e.sender}</div>
+                      </div>
+                      {linked && <Check className="size-3.5 shrink-0 text-blue-600" />}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+      {linkedEmails.length > 0 && (
+        <div className="space-y-1">
+          {linkedEmails.map((e) => (
+            <div key={e.id} className="flex items-center gap-2 rounded-md border bg-muted/30 px-2 py-1.5">
+              <Mail className="size-3.5 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-medium">{e.subject || '(no subject)'}</div>
+                <div className="truncate text-[11px] text-muted-foreground">{e.sender}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkedEmailIds(linkedEmailIds.filter((id) => id !== e.id))}
+                aria-label="Remove email link"
+                className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div className="space-y-5">
@@ -575,11 +921,13 @@ function TasksContent() {
 
       {/* Create Task Modal */}
       <Dialog open={showCreateModal} onOpenChange={handleModalOpenChange}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={draftCards.length > 0 ? 'sm:max-w-lg' : 'sm:max-w-md'}>
           <DialogHeader>
-            <DialogTitle>Create New Task</DialogTitle>
+            <DialogTitle>{draftCards.length > 0 ? `Review ${draftCards.length} suggested tasks` : 'Create New Task'}</DialogTitle>
             <DialogDescription>
-              Add a manual task when work starts outside the email pipeline.
+              {draftCards.length > 0
+                ? 'AI suggested separate tasks for independent outcomes. Edit or remove any below before creating.'
+                : 'Add a manual task when work starts outside the email pipeline.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -621,140 +969,126 @@ function TasksContent() {
               )}
             </div>
 
-            {!taskTitle.trim() && creatingTask ? (
-              <InlineNotice variant="warning">A task title is required before you can create it.</InlineNotice>
-            ) : null}
-
-            <div className="space-y-2">
-              <Label htmlFor="manual-task-title">Task Title</Label>
-              <Input
-                id="manual-task-title"
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                placeholder="Enter task title"
-                className="h-10"
-                autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleCreateTask() }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="manual-task-summary">Summary</Label>
-              <Textarea
-                id="manual-task-summary"
-                value={taskSummary}
-                onChange={(e) => setTaskSummary(e.target.value)}
-                placeholder="Brief description (optional)"
-                rows={3}
-                className="resize-none"
-              />
-            </div>
-
-            {/* Project picker */}
-            {projects.length > 0 && (
-              <div className="space-y-2">
-                <Label>Project <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                <Select value={selectedProjectId} onValueChange={(v) => setSelectedProjectId(v ?? '')}>
-                  <SelectTrigger className="h-9 w-full text-sm">
-                    <SelectValue placeholder="Link to a project..." />
-                  </SelectTrigger>
-                  <SelectContent className="w-full">
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div className="flex flex-col py-0.5">
-                          <span className="font-medium">{p.name}</span>
-                          {p.identity && (
-                            <span className="text-xs text-muted-foreground">{p.identity.name}</span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Checklist */}
-            <div className="space-y-2">
-              <Label>Checklist <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              {draftActionItems.length > 0 && (
-                <div className="space-y-1.5">
-                  {draftActionItems.map((item, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Input
-                        value={item}
-                        onChange={(e) => {
-                          const next = [...draftActionItems]
-                          next[i] = e.target.value
-                          setDraftActionItems(next)
-                        }}
-                        className="h-8 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setDraftActionItems(draftActionItems.filter((_, j) => j !== i))}
-                        className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </div>
+            {draftCards.length > 0 ? (
+              <>
+                <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+                  {draftCards.map((card, idx) => (
+                    <DraftCard
+                      key={idx}
+                      card={card}
+                      onChange={(patch) => updateCard(idx, patch)}
+                      onRemove={() => removeCard(idx)}
+                    />
                   ))}
                 </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setDraftActionItems([...draftActionItems, ''])}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Plus className="size-3.5" /> Add item
-              </button>
-            </div>
 
-            {/* Deadline + Priority */}
-            <div className="flex gap-3">
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="draft-deadline">Deadline <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                <Input
-                  id="draft-deadline"
-                  type="date"
-                  value={draftDeadline}
-                  onChange={(e) => setDraftDeadline(e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Priority</Label>
-                <Select
-                  value={(() => {
-                    if (draftPriorityScore >= 20) return 'critical'
-                    if (draftPriorityScore >= 12) return 'high'
-                    if (draftPriorityScore >= 6) return 'medium'
-                    return 'low'
-                  })()}
-                  onValueChange={(v) => {
-                    if (!v) return
-                    const map: Record<string, { urgency: number; impact: number; score: number }> = {
-                      critical: { urgency: 5, impact: 4, score: 20 },
-                      high: { urgency: 4, impact: 4, score: 16 },
-                      medium: { urgency: 3, impact: 3, score: 9 },
-                      low: { urgency: 2, impact: 2, score: 4 },
-                    }
-                    const p = map[v]
-                    if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
-                  }}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                {identityProjectPicker}
+              </>
+            ) : (
+              <>
+                {!taskTitle.trim() && creatingTask ? (
+                  <InlineNotice variant="warning">A task title is required before you can create it.</InlineNotice>
+                ) : null}
+
+                <div className="space-y-2">
+                  <Label htmlFor="manual-task-title">Task Title</Label>
+                  <Input
+                    id="manual-task-title"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder="Enter task title"
+                    className="h-10"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleCreateTask() }}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="manual-task-summary">Summary</Label>
+                  <Textarea
+                    id="manual-task-summary"
+                    value={taskSummary}
+                    onChange={(e) => setTaskSummary(e.target.value)}
+                    placeholder="Brief description (optional)"
+                    rows={3}
+                    className="resize-none"
+                  />
+                </div>
+
+                {identityProjectPicker}
+
+                {linkedEmailPicker}
+
+                <div className="space-y-2">
+                  <Label>Checklist <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  {draftActionItems.length > 0 && (
+                    <div className="space-y-1.5">
+                      {draftActionItems.map((item, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <Input
+                            value={item}
+                            onChange={(e) => {
+                              const next = [...draftActionItems]
+                              next[i] = e.target.value
+                              setDraftActionItems(next)
+                            }}
+                            className="h-8 text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setDraftActionItems(draftActionItems.filter((_, j) => j !== i))}
+                            className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            <X className="size-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDraftActionItems([...draftActionItems, ''])}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="size-3.5" /> Add item
+                  </button>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="flex-1 space-y-2">
+                    <Label htmlFor="draft-deadline">Deadline <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Input
+                      id="draft-deadline"
+                      type="date"
+                      value={draftDeadline}
+                      onChange={(e) => setDraftDeadline(e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Priority</Label>
+                    <Select
+                      value={priorityBucketFromScore(draftPriorityScore)}
+                      onValueChange={(v) => {
+                        if (!v) return
+                        const p = PRIORITY_LEVELS[v]
+                        if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue>{PRIORITY_LABELS[priorityBucketFromScore(draftPriorityScore)]}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="critical">Critical</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <DialogFooter className="mt-2">
@@ -765,10 +1099,19 @@ function TasksContent() {
             </DialogClose>
             <Button
               onClick={handleCreateTask}
-              disabled={creatingTask || !taskTitle.trim()}
+              disabled={
+                creatingTask ||
+                (draftCards.length > 0
+                  ? draftCards.some((c) => !c.title.trim())
+                  : !taskTitle.trim())
+              }
               className="flex-1"
             >
-              {creatingTask ? 'Creating...' : 'Create Task'}
+              {creatingTask
+                ? 'Creating...'
+                : draftCards.length > 0
+                  ? `Create ${draftCards.length} Task${draftCards.length === 1 ? '' : 's'}`
+                  : 'Create Task'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -788,6 +1131,112 @@ function parseStatusFilter(value: string | null): StatusFilter {
 function matchesPriorityFilter(task: TaskItem, priority: unknown) {
   if (priority !== 'critical' && priority !== 'high' && priority !== 'medium' && priority !== 'low') return true
   return getPriorityBand(task.priorityScore || 0) === priority
+}
+
+/* ========== DRAFT CARD - one suggested task in the multi-candidate review list ========== */
+function DraftCard({
+  card,
+  onChange,
+  onRemove,
+}: {
+  card: TaskDraft
+  onChange: (patch: Partial<TaskDraft>) => void
+  onRemove: () => void
+}) {
+  const deadline = card.explicitDeadline || card.inferredDeadline || ''
+  const priorityBucket = priorityBucketFromScore(card.priorityScore)
+
+  return (
+    <div className="relative rounded-lg border bg-card p-3 space-y-2">
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove this task"
+        className="absolute right-2 top-2 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+      >
+        <X className="size-3.5" />
+      </button>
+
+      <Input
+        value={card.title}
+        onChange={(e) => onChange({ title: e.target.value })}
+        placeholder="Task title"
+        className="h-9 pr-7 text-sm font-medium"
+      />
+
+      {card.splitReason && (
+        <p className="text-[11px] italic text-muted-foreground">{card.splitReason}</p>
+      )}
+
+      {card.summary && (
+        <Textarea
+          value={card.summary}
+          onChange={(e) => onChange({ summary: e.target.value })}
+          rows={2}
+          className="resize-none text-xs"
+        />
+      )}
+
+      {card.actionItems.length > 0 && (
+        <div className="space-y-1">
+          {card.actionItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <Input
+                value={item}
+                onChange={(e) => {
+                  const next = [...card.actionItems]
+                  next[i] = e.target.value
+                  onChange({ actionItems: next })
+                }}
+                className="h-7 text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => onChange({ actionItems: card.actionItems.filter((_, j) => j !== i) })}
+                className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => onChange({ actionItems: [...card.actionItems, ''] })}
+        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <Plus className="size-3" /> Add item
+      </button>
+
+      <div className="flex gap-2">
+        <Input
+          type="date"
+          value={deadline}
+          onChange={(e) => onChange({ explicitDeadline: e.target.value || null, inferredDeadline: null })}
+          className="h-7 flex-1 text-xs"
+        />
+        <Select
+          value={priorityBucket}
+          onValueChange={(v) => {
+            if (!v) return
+            const p = PRIORITY_LEVELS[v]
+            if (p) onChange({ urgency: p.urgency, impact: p.impact, priorityScore: p.score })
+          }}
+        >
+          <SelectTrigger className="h-7 w-[110px] text-xs">
+            <SelectValue>{PRIORITY_LABELS[priorityBucket]}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="critical">Critical</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="low">Low</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
 }
 
 /* ========== LIST VIEW - 2-level collapsible: identity -> project ========== */

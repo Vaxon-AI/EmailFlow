@@ -21,6 +21,12 @@ vi.mock('@/lib/prisma', () => ({
     task: {
       create: vi.fn(),
     },
+    email: {
+      findMany: vi.fn(),
+    },
+    taskEmail: {
+      createMany: vi.fn(),
+    },
   },
 }))
 
@@ -44,6 +50,8 @@ const mockInvalidateStatsCache = vi.mocked(invalidateStatsCache)
 const mockProjectContext = vi.mocked(prisma.projectContext)
 const mockMatterMemory = vi.mocked(prisma.matterMemory)
 const mockTask = vi.mocked(prisma.task)
+const mockEmail = vi.mocked(prisma.email)
+const mockTaskEmail = vi.mocked(prisma.taskEmail)
 
 describe('GET /api/tasks', () => {
   beforeEach(() => {
@@ -212,5 +220,53 @@ describe('POST /api/tasks', () => {
         matterId: undefined,
       },
     })
+  })
+
+  it('links provided emailIds to the new task, scoped to the user', async () => {
+    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'Coordinate' } as never)
+    mockEmail.findMany.mockResolvedValue([
+      { id: 'email-1' },
+      { id: 'email-2' },
+    ] as never)
+    mockTaskEmail.createMany.mockResolvedValue({ count: 2 } as never)
+
+    const req = new NextRequest('http://localhost/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Coordinate',
+        emailIds: ['email-1', 'email-2', 'email-foreign'],
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await POST(req)
+
+    expect(mockEmail.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['email-1', 'email-2', 'email-foreign'] }, userId: 'user-1' },
+      select: { id: true },
+    })
+    expect(mockTaskEmail.createMany).toHaveBeenCalledWith({
+      data: [
+        { taskId: 'task-1', emailId: 'email-1', relationship: 'source' },
+        { taskId: 'task-1', emailId: 'email-2', relationship: 'source' },
+      ],
+      skipDuplicates: true,
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('skips email linking when emailIds is empty or omitted', async () => {
+    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'Plain' } as never)
+
+    const req = new NextRequest('http://localhost/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Plain', emailIds: [] }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    await POST(req)
+
+    expect(mockEmail.findMany).not.toHaveBeenCalled()
+    expect(mockTaskEmail.createMany).not.toHaveBeenCalled()
   })
 })

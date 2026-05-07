@@ -24,32 +24,35 @@ export async function POST(req: NextRequest) {
       bodyPreview: truncated,
       body: truncated,
     })
-    const task = extraction.tasks[0]
 
-    if (!task) {
+    if (!extraction.tasks.length) {
       return error('EXTRACTION_EMPTY', 'No task could be extracted', 422)
     }
 
-    const priority = await scorePriority({
-      title: task.title,
-      summary: task.summary,
-      actionItems: task.actionItems,
-      sender: '',
-      currentDate: now,
-    })
+    const tasks = await Promise.all(extraction.tasks.map(async (task) => {
+      const priority = await scorePriority({
+        title: task.title,
+        summary: task.summary,
+        actionItems: task.actionItems,
+        sender: '',
+        currentDate: now,
+      })
+      return {
+        title: task.title,
+        summary: task.summary,
+        actionItems: task.actionItems,
+        explicitDeadline: task.explicitDeadline,
+        inferredDeadline: task.inferredDeadline,
+        deadlineConfidence: task.deadlineConfidence,
+        urgency: priority.urgency,
+        impact: priority.impact,
+        priorityScore: priority.combinedScore,
+        priorityReason: priority.reasoning,
+        splitReason: task.splitReason,
+      }
+    }))
 
-    return success({
-      title: task.title,
-      summary: task.summary,
-      actionItems: task.actionItems,
-      explicitDeadline: task.explicitDeadline,
-      inferredDeadline: task.inferredDeadline,
-      deadlineConfidence: task.deadlineConfidence,
-      urgency: priority.urgency,
-      impact: priority.impact,
-      priorityScore: priority.combinedScore,
-      priorityReason: priority.reasoning,
-    })
+    return success({ tasks })
   } catch (err) {
     console.error('[api/tasks/from-text POST]', err)
     return errorFromException(err, 'INTERNAL_ERROR', 'Failed to extract task', 500)

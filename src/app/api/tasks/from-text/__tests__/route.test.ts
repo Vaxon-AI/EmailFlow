@@ -33,6 +33,7 @@ const EXTRACTED_TASK = {
   explicitDeadline: '2026-05-10',
   inferredDeadline: null,
   deadlineConfidence: 0.9,
+  splitReason: null,
 }
 
 const PRIORITY_RESULT = {
@@ -77,7 +78,7 @@ describe('POST /api/tasks/from-text', () => {
     expect((await res.json()).error.code).toBe('EXTRACTION_EMPTY')
   })
 
-  it('extracts task and scores priority from text', async () => {
+  it('extracts a single task and scores priority from text', async () => {
     const res = await POST(postRequest({ text: 'Please review the contract before Friday and flag any issues.' }))
 
     expect(mockExtractTask).toHaveBeenCalled()
@@ -90,10 +91,39 @@ describe('POST /api/tasks/from-text', () => {
     })
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.data.title).toBe('Review the contract')
-    expect(body.data.urgency).toBe(4)
-    expect(body.data.impact).toBe(5)
-    expect(body.data.priorityScore).toBe(20)
+    expect(body.data.tasks).toHaveLength(1)
+    expect(body.data.tasks[0].title).toBe('Review the contract')
+    expect(body.data.tasks[0].urgency).toBe(4)
+    expect(body.data.tasks[0].impact).toBe(5)
+    expect(body.data.tasks[0].priorityScore).toBe(20)
+    expect(body.data.tasks[0].splitReason).toBeNull()
+  })
+
+  it('returns multiple drafts and scores priority for each candidate', async () => {
+    const candidates = [
+      { ...EXTRACTED_TASK, title: 'Ship beta', splitReason: 'Independent deliverable' },
+      { ...EXTRACTED_TASK, title: 'Set up landing page', splitReason: 'Independent deliverable' },
+      { ...EXTRACTED_TASK, title: 'Email investors', splitReason: 'Independent deliverable' },
+    ]
+    mockExtractTask.mockResolvedValue({ tasks: candidates } as never)
+
+    const res = await POST(postRequest({ text: 'Three independent things to do this week...' }))
+
+    expect(res.status).toBe(200)
+    expect(mockScorePriority).toHaveBeenCalledTimes(3)
+    const body = await res.json()
+    expect(body.data.tasks).toHaveLength(3)
+    expect(body.data.tasks.map((t: { title: string }) => t.title)).toEqual([
+      'Ship beta',
+      'Set up landing page',
+      'Email investors',
+    ])
+    for (const draft of body.data.tasks) {
+      expect(draft.urgency).toBe(4)
+      expect(draft.impact).toBe(5)
+      expect(draft.priorityScore).toBe(20)
+      expect(draft.splitReason).toBe('Independent deliverable')
+    }
   })
 
   it('truncates text to 1000 characters before extraction', async () => {
