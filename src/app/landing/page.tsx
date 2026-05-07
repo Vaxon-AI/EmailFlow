@@ -60,8 +60,11 @@ function lerp(a: number, b: number, t: number) {
 // ---------- Top-level page ----------
 
 export default function LandingPage() {
+  // overflow-x: clip clips horizontal overflow from hero decorations without
+  // creating a scroll container — unlike overflow: hidden, it does NOT break
+  // position: sticky on descendants (CinePinnedStory pins its inner panel).
   return (
-    <div className="landing-cine" style={{ overflow: 'hidden' }}>
+    <div className="landing-cine" style={{ overflowX: 'clip' }}>
       <CineNav />
       <CineHero />
       <CinePinnedStory />
@@ -525,18 +528,44 @@ function FlowArrow({ step }: { step: number }) {
 // ---------- Pinned story (4 acts) ----------
 
 function CinePinnedStory() {
+  // Section is 500vh tall in the document flow. The inner div uses
+  // `position: sticky; top: 0` so it pins to the viewport while we scroll
+  // through the remaining 400vh — that 400vh window drives the act/subP
+  // progression. No nested scroll container, so the page's natural scroll
+  // (and trackpad/wheel momentum) is never interrupted.
+  const sectionRef = useRef<HTMLElement>(null)
   const [act, setAct] = useState(0)
   const [subP, setSubP] = useState(0)
 
-  const onInternalScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget
-    const scrollable = el.scrollHeight - el.clientHeight
-    if (scrollable <= 0) return
-    const progress = el.scrollTop / scrollable
-    const raw = progress * 4
-    setAct(Math.min(3, Math.floor(raw)))
-    setSubP(clamp(raw - Math.floor(raw)))
-  }
+  useEffect(() => {
+    let raf = 0
+    const tick = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const el = sectionRef.current
+        if (!el) return
+        const r = el.getBoundingClientRect()
+        const vh = window.innerHeight
+        const pinnedRange = r.height - vh // section height (500vh) - sticky height (100vh) = 400vh
+        if (pinnedRange <= 0) return
+        const progress = Math.max(0, Math.min(1, -r.top / pinnedRange))
+        const raw = progress * 4
+        const nextAct = Math.min(3, Math.floor(raw))
+        // Subtract the clamped act (not floor(raw)) so when progress=1
+        // subP correctly resolves to 1 instead of jumping back to 0.
+        setAct(nextAct)
+        setSubP(clamp(raw - nextAct))
+      })
+    }
+    window.addEventListener('scroll', tick, { passive: true })
+    window.addEventListener('resize', tick)
+    tick()
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', tick)
+      window.removeEventListener('resize', tick)
+    }
+  }, [])
 
   const titles = ['Read.', 'Understand.', 'Extract.', 'Rank.']
   const descs = [
@@ -547,29 +576,20 @@ function CinePinnedStory() {
   ]
 
   return (
-    <section style={{ position: 'relative' }}>
+    <section ref={sectionRef} style={{ position: 'relative', height: '500vh' }}>
       <div
-        onScroll={onInternalScroll}
         style={{
+          position: 'sticky',
+          top: 0,
           height: '100vh',
-          overflowY: 'scroll',
-          position: 'relative',
+          width: '100%',
+          overflow: 'hidden',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1.4fr',
+          alignItems: 'center',
+          background: 'var(--ef-base)',
         }}
       >
-        <div style={{ height: '500vh', position: 'relative' }}>
-          <div
-            style={{
-              position: 'sticky',
-              top: 0,
-              height: '100vh',
-              width: '100%',
-              overflow: 'hidden',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1.4fr',
-              alignItems: 'center',
-              background: 'var(--ef-base)',
-            }}
-          >
             <div
               style={{
                 position: 'absolute',
@@ -713,8 +733,6 @@ function CinePinnedStory() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
     </section>
   )
 }

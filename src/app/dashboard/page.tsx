@@ -513,7 +513,7 @@ function DashboardContent() {
               value={emailData.total}
               icon={<Mail className="h-4 w-4 text-blue-600" />}
               detail={`${emailData.needsReview} need action, ${emailData.uncertain} uncertain`}
-              href={dashboardLink('/dashboard/emails', { tab: 'all' })}
+              href={dashboardLink('/dashboard/emails')}
             />
             <StatCard
               title="Open Tasks"
@@ -582,7 +582,7 @@ function DashboardContent() {
                   <BarRow label="Needs Action" value={emailData.needsReview} max={emailData.total} color="bg-red-400" href={dashboardLink('/dashboard/emails', { tab: 'needs_review' })} />
                   <BarRow label="Tracked" value={emailData.tracked} max={emailData.total} color="bg-green-400" href={dashboardLink('/dashboard/emails', { tab: 'tracked' })} />
                   <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-blue-400" href={dashboardLink('/dashboard/emails', { tab: 'fyi' })} />
-                  <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" href={dashboardLink('/dashboard/emails', { tab: 'all', classification: 'ignore' })} />
+                  <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" href={dashboardLink('/dashboard/emails', { tab: 'ignored' })} />
                 </div>
               </CardContent>
             </Card>

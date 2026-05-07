@@ -53,9 +53,10 @@ type BatchStatus = {
   actionEmails: BatchActionEmail[]
 }
 
-type Tab = 'needs_review' | 'tracked' | 'fyi' | 'all'
-type EmailBucket = Exclude<Tab, 'all'>
-type AllMailFilter = EmailBucket | 'all'
+// Each tab is a mutually-exclusive bucket — no "All Mail" tab anymore. Needs
+// Action / Tracked / FYI cover the everyday mail; Ignored is the catch-all
+// for AI-classified ignore + user-dismissed soft-deletes.
+type Tab = 'needs_review' | 'tracked' | 'fyi' | 'ignored'
 type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
 
 type LinkedTask = {
@@ -102,8 +103,7 @@ const fyiPriority: Record<string, number> = {
   ignore: 1,
 }
 
-const VALID_TABS = new Set<Tab>(['needs_review', 'tracked', 'fyi', 'all'])
-const VALID_ALL_MAIL_FILTERS = new Set<AllMailFilter>(['all', 'needs_review', 'tracked', 'fyi'])
+const VALID_TABS = new Set<Tab>(['needs_review', 'tracked', 'fyi', 'ignored'])
 
 function isNeedsActionPageEmail(email: EmailItem) {
   return (
@@ -128,16 +128,20 @@ function isFyiEmail(email: EmailItem) {
   return email.classification === 'awareness'
 }
 
-function matchesEmailBucket(email: EmailItem, bucket: EmailBucket) {
-  if (bucket === 'needs_review') return isNeedsActionPageEmail(email)
-  if (bucket === 'tracked') return isTrackedEmail(email)
-  return isFyiEmail(email)
+function isIgnoredEmail(email: EmailItem) {
+  return email.classification === 'ignore'
+}
+
+function matchesEmailTab(email: EmailItem, tab: Tab) {
+  if (tab === 'needs_review') return isNeedsActionPageEmail(email)
+  if (tab === 'tracked') return isTrackedEmail(email)
+  if (tab === 'fyi') return isFyiEmail(email)
+  return isIgnoredEmail(email)
 }
 
 type FilterEmailsOptions = {
   emails: EmailItem[]
   tab: Tab
-  allMailFilter: AllMailFilter
   accountFilter: string
   searchQuery: string
   dateRange?: DateRange
@@ -146,18 +150,13 @@ type FilterEmailsOptions = {
 function filterEmails({
   emails,
   tab,
-  allMailFilter,
   accountFilter,
   searchQuery,
   dateRange,
 }: FilterEmailsOptions) {
   let result = emails
 
-  if (tab !== 'all') {
-    result = result.filter((email) => matchesEmailBucket(email, tab))
-  } else if (allMailFilter !== 'all') {
-    result = result.filter((email) => matchesEmailBucket(email, allMailFilter))
-  }
+  result = result.filter((email) => matchesEmailTab(email, tab))
 
   if (accountFilter !== 'all') {
     result = result.filter((email) => email.accountEmail === accountFilter)
@@ -201,20 +200,16 @@ function filterEmails({
   return result
 }
 
-function parseEmailTab(value: string | null): Tab {
-  return value && VALID_TABS.has(value as Tab) ? (value as Tab) : 'needs_review'
-}
-
-function parseAllMailFilter(value: string | null, legacyClassification: string | null, tab: Tab): AllMailFilter {
-  if (tab !== 'all') return 'all'
-  if (value && VALID_ALL_MAIL_FILTERS.has(value as AllMailFilter)) {
-    return value as AllMailFilter
-  }
-
+function parseEmailTab(value: string | null, legacyClassification: string | null): Tab {
+  if (value && VALID_TABS.has(value as Tab)) return value as Tab
+  // Legacy URL compat: an old "?tab=all&classification=ignore" link from the
+  // dashboard or a bookmark resolves to the new Ignored tab. Other classifications
+  // are absorbed into their tab equivalents.
+  if (value === 'all' && legacyClassification === 'ignore') return 'ignored'
   if (legacyClassification === 'action' || legacyClassification === 'uncertain') return 'needs_review'
   if (legacyClassification === 'awareness') return 'fyi'
-  if (legacyClassification === 'ignore') return 'tracked'
-  return 'all'
+  if (legacyClassification === 'ignore') return 'ignored'
+  return 'needs_review'
 }
 
 export default function EmailsPage() {
@@ -229,8 +224,9 @@ function EmailsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const focusIdentityId = searchParams.get('identity') ?? undefined
-  const [tab, setTab] = useState<Tab>(() => parseEmailTab(searchParams.get('tab')))
-  const allMailFilter = parseAllMailFilter(searchParams.get('filter'), searchParams.get('classification'), tab)
+  const [tab, setTab] = useState<Tab>(() =>
+    parseEmailTab(searchParams.get('tab'), searchParams.get('classification'))
+  )
   const [accountFilter, setAccountFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -285,24 +281,19 @@ function EmailsContent() {
 
   // Keep local tab state in sync with URL for browser back/forward navigation
   useEffect(() => {
-    setTab(parseEmailTab(searchParams.get('tab')))
+    setTab(parseEmailTab(searchParams.get('tab'), searchParams.get('classification')))
   }, [searchParams])
 
-  const updateEmailUrlFilter = useCallback((next: { tab?: Tab; allMailFilter?: AllMailFilter }) => {
+  const updateEmailUrlFilter = useCallback((next: { tab?: Tab }) => {
     // Use window.location.search instead of searchParams to always read the
     // current URL — avoids stale closure when the user clicks faster than React
     // can re-render after a router.replace call.
     const params = new URLSearchParams(window.location.search)
     if (next.tab) {
       params.set('tab', next.tab)
+      // Clear legacy params so old links don't override the new tab.
       params.delete('filter')
       params.delete('classification')
-    }
-    if (next.allMailFilter) {
-      params.set('tab', 'all')
-      params.delete('classification')
-      if (next.allMailFilter === 'all') params.delete('filter')
-      else params.set('filter', next.allMailFilter)
     }
     const query = params.toString()
     router.replace(query ? `/dashboard/emails?${query}` : '/dashboard/emails', { scroll: false })
@@ -536,30 +527,27 @@ function EmailsContent() {
     return Array.from(set)
   }, [emails])
 
-  // Client-side filtering: tab/all-mail bucket -> account -> search
+  // Client-side filtering: tab -> account -> search
   const filtered = filterEmails({
     emails,
     tab,
-    allMailFilter,
     accountFilter,
     searchQuery,
     dateRange,
   })
 
-  // Kept for rollback; no longer used directly in render.
-  // const { needsAttention, hasTaskEmails } = useMemo(() => { ... }, [filtered, tab])
-
   // Counts for tab badges
   const needsActionCount = emails.filter(isNeedsActionPageEmail).length
   const trackedCount = emails.filter(isTrackedEmail).length
   const infoCount = emails.filter(isFyiEmail).length
+  const ignoredCount = emails.filter(isIgnoredEmail).length
   const pendingCount = emails.filter((e) => e.processingStatus === 'pending').length
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'needs_review', label: 'Needs Action', count: needsActionCount },
     { key: 'tracked', label: 'Tracked', count: trackedCount },
     { key: 'fyi', label: 'FYI', count: infoCount },
-    { key: 'all', label: 'All Mail', count: emails.length },
+    { key: 'ignored', label: 'Ignored', count: ignoredCount },
   ]
 
   return (
@@ -723,20 +711,6 @@ function EmailsContent() {
                 </button>
               )}
             </div>
-
-            {/* Product bucket filter - only meaningful on All Mail tab */}
-            {tab === 'all' && (
-              <SegmentedControl
-                value={allMailFilter}
-                onChange={(nextFilter) => updateEmailUrlFilter({ allMailFilter: nextFilter })}
-                options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'needs_review', label: 'Needs Action' },
-                  { value: 'tracked', label: 'Tracked' },
-                  { value: 'fyi', label: 'FYI' },
-                ]}
-              />
-            )}
 
             {accounts.length > 1 && (
               <SegmentedControl
