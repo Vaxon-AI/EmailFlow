@@ -183,6 +183,7 @@ describe('POST /api/tasks', () => {
         priorityScore: 20,
         actionItems: '["call"]',
         userSetDeadline: new Date(deadline),
+        startDate: undefined,
         source: 'manual',
         matterId: 'matter-1',
       },
@@ -216,10 +217,27 @@ describe('POST /api/tasks', () => {
         priorityScore: 9,
         actionItems: '[]',
         userSetDeadline: undefined,
+        startDate: undefined,
         source: 'manual',
         matterId: undefined,
       },
     })
+  })
+
+  it('writes startDate when provided', async () => {
+    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'With start' } as never)
+
+    const req = new NextRequest('http://localhost/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'With start', startDate: '2026-05-10' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    await POST(req)
+
+    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ startDate: new Date('2026-05-10') }),
+    }))
   })
 
   it('links provided emailIds to the new task, scoped to the user', async () => {

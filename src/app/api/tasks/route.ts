@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
     const url = req.nextUrl
     const page = parseInt(url.searchParams.get('page') || '1')
-    const limit = parseInt(url.searchParams.get('limit') || '50')
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 2000)
     const status = url.searchParams.get('status') || undefined
     const scope = url.searchParams.get('scope') === 'open' ? 'open' : undefined
     const priorityParam = url.searchParams.get('priority')
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser()
 
-    const { title, summary, actionItems, userSetDeadline, urgency, impact, priorityScore, projectId, source, emailIds } = await req.json()
+    const { title, summary, actionItems, userSetDeadline, startDate, urgency, impact, priorityScore, projectId, source, emailIds } = await req.json()
 
     if (!title) {
       return error('BAD_REQUEST', 'Title is required', 400)
@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
         priorityScore: priorityScore ?? 9,
         actionItems: actionItems ?? '[]',
         userSetDeadline: userSetDeadline ? new Date(userSetDeadline) : undefined,
+        startDate: startDate ? new Date(startDate) : undefined,
         source: source ?? 'manual',
         matterId,
       },

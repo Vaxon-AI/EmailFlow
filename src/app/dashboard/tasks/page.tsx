@@ -36,6 +36,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { GanttTimeline } from '@/components/gantt-timeline'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { BatchReassignModal } from '@/components/batch-reassign-modal'
+import { UpgradeModal } from '@/components/upgrade-modal'
+import { useAuth } from '@/lib/use-auth'
 import { InlineEditableName } from '@/components/inline-editable-name'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import { toast } from 'sonner'
@@ -196,6 +198,9 @@ function TasksContent() {
   const [extracting, setExtracting] = useState(false)
   const [draftActionItems, setDraftActionItems] = useState<string[]>([])
   const [draftDeadline, setDraftDeadline] = useState('')
+  const [draftStartDate, setDraftStartDate] = useState('')
+  const [suggestingDates, setSuggestingDates] = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const [draftUrgency, setDraftUrgency] = useState(3)
   const [draftImpact, setDraftImpact] = useState(3)
   const [draftPriorityScore, setDraftPriorityScore] = useState(9)
@@ -207,6 +212,8 @@ function TasksContent() {
   const [emailPickerQuery, setEmailPickerQuery] = useState('')
   const [draftCards, setDraftCards] = useState<TaskDraft[]>([])
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const isPro = Boolean(user?.plan && user.plan !== 'free')
   const priorityFilterLabel = PRIORITY_OPTIONS.find((option) => option.value === priorityFilter)?.label ?? 'All priorities'
 
   // Fetch all tasks (no server-side status filter — we filter client-side for "all")
@@ -216,7 +223,7 @@ function TasksContent() {
   const { data: res, isLoading } = useQuery({
     queryKey: ['tasks', apiScope || apiStatus, sortBy, apiPriority],
     queryFn: () =>
-      fetch(`/api/tasks?${apiScope ? `scope=${apiScope}` : `status=${apiStatus}`}&sort=${sortBy}&limit=50${apiPriority ? `&priority=${apiPriority}` : ''}`).then((r) => r.json()),
+      fetch(`/api/tasks?${apiScope ? `scope=${apiScope}` : `status=${apiStatus}`}&sort=${sortBy}&limit=2000${apiPriority ? `&priority=${apiPriority}` : ''}`).then((r) => r.json()),
     staleTime: CACHE_TIME.list,
     placeholderData: (previous) => previous,
   })
@@ -302,6 +309,8 @@ function TasksContent() {
     setExtracting(false)
     setDraftActionItems([])
     setDraftDeadline('')
+    setDraftStartDate('')
+    setSuggestingDates(false)
     setDraftUrgency(3)
     setDraftImpact(3)
     setDraftPriorityScore(9)
@@ -382,6 +391,7 @@ function TasksContent() {
     summary: string
     actionItems: string[]
     userSetDeadline?: string
+    startDate?: string
     urgency: number
     impact: number
     priorityScore: number
@@ -395,6 +405,7 @@ function TasksContent() {
         summary: payload.summary,
         actionItems: payload.actionItems.length > 0 ? JSON.stringify(payload.actionItems) : undefined,
         userSetDeadline: payload.userSetDeadline || undefined,
+        startDate: payload.startDate || undefined,
         urgency: payload.urgency,
         impact: payload.impact,
         priorityScore: payload.priorityScore,
@@ -405,6 +416,37 @@ function TasksContent() {
     })
     if (!res.ok) throw new Error('Failed to create task')
     return res.json()
+  }
+
+  const handleSuggestDates = async () => {
+    if (!taskTitle.trim()) return
+    if (!isPro) { setShowUpgrade(true); return }
+    setSuggestingDates(true)
+    try {
+      const res = await fetch('/api/tasks/suggest-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: taskTitle,
+          summary: taskSummary,
+          projectId: selectedProjectId || undefined,
+        }),
+      })
+      if (res.status === 402) { setShowUpgrade(true); return }
+      if (!res.ok) { showError('Failed to suggest dates'); return }
+      const { data } = await res.json()
+      if (data.startDate) setDraftStartDate(data.startDate)
+      if (data.dueDate) setDraftDeadline(data.dueDate)
+      if (!data.startDate && !data.dueDate) {
+        toast.info('No clear date signal — leave empty or set manually.')
+      } else if (data.reasoning) {
+        toast.info(`AI: ${data.reasoning}`)
+      }
+    } catch {
+      showError('Failed to suggest dates')
+    } finally {
+      setSuggestingDates(false)
+    }
   }
 
   const handleCreateTask = async () => {
@@ -461,6 +503,7 @@ function TasksContent() {
         summary: taskSummary,
         actionItems: draftActionItems,
         userSetDeadline: draftDeadline || undefined,
+        startDate: draftStartDate || undefined,
         urgency: draftUrgency,
         impact: draftImpact,
         priorityScore: draftPriorityScore,
@@ -919,6 +962,8 @@ function TasksContent() {
         onSuccess={clearSelection}
       />
 
+      <UpgradeModal open={showUpgrade} onOpenChange={setShowUpgrade} />
+
       {/* Create Task Modal */}
       <Dialog open={showCreateModal} onOpenChange={handleModalOpenChange}>
         <DialogContent className={draftCards.length > 0 ? 'sm:max-w-lg' : 'sm:max-w-md'}>
@@ -1004,12 +1049,12 @@ function TasksContent() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manual-task-summary">Summary</Label>
+                  <Label htmlFor="manual-task-summary">Summary <span className="text-muted-foreground font-normal">(optional)</span></Label>
                   <Textarea
                     id="manual-task-summary"
                     value={taskSummary}
                     onChange={(e) => setTaskSummary(e.target.value)}
-                    placeholder="Brief description (optional)"
+                    placeholder="Brief description"
                     rows={3}
                     className="resize-none"
                   />
@@ -1054,38 +1099,70 @@ function TasksContent() {
                   </button>
                 </div>
 
-                <div className="flex gap-3">
-                  <div className="flex-1 space-y-2">
-                    <Label htmlFor="draft-deadline">Deadline <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Input
-                      id="draft-deadline"
-                      type="date"
-                      value={draftDeadline}
-                      onChange={(e) => setDraftDeadline(e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Priority</Label>
-                    <Select
-                      value={priorityBucketFromScore(draftPriorityScore)}
-                      onValueChange={(v) => {
-                        if (!v) return
-                        const p = PRIORITY_LEVELS[v]
-                        if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
-                      }}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Dates <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSuggestDates}
+                      disabled={!taskTitle.trim() || suggestingDates}
+                      className="h-7 gap-1 text-xs"
                     >
-                      <SelectTrigger className="h-8 text-sm">
-                        <SelectValue>{PRIORITY_LABELS[priorityBucketFromScore(draftPriorityScore)]}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="critical">Critical</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="low">Low</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      <Sparkles className="size-3" />
+                      {suggestingDates ? 'Suggesting...' : 'Suggest dates'}
+                      {!isPro && (
+                        <Badge className="ml-1 h-4 bg-blue-100 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 hover:bg-blue-100">
+                          Pro
+                        </Badge>
+                      )}
+                    </Button>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="draft-start-date" className="text-xs text-muted-foreground">Start date</Label>
+                      <Input
+                        id="draft-start-date"
+                        type="date"
+                        value={draftStartDate}
+                        onChange={(e) => setDraftStartDate(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="draft-deadline" className="text-xs text-muted-foreground">Due date</Label>
+                      <Input
+                        id="draft-deadline"
+                        type="date"
+                        value={draftDeadline}
+                        onChange={(e) => setDraftDeadline(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Priority</Label>
+                  <Select
+                    value={priorityBucketFromScore(draftPriorityScore)}
+                    onValueChange={(v) => {
+                      if (!v) return
+                      const p = PRIORITY_LEVELS[v]
+                      if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-full text-sm">
+                      <SelectValue>{PRIORITY_LABELS[priorityBucketFromScore(draftPriorityScore)]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="critical">Critical</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </>
             )}

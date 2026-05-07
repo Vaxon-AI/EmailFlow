@@ -22,6 +22,8 @@ import {
 import { PageHeader } from '@/components/page-header'
 import { StatePanel } from '@/components/state-panel'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
+import { UpgradeModal } from '@/components/upgrade-modal'
+import { useAuth } from '@/lib/use-auth'
 import {
   ArrowLeft, Mail, Paperclip, Clock, ArrowUpRight,
   CheckSquare, Sparkles, Shield, Plus, Tag, X,
@@ -63,6 +65,8 @@ export default function EmailDetailPage() {
   const params = useParams()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const isPro = Boolean(user?.plan && user.plan !== 'free')
   const emailId = params.id as string
   const [classifying, setClassifying] = useState(false)
   const [unlinkingTaskId, setUnlinkingTaskId] = useState<string | null>(null)
@@ -73,6 +77,9 @@ export default function EmailDetailPage() {
   const [linkedEmailIds, setLinkedEmailIds] = useState<string[]>([])
   const [creatingTask, setCreatingTask] = useState(false)
   const [draftDeadline, setDraftDeadline] = useState('')
+  const [draftStartDate, setDraftStartDate] = useState('')
+  const [suggestingDates, setSuggestingDates] = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const [draftUrgency, setDraftUrgency] = useState(3)
   const [draftImpact, setDraftImpact] = useState(3)
   const [draftPriorityScore, setDraftPriorityScore] = useState(9)
@@ -96,6 +103,8 @@ export default function EmailDetailPage() {
   })
 
   const email = res?.data
+  const emailProjectName: string | undefined = email?.project?.name
+  const emailIdentityName: string | undefined = email?.project?.identity?.name
 
   useEffect(() => {
     setReplyDraft(email?.aiReplyDraft ?? '')
@@ -297,6 +306,55 @@ export default function EmailDetailPage() {
     }
   }
 
+  const resetCreateForm = () => {
+    setTaskTitle('')
+    setTaskSummary('')
+    setLinkedEmailIds([])
+    setDraftDeadline('')
+    setDraftStartDate('')
+    setSuggestingDates(false)
+    setDraftUrgency(3)
+    setDraftImpact(3)
+    setDraftPriorityScore(9)
+    setDraftActionItems([])
+  }
+
+  const handleSuggestDates = async () => {
+    if (!taskTitle.trim()) return
+    if (!isPro) { setShowUpgrade(true); return }
+    setSuggestingDates(true)
+    try {
+      const res = await fetch('/api/tasks/suggest-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: taskTitle,
+          summary: taskSummary,
+          projectId: email?.project?.id || undefined,
+        }),
+      })
+      if (res.status === 402) { setShowUpgrade(true); return }
+      if (!res.ok) { showError('Failed to suggest dates'); return }
+      const { data } = await res.json()
+      if (data.startDate) setDraftStartDate(data.startDate)
+      if (data.dueDate) setDraftDeadline(data.dueDate)
+      if (!data.startDate && !data.dueDate) {
+        toast.info('No clear date signal — leave empty or set manually.')
+      } else if (data.reasoning) {
+        toast.info(`AI: ${data.reasoning}`)
+      }
+    } catch {
+      showError('Failed to suggest dates')
+    } finally {
+      setSuggestingDates(false)
+    }
+  }
+
+  const handleCreateModalOpenChange = (open: boolean) => {
+    setShowCreateModal(open)
+    if (!open) resetCreateForm()
+  }
+
   const handleCreateTask = async () => {
     setCreatingTask(true)
     try {
@@ -312,7 +370,9 @@ export default function EmailDetailPage() {
           impact: draftImpact,
           priorityScore: draftPriorityScore,
           userSetDeadline: draftDeadline || undefined,
+          startDate: draftStartDate || undefined,
           actionItems: draftActionItems.length > 0 ? draftActionItems : undefined,
+          projectId: email?.project?.id || undefined,
         }),
       })
 
@@ -322,14 +382,7 @@ export default function EmailDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['tasks'] })
         toast.success('Task created')
         setShowCreateModal(false)
-        setTaskTitle('')
-        setTaskSummary('')
-        setLinkedEmailIds([])
-        setDraftDeadline('')
-        setDraftUrgency(3)
-        setDraftImpact(3)
-        setDraftPriorityScore(9)
-        setDraftActionItems([])
+        resetCreateForm()
       } else {
         showError('Failed to create task')
       }
@@ -874,8 +927,10 @@ export default function EmailDetailPage() {
         </div>
       </div>
 
+      <UpgradeModal open={showUpgrade} onOpenChange={setShowUpgrade} />
+
       {/* Create Task Modal */}
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+      <Dialog open={showCreateModal} onOpenChange={handleCreateModalOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Create Task from Email</DialogTitle>
@@ -896,7 +951,7 @@ export default function EmailDetailPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email-task-summary">Summary</Label>
+              <Label htmlFor="email-task-summary">Summary <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <Textarea
                 id="email-task-summary"
                 value={taskSummary}
@@ -917,6 +972,34 @@ export default function EmailDetailPage() {
                   <span className="text-xs font-medium text-blue-600">Current email</span>
                 </div>
               </div>
+            </div>
+
+            {/* Identity / Project — inherited from this email's classification (read-only) */}
+            <div className="space-y-2">
+              <Label>Filed under</Label>
+              <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3">
+                <div className="min-w-0 space-y-0.5">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Identity</div>
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <UserRound className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className={`truncate ${emailIdentityName ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      {emailIdentityName ?? '—'}
+                    </span>
+                  </div>
+                </div>
+                <div className="min-w-0 space-y-0.5">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Project</div>
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className={`truncate ${emailProjectName ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      {emailProjectName ?? 'Uncategorized'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] italic text-muted-foreground">
+                The new task will inherit these from the email. To change them, reassign the email first.
+              </p>
             </div>
 
             {/* Checklist */}
@@ -955,50 +1038,88 @@ export default function EmailDetailPage() {
               </button>
             </div>
 
-            {/* Deadline + Priority */}
-            <div className="flex gap-3">
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="email-task-deadline">Deadline <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                <Input
-                  id="email-task-deadline"
-                  type="date"
-                  value={draftDeadline}
-                  onChange={(e) => setDraftDeadline(e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Priority</Label>
-                <Select
-                  value={(() => {
-                    if (draftPriorityScore >= 20) return 'critical'
-                    if (draftPriorityScore >= 12) return 'high'
-                    if (draftPriorityScore >= 6) return 'medium'
-                    return 'low'
-                  })()}
-                  onValueChange={(v) => {
-                    if (!v) return
-                    const map: Record<string, { urgency: number; impact: number; score: number }> = {
-                      critical: { urgency: 5, impact: 4, score: 20 },
-                      high: { urgency: 4, impact: 4, score: 16 },
-                      medium: { urgency: 3, impact: 3, score: 9 },
-                      low: { urgency: 2, impact: 2, score: 4 },
-                    }
-                    const p = map[v]
-                    if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
-                  }}
+            {/* Dates */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Dates <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSuggestDates}
+                  disabled={!taskTitle.trim() || suggestingDates}
+                  className="h-7 gap-1 text-xs"
                 >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <Sparkles className="size-3" />
+                  {suggestingDates ? 'Suggesting...' : 'Suggest dates'}
+                  {!isPro && (
+                    <Badge className="ml-1 h-4 bg-blue-100 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 hover:bg-blue-100">
+                      Pro
+                    </Badge>
+                  )}
+                </Button>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="email-task-start-date" className="text-xs text-muted-foreground">Start date</Label>
+                  <Input
+                    id="email-task-start-date"
+                    type="date"
+                    value={draftStartDate}
+                    onChange={(e) => setDraftStartDate(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="email-task-deadline" className="text-xs text-muted-foreground">Due date</Label>
+                  <Input
+                    id="email-task-deadline"
+                    type="date"
+                    value={draftDeadline}
+                    onChange={(e) => setDraftDeadline(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Priority */}
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select
+                value={(() => {
+                  if (draftPriorityScore >= 20) return 'critical'
+                  if (draftPriorityScore >= 12) return 'high'
+                  if (draftPriorityScore >= 6) return 'medium'
+                  return 'low'
+                })()}
+                onValueChange={(v) => {
+                  if (!v) return
+                  const map: Record<string, { urgency: number; impact: number; score: number }> = {
+                    critical: { urgency: 5, impact: 4, score: 20 },
+                    high: { urgency: 4, impact: 4, score: 16 },
+                    medium: { urgency: 3, impact: 3, score: 9 },
+                    low: { urgency: 2, impact: 2, score: 4 },
+                  }
+                  const p = map[v]
+                  if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
+                }}
+              >
+                <SelectTrigger className="h-8 w-full text-sm">
+                  <SelectValue>
+                    {draftPriorityScore >= 20 ? 'Critical'
+                      : draftPriorityScore >= 12 ? 'High'
+                      : draftPriorityScore >= 6 ? 'Medium'
+                      : 'Low'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

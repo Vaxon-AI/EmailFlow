@@ -7,7 +7,7 @@ import { getExtractRemaining, incrementExtractUsed, FREE_EXTRACT_LIMIT } from '@
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser()
-    const { title, summary, sourceEmailId, linkedEmailIds, urgency, impact, priorityScore, userSetDeadline, actionItems } = await req.json()
+    const { title, summary, sourceEmailId, linkedEmailIds, urgency, impact, priorityScore, userSetDeadline, startDate, actionItems, projectId } = await req.json()
 
     if (!title || !sourceEmailId) {
       return error('BAD_REQUEST', 'Title and sourceEmailId are required', 400)
@@ -17,6 +17,28 @@ export async function POST(req: NextRequest) {
       const remaining = await getExtractRemaining(user.id)
       if (remaining <= 0) {
         return error('QUOTA_EXCEEDED', `Free plan limit of ${FREE_EXTRACT_LIMIT} manual task extractions per month reached. Upgrade to Pro for unlimited access.`, 402)
+      }
+    }
+
+    // If projectId provided, find or create a MatterMemory to link the task
+    let matterId: string | undefined
+    if (projectId) {
+      const project = await prisma.projectContext.findFirst({ where: { id: projectId, userId: user.id } })
+      if (project) {
+        let matter = await prisma.matterMemory.findFirst({ where: { userId: user.id, projectContextId: projectId } })
+        if (!matter) {
+          matter = await prisma.matterMemory.create({
+            data: {
+              userId: user.id,
+              projectContextId: projectId,
+              title: project.name,
+              summary: 'Manually assigned to this project',
+              status: 'open',
+              topic: 'other',
+            },
+          })
+        }
+        matterId = matter.id
       }
     }
 
@@ -31,7 +53,9 @@ export async function POST(req: NextRequest) {
         impact: impact ?? 3,
         priorityScore: priorityScore ?? 9,
         userSetDeadline: userSetDeadline || undefined,
+        startDate: startDate ? new Date(startDate) : undefined,
         actionItems: actionItems ? JSON.stringify(actionItems) : undefined,
+        matterId,
       },
     })
 
