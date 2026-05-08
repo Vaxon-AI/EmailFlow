@@ -30,6 +30,19 @@ export async function PATCH(
     const existing = await emailRepo.findEmailById(user.id, id)
     if (!existing) return error('NOT_FOUND', 'Email not found', 404)
 
+    // Bucket is the new user-facing field — preferred over raw classification.
+    // Each bucket atomically sets (classification, actioned, awaitingReview)
+    // so the email moves cleanly between tabs. Falls back to classification
+    // for legacy callers.
+    if (body.bucket) {
+      const valid: emailRepo.EmailBucket[] = ['needs_action', 'tracked', 'fyi', 'ignored']
+      if (!valid.includes(body.bucket)) {
+        return error('BAD_REQUEST', `Invalid bucket: ${body.bucket}`, 400)
+      }
+      const updated = await emailRepo.setEmailBucket(id, body.bucket)
+      return success(updated)
+    }
+
     if (body.classification) {
       const updated = await emailRepo.updateClassification(id, {
         category: body.classification,

@@ -460,58 +460,54 @@ function DashboardContent() {
         title={`Hi, ${user?.name?.split(' ')[0] || 'there'}`}
         description="Your email-to-task command center."
         actions={
-          summaryLoading ? (
-            <Skeleton className="h-9 w-28 rounded-lg" />
-          ) : providerReauthRequired ? (
-            <Link href="/dashboard/settings">
-              <Button size="sm" variant="outline" className="border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100">
-                Reconnect Gmail
-              </Button>
-            </Link>
-          ) : s?.sync?.gmailConnected ? (
-            <Badge className="h-9 rounded-lg bg-green-100 px-4 text-sm font-medium text-green-700 hover:bg-green-100">
-              Connected
-            </Badge>
-          ) : (
-            <a href="/api/auth/google">
-              <Button size="sm">Connect Gmail</Button>
-            </a>
-          )
+          <>
+            {/* Quota chip: only surfaces once usage crosses 70%. Below that
+                threshold the sidebar progress bar is sufficient and a chip
+                here would just be visual noise. */}
+            {user?.plan === 'free' && quota && quota.classify.limit ? (() => {
+              const used = quota.classify.used
+              const limit = quota.classify.limit ?? 1
+              const ratio = used / limit
+              if (ratio < 0.7) return null
+              const tone = ratio >= 0.9
+                ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+              return (
+                <button
+                  type="button"
+                  onClick={() => setQuotaUpgradeOpen(true)}
+                  className={cn(
+                    'flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors',
+                    tone
+                  )}
+                  title={`Resets ${format(new Date(quota.classify.resetAt), 'MMM d')}`}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>{used}/{limit}</span>
+                  <span className="hidden text-xs font-normal opacity-80 sm:inline">· Upgrade</span>
+                </button>
+              )
+            })() : null}
+            {summaryLoading ? (
+              <Skeleton className="h-9 w-28 rounded-lg" />
+            ) : providerReauthRequired ? (
+              <Link href="/dashboard/settings">
+                <Button size="sm" variant="outline" className="border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100">
+                  Reconnect Gmail
+                </Button>
+              </Link>
+            ) : s?.sync?.gmailConnected ? (
+              <Badge className="h-9 rounded-lg bg-green-100 px-4 text-sm font-medium text-green-700 hover:bg-green-100">
+                Connected
+              </Badge>
+            ) : (
+              <a href="/api/auth/google">
+                <Button size="sm">Connect Gmail</Button>
+              </a>
+            )}
+          </>
         }
       />
-
-      {user?.plan === 'free' && quota && quota.classify.limit ? (() => {
-        const used = quota.classify.used
-        const limit = quota.classify.limit ?? 1
-        const ratio = used / limit
-        return (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200/80 bg-white px-4 py-3 shadow-sm">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <Sparkles className="h-4 w-4 shrink-0 text-blue-500" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900">
-                  AI classification · {used}/{limit} used this month
-                </p>
-                <p className="text-xs text-gray-500">
-                  Resets {format(new Date(quota.classify.resetAt), 'MMM d')}
-                </p>
-              </div>
-              <div className="hidden h-1.5 w-32 shrink-0 overflow-hidden rounded-full bg-gray-100 sm:block">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all',
-                    ratio >= 0.9 ? 'bg-red-400' : ratio >= 0.7 ? 'bg-amber-400' : 'bg-blue-400'
-                  )}
-                  style={{ width: `${Math.min(100, ratio * 100)}%` }}
-                />
-              </div>
-            </div>
-            <Button size="sm" variant="outline" onClick={() => setQuotaUpgradeOpen(true)}>
-              Upgrade
-            </Button>
-          </div>
-        )
-      })() : null}
 
       <div className="animate-fade-in-up stagger-1 rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm backdrop-blur">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">

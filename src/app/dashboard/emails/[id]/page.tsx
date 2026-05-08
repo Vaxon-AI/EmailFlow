@@ -34,7 +34,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
-import { EMAIL_CLASS_CONFIG, getEmailClassConfig } from '@/lib/email-classification'
+import { EMAIL_BUCKET_CONFIG, getEmailBucket, type EmailBucket } from '@/lib/email-classification'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
@@ -152,19 +152,22 @@ export default function EmailDetailPage() {
     }
   }
 
-  const handleClassify = async (newClass: string) => {
-    if (newClass === email?.classification) return
+  const handleClassify = async (newBucket: EmailBucket) => {
+    const currentBucket = email
+      ? getEmailBucket({ classification: email.classification, actioned: email.actioned })
+      : null
+    if (newBucket === currentBucket) return
     setClassifying(true)
     try {
       const res = await fetch(`/api/emails/${emailId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ classification: newClass }),
+        body: JSON.stringify({ bucket: newBucket }),
       })
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ['email', emailId] })
         queryClient.invalidateQueries({ queryKey: ['emails'] })
-        toast.success(`Marked as ${getEmailClassConfig(newClass).label}`)
+        toast.success(`Marked as ${EMAIL_BUCKET_CONFIG[newBucket].label}`)
       } else {
         showError(await readErrorMessage(res, 'Failed to update classification'))
       }
@@ -423,7 +426,8 @@ export default function EmailDetailPage() {
     )
   }
 
-  const cls = getEmailClassConfig(email.classification)
+  const bucket = getEmailBucket({ classification: email.classification, actioned: email.actioned })
+  const cls = EMAIL_BUCKET_CONFIG[bucket]
   const ClsIcon = cls.icon
   const senderName = email.sender?.split('<')[0]?.trim()
   const senderEmail = email.sender?.match(/<(.+?)>/)?.[1] || email.sender
@@ -857,8 +861,8 @@ export default function EmailDetailPage() {
               </div>
               <Label className="text-xs text-gray-500">Mark this email as</Label>
               <Select
-                value={email.classification ?? 'uncertain'}
-                onValueChange={(value) => { if (value) handleClassify(value) }}
+                value={bucket}
+                onValueChange={(value) => { if (value) handleClassify(value as EmailBucket) }}
                 disabled={classifying}
               >
                 <SelectTrigger className="h-10 w-full border-gray-200 bg-white text-sm shadow-sm">
@@ -872,7 +876,7 @@ export default function EmailDetailPage() {
                   </div>
                 </SelectTrigger>
                 <SelectContent align="start">
-                  {Object.entries(EMAIL_CLASS_CONFIG).map(([key, config]) => {
+                  {(Object.entries(EMAIL_BUCKET_CONFIG) as [EmailBucket, typeof EMAIL_BUCKET_CONFIG[EmailBucket]][]).map(([key, config]) => {
                     const Icon = config.icon
                     return (
                       <SelectItem key={key} value={key}>

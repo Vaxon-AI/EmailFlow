@@ -147,6 +147,32 @@ export async function markActioned(emailId: string) {
   })
 }
 
+// User-facing bucket → (classification, actioned) translation.
+// The picker on the email detail page exposes 4 buckets; each maps to a
+// deterministic DB state so round-trips are predictable. `tracked` forces
+// classification='action' because tracking only makes sense for actionable
+// emails — if you wanted FYI, you'd pick FYI directly.
+export type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
+
+export async function setEmailBucket(emailId: string, bucket: EmailBucket) {
+  const data = (() => {
+    switch (bucket) {
+      case 'needs_action':
+        return { classification: 'action', actioned: false, awaitingReview: false }
+      case 'tracked':
+        return { classification: 'action', actioned: true, awaitingReview: false }
+      case 'fyi':
+        return { classification: 'awareness', actioned: false, awaitingReview: false }
+      case 'ignored':
+        return { classification: 'ignore', actioned: true, awaitingReview: false }
+    }
+  })()
+  return prisma.email.update({
+    where: { id: emailId },
+    data: { ...data, classConfidence: 1, processingStatus: 'done' },
+  })
+}
+
 export async function findPendingReviewEmails(userId: string) {
   return prisma.email.findMany({
     where: { userId, awaitingReview: true, classification: 'action' },

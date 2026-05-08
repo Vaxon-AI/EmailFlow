@@ -28,6 +28,7 @@ import {
   fixStuckEmails,
   markQuotaSkipped,
   countQuotaSkipped,
+  setEmailBucket,
 } from '../email-repo'
 
 // ---------------------------------------------------------------------------
@@ -247,6 +248,54 @@ describe('markQuotaSkipped', () => {
     const count = await markQuotaSkipped([])
     expect(count).toBe(0)
     expect(mockPrismaEmail.updateMany).not.toHaveBeenCalled()
+  })
+})
+
+describe('setEmailBucket', () => {
+  it('maps needs_action to classification=action, actioned=false', async () => {
+    mockPrismaEmail.update.mockResolvedValue({} as any)
+
+    await setEmailBucket('email-1', 'needs_action')
+
+    expect(mockPrismaEmail.update).toHaveBeenCalledWith({
+      where: { id: 'email-1' },
+      data: expect.objectContaining({
+        classification: 'action',
+        actioned: false,
+        awaitingReview: false,
+        processingStatus: 'done',
+      }),
+    })
+  })
+
+  it('maps tracked to classification=action, actioned=true', async () => {
+    mockPrismaEmail.update.mockResolvedValue({} as any)
+
+    await setEmailBucket('email-1', 'tracked')
+
+    const call = (mockPrismaEmail.update as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(call.data.classification).toBe('action')
+    expect(call.data.actioned).toBe(true)
+  })
+
+  it('maps fyi to classification=awareness, actioned=false', async () => {
+    mockPrismaEmail.update.mockResolvedValue({} as any)
+
+    await setEmailBucket('email-1', 'fyi')
+
+    const call = (mockPrismaEmail.update as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(call.data.classification).toBe('awareness')
+    expect(call.data.actioned).toBe(false)
+  })
+
+  it('maps ignored to classification=ignore, actioned=true', async () => {
+    mockPrismaEmail.update.mockResolvedValue({} as any)
+
+    await setEmailBucket('email-1', 'ignored')
+
+    const call = (mockPrismaEmail.update as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(call.data.classification).toBe('ignore')
+    expect(call.data.actioned).toBe(true)
   })
 })
 
