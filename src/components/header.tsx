@@ -11,9 +11,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { RefreshCw, User, LogOut, ChevronRight, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Menu } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { isWorkspaceQueryKey } from '@/lib/query-cache'
+import { CACHE_TIME, isWorkspaceQueryKey } from '@/lib/query-cache'
 import {
   Dialog,
   DialogContent,
@@ -56,6 +56,16 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const segments = pathname.split('/').filter(Boolean)
   const currentSection = segments[1] ? segments[1].replace(/-/g, ' ') : 'dashboard'
   const sectionLabel = currentSection.charAt(0).toUpperCase() + currentSection.slice(1)
+
+  // Quota_skipped emails — surfaces as a chip in the right side of header so
+  // users can click in from any dashboard route. queryKey starts with 'emails'
+  // so isWorkspaceQueryKey invalidates it on sync mutations.
+  const { data: unclassifiedRes } = useQuery<{ data: { count: number } }>({
+    queryKey: ['emails', 'unclassified-count'],
+    queryFn: () => fetch('/api/emails/unclassified-count').then((r) => r.json()),
+    staleTime: CACHE_TIME.stats,
+  })
+  const unclassifiedCount = unclassifiedRes?.data?.count ?? 0
 
   const syncMutation = useMutation({
     mutationFn: async () => {
@@ -183,6 +193,17 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           <span className="truncate">{sectionLabel}</span>
         </div>
         <div className="flex items-center gap-3">
+          {unclassifiedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard/emails?tab=unclassified')}
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+              title="Emails AI couldn't categorize on its own — open to review manually"
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              <span>{unclassifiedCount} to review</span>
+            </button>
+          )}
           <button
             onClick={async () => {
               if (syncMutation.isPending || checkingSyncState) return

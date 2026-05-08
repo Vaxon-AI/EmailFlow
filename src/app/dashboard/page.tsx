@@ -689,7 +689,7 @@ function DashboardContent() {
                     href={dashboardLink('/dashboard/emails', { tab: 'unclassified' })}
                     className="mt-2.5 block rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] text-amber-800 transition-colors hover:bg-amber-50"
                   >
-                    +{emailData.unclassified} awaiting classification (free quota reached)
+                    +{emailData.unclassified} need your review (uncertain or quota-skipped)
                   </Link>
                 )}
               </CardContent>

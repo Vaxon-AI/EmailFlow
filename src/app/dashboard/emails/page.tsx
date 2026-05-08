@@ -107,10 +107,9 @@ const fyiPriority: Record<string, number> = {
 const VALID_TABS = new Set<Tab>(['needs_review', 'tracked', 'fyi', 'ignored', 'unclassified'])
 
 function isNeedsActionPageEmail(email: EmailItem) {
-  return (
-    (email.classification === 'action' || email.classification === 'uncertain') &&
-    email.actioned !== true
-  )
+  // Action-only now. Uncertain moved to the Needs Review tab so this tab
+  // reflects high-confidence actionable emails the user should triage first.
+  return email.classification === 'action' && email.actioned !== true
 }
 
 function isUncertainEmail(email: EmailItem) {
@@ -133,8 +132,15 @@ function isIgnoredEmail(email: EmailItem) {
   return email.classification === 'ignore'
 }
 
+// "Needs Review" bucket: anything the user has to look at manually because
+// AI either couldn't categorize it (quota_skipped) or wasn't confident
+// enough (uncertain). actioned=true takes the email out of this bucket
+// (it's effectively triaged by being in Tracked).
 function isUnclassifiedEmail(email: EmailItem) {
-  return !email.classification && email.processingStatus === 'quota_skipped'
+  if (email.actioned) return false
+  if (!email.classification && email.processingStatus === 'quota_skipped') return true
+  if (email.classification === 'uncertain') return true
+  return false
 }
 
 function matchesEmailTab(email: EmailItem, tab: Tab) {
@@ -555,7 +561,7 @@ function EmailsContent() {
     { key: 'tracked', label: 'Tracked', count: trackedCount },
     { key: 'fyi', label: 'FYI', count: infoCount },
     { key: 'ignored', label: 'Ignored', count: ignoredCount },
-    ...(unclassifiedCount > 0 ? [{ key: 'unclassified' as Tab, label: 'Unclassified', count: unclassifiedCount }] : []),
+    ...(unclassifiedCount > 0 ? [{ key: 'unclassified' as Tab, label: 'Needs Review', count: unclassifiedCount }] : []),
   ]
 
   return (
@@ -570,10 +576,10 @@ function EmailsContent() {
         <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm">
           <div className="min-w-0">
             <p className="font-medium text-amber-900">
-              {unclassifiedCount} email{unclassifiedCount === 1 ? '' : 's'} awaiting classification
+              {unclassifiedCount} email{unclassifiedCount === 1 ? '' : 's'} need{unclassifiedCount === 1 ? 's' : ''} your review
             </p>
             <p className="mt-0.5 text-xs text-amber-800">
-              Free plan limit reached this month. Open any of them to classify manually, or upgrade to Pro for automatic classification.
+              AI was either unsure or hit your free plan limit. Open any of them to classify manually, or upgrade to Pro.
             </p>
           </div>
           <Button

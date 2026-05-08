@@ -245,6 +245,24 @@ export async function countQuotaSkipped(userId: string): Promise<number> {
   })
 }
 
+// Counts everything the user needs to look at manually — emails that the AI
+// either couldn't run on (quota_skipped) OR ran on but wasn't confident
+// about (uncertain). actioned=true emails are excluded so once a user takes
+// action (or links a task), they're out of this bucket. This is the count
+// that drives the global header chip and the unified "Needs Review" tab.
+export async function countAwaitingReview(userId: string): Promise<number> {
+  return prisma.email.count({
+    where: {
+      userId,
+      actioned: false,
+      OR: [
+        { processingStatus: 'quota_skipped', classification: null },
+        { classification: 'uncertain' },
+      ],
+    },
+  })
+}
+
 // Finds emails stuck in 'pending' for longer than staleAfterMs and marks them failed.
 // Returns the number of emails fixed.
 export async function fixStuckEmails(userId: string | null, staleAfterMs = 2 * 60 * 1000): Promise<number> {

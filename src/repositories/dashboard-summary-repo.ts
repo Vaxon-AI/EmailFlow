@@ -64,10 +64,12 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
   const momentumDays = view === 'today' ? 1 : view === 'week' ? WEEK_MOMENTUM_DAYS : MOMENTUM_DAYS
   const momentumStart = startOfUtcDay(addUtcDays(period?.start ?? now, -(momentumDays - 1)))
 
-  // Needs Action page: action emails ready for extraction plus uncertain
-  // emails that need user confirmation before task generation.
+  // Needs Action page (now action-only): high-confidence action emails ready
+  // for extraction. Uncertain emails moved to the unified "Needs Review"
+  // bucket (alongside quota_skipped) so the user-facing tabs separate
+  // confidence levels cleanly.
   const attentionEmailWhere: Prisma.EmailWhereInput = {
-    classification: { in: ['action', 'uncertain'] },
+    classification: 'action',
     actioned: false,
     processingStatus: { not: 'failed' },
   }
@@ -413,10 +415,18 @@ function buildStats(
   const taskCount = (status: string) =>
     taskGroups.find((group) => group.status === status)?._count.id ?? 0
 
-  const unclassifiedTotal = emailCount(null)
-  // Classified emails are visible in the inbox tabs; unclassified (quota-skipped)
-  // sit in a separate banner/tab. Keep them out of the headline "total" so the
-  // dashboard count matches what the user sees on the Emails page.
+  // "Needs Review" = quota_skipped (AI couldn't run) + uncertain (AI ran but
+  // wasn't confident). Both groups need user attention and now live in the
+  // same tab. We can't perfectly compute "uncertain not actioned" from
+  // emailGroups alone (groupBy is by classification only), but the dashboard
+  // bar chart never shows uncertain in its own bar — that was a gap pre-merge.
+  // For the headline count the approximation `emailCount('uncertain')` is
+  // close enough (small false-positive: uncertain+actioned counted both here
+  // and in Tracked).
+  const unclassifiedTotal = emailCount(null) + emailCount('uncertain')
+  // Classified emails (action / awareness / ignore) are visible in the inbox
+  // tabs; unclassified + uncertain sit in the Needs Review tab. Keep them
+  // out of the headline "total" so it matches what's visible in the bars.
   const emailTotal = emailGroups.reduce((sum, group) => sum + group._count.id, 0) - unclassifiedTotal
   const taskTotal = taskGroups.reduce((sum, group) => sum + group._count.id, 0)
   const pending = taskCount('pending')

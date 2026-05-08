@@ -28,6 +28,7 @@ import {
   fixStuckEmails,
   markQuotaSkipped,
   countQuotaSkipped,
+  countAwaitingReview,
   setEmailBucket,
 } from '../email-repo'
 
@@ -296,6 +297,27 @@ describe('setEmailBucket', () => {
     const call = (mockPrismaEmail.update as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.data.classification).toBe('ignore')
     expect(call.data.actioned).toBe(true)
+  })
+})
+
+describe('countAwaitingReview', () => {
+  it('counts both quota_skipped + uncertain (not actioned), scoped to userId', async () => {
+    const mockCount = vi.mocked(prisma.email.count)
+    mockCount.mockResolvedValue(11 as never)
+
+    const result = await countAwaitingReview('user-7')
+
+    expect(result).toBe(11)
+    expect(mockCount).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-7',
+        actioned: false,
+        OR: [
+          { processingStatus: 'quota_skipped', classification: null },
+          { classification: 'uncertain' },
+        ],
+      },
+    })
   })
 })
 

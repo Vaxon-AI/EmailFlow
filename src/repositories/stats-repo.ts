@@ -60,9 +60,11 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
   const taskCount = (status: string) =>
     taskGroups.find((g) => g.status === status)?._count.id ?? 0
 
-  const unclassifiedTotal = emailCount(null)
-  // Headline total excludes unclassified (quota-skipped) so it matches what's
-  // visible in the inbox tabs. unclassified is reported separately.
+  // unclassified = quota_skipped (null classification) + uncertain — both
+  // need user attention and now share the same Needs Review tab.
+  const unclassifiedTotal = emailCount(null) + emailCount('uncertain')
+  // Headline total excludes the Needs Review group so it matches what's
+  // visible in the inbox tabs (Needs Action / Tracked / FYI / Ignored).
   const emailTotal = emailGroups.reduce((sum, g) => sum + g._count.id, 0) - unclassifiedTotal
   const taskTotal = taskGroups.reduce((sum, g) => sum + g._count.id, 0)
 
