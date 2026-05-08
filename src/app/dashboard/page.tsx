@@ -15,6 +15,7 @@ import {
   Loader2,
   Mail,
   PieChart,
+  Sparkles,
   Target,
   TrendingUp,
   UserRound,
@@ -29,8 +30,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
+import { UpgradeModal } from '@/components/upgrade-modal'
 import { getPriorityBand, getPriorityColor, getPriorityLabel } from '@/types'
 import { useAuth } from '@/lib/use-auth'
+import { cn } from '@/lib/utils'
 import { CACHE_TIME } from '@/lib/query-cache'
 import { toast } from 'sonner'
 
@@ -171,6 +174,7 @@ function DashboardContent() {
   const [syncSetupLoading, setSyncSetupLoading] = useState<number | null>(null)
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined)
   const [customCalendarOpen, setCustomCalendarOpen] = useState(false)
+  const [quotaUpgradeOpen, setQuotaUpgradeOpen] = useState(false)
 
   useEffect(() => {
     const gmailError = searchParams.get('gmail_error')
@@ -379,6 +383,21 @@ function DashboardContent() {
     router.replace(query ? `/dashboard?${query}` : '/dashboard', { scroll: false })
   }, [router, searchParams])
 
+  // Free-plan AI quota — shared cache key with sidebar so both stay in sync.
+  const { data: quotaRes } = useQuery<{
+    data: {
+      plan: string
+      classify: { used: number; limit: number | null; resetAt: string }
+      extract: { used: number; limit: number | null; resetAt: string }
+    }
+  }>({
+    queryKey: ['quota'],
+    queryFn: () => fetch('/api/settings/quota').then((r) => r.json()),
+    staleTime: CACHE_TIME.stats,
+    enabled: user?.plan === 'free',
+  })
+  const quota = quotaRes?.data
+
   const { data: summaryRes, isLoading: summaryLoading } = useQuery<DashboardSummaryResponse>({
     queryKey: ['dashboard-summary', selectedIdentityIds.join(','), effectiveProjectIds.join(','), selectedView, timezoneOffset],
     queryFn: () => {
@@ -460,6 +479,39 @@ function DashboardContent() {
           )
         }
       />
+
+      {user?.plan === 'free' && quota && quota.classify.limit ? (() => {
+        const used = quota.classify.used
+        const limit = quota.classify.limit ?? 1
+        const ratio = used / limit
+        return (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200/80 bg-white px-4 py-3 shadow-sm">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <Sparkles className="h-4 w-4 shrink-0 text-blue-500" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900">
+                  AI classification · {used}/{limit} used this month
+                </p>
+                <p className="text-xs text-gray-500">
+                  Resets {format(new Date(quota.classify.resetAt), 'MMM d')}
+                </p>
+              </div>
+              <div className="hidden h-1.5 w-32 shrink-0 overflow-hidden rounded-full bg-gray-100 sm:block">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all',
+                    ratio >= 0.9 ? 'bg-red-400' : ratio >= 0.7 ? 'bg-amber-400' : 'bg-blue-400'
+                  )}
+                  style={{ width: `${Math.min(100, ratio * 100)}%` }}
+                />
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setQuotaUpgradeOpen(true)}>
+              Upgrade
+            </Button>
+          </div>
+        )
+      })() : null}
 
       <div className="animate-fade-in-up stagger-1 rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm backdrop-blur">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -803,22 +855,47 @@ function DashboardContent() {
                 )}
               </>
             ) : (
-              SYNC_PRESET_DAYS.map((days) => {
-                const from = new Date(Date.now() - days * 86400000)
-                const preview = presetPreviews?.find((p) => p.days === days)
-                return (
-                  <SyncWindowOption
-                    key={days}
-                    title={`Last ${days} days`}
-                    fromDate={from}
-                    preview={preview}
-                    loading={!preview && presetPreviewsLoading}
-                    busy={syncSetupLoading === days}
-                    disabled={syncSetupLoading !== null}
-                    onClick={() => handleSyncSetup(days)}
-                  />
-                )
-              })
+              <>
+                {/* Recommended: 7 days fits the 100/month free quota for most inboxes */}
+                {(() => {
+                  const days = 7
+                  const from = new Date(Date.now() - days * 86400000)
+                  const preview = presetPreviews?.find((p) => p.days === days)
+                  return (
+                    <SyncWindowOption
+                      key={days}
+                      title="Last 7 days"
+                      fromDate={from}
+                      preview={preview}
+                      loading={!preview && presetPreviewsLoading}
+                      busy={syncSetupLoading === days}
+                      disabled={syncSetupLoading !== null}
+                      onClick={() => handleSyncSetup(days)}
+                      recommended
+                    />
+                  )
+                })()}
+
+                {/* Secondary: dimmed so users notice but aren't visually pushed toward longer windows */}
+                <p className="mt-1 text-[11px] text-gray-400">Or sync more history</p>
+                {[15, 30].map((days) => {
+                  const from = new Date(Date.now() - days * 86400000)
+                  const preview = presetPreviews?.find((p) => p.days === days)
+                  return (
+                    <SyncWindowOption
+                      key={days}
+                      title={`Last ${days} days`}
+                      fromDate={from}
+                      preview={preview}
+                      loading={!preview && presetPreviewsLoading}
+                      busy={syncSetupLoading === days}
+                      disabled={syncSetupLoading !== null}
+                      onClick={() => handleSyncSetup(days)}
+                      dim
+                    />
+                  )
+                })}
+              </>
             )}
 
             {/* Custom date picker — let users pick a start date instead of a preset */}
@@ -878,6 +955,8 @@ function DashboardContent() {
           </button>
         </DialogContent>
       </Dialog>
+
+      <UpgradeModal open={quotaUpgradeOpen} onOpenChange={setQuotaUpgradeOpen} />
     </div>
   )
 }
@@ -1333,6 +1412,8 @@ function SyncWindowOption({
   onClick,
   variant,
   onClear,
+  recommended,
+  dim,
 }: {
   title: string
   fromDate: Date
@@ -1343,6 +1424,8 @@ function SyncWindowOption({
   onClick: () => void
   variant?: 'preset' | 'custom'
   onClear?: () => void
+  recommended?: boolean
+  dim?: boolean
 }) {
   const exceeds = preview?.wouldExceedQuota ?? false
 
@@ -1355,20 +1438,35 @@ function SyncWindowOption({
       ? `From ${format(fromDate, 'MMM d')} · ${countLabel}`
       : `From ${format(fromDate, 'MMM d')}`
 
+  // Visual hierarchy: exceeds > recommended > dim > default. Exceeds always wins
+  // because it's a hard warning the user needs to see regardless of emphasis.
+  const containerClass = exceeds
+    ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400 hover:bg-amber-50 p-4'
+    : recommended
+      ? 'border-blue-300 bg-blue-50/40 hover:border-blue-400 hover:bg-blue-50/70 p-4 shadow-sm'
+      : dim
+        ? 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50/60 p-3'
+        : 'border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/60 p-4'
+
+  const titleClass = dim && !exceeds
+    ? 'flex items-center gap-2 text-[13px] font-medium text-gray-700'
+    : 'flex items-center gap-2 text-sm font-semibold text-gray-900'
+
   return (
     <div className="space-y-1">
       <button
         onClick={onClick}
         disabled={disabled}
-        className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
-          exceeds
-            ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400 hover:bg-amber-50'
-            : 'border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/60'
-        }`}
+        className={`flex w-full items-center justify-between rounded-xl border text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${containerClass}`}
       >
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <p className={titleClass}>
             {title}
+            {recommended && !exceeds ? (
+              <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                Recommended
+              </span>
+            ) : null}
             {exceeds ? <AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> : null}
           </p>
           <p className="truncate text-xs text-gray-500">{detail}</p>
@@ -1384,7 +1482,7 @@ function SyncWindowOption({
           ) : busy ? (
             <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
           ) : (
-            <div className="h-4 w-4 rounded-full border-2 border-gray-200" />
+            <div className={`h-4 w-4 rounded-full border-2 ${recommended && !exceeds ? 'border-blue-300' : 'border-gray-200'}`} />
           )}
         </div>
       </button>
