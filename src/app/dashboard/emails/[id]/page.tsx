@@ -34,7 +34,12 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
-import { EMAIL_BUCKET_CONFIG, getEmailBucket, type EmailBucket } from '@/lib/email-classification'
+import {
+  EMAIL_BUCKET_CONFIG,
+  EMAIL_DISPLAY_CONFIG,
+  getEmailDisplayState,
+  type EmailBucket,
+} from '@/lib/email-classification'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
@@ -153,10 +158,13 @@ export default function EmailDetailPage() {
   }
 
   const handleClassify = async (newBucket: EmailBucket) => {
-    const currentBucket = email
-      ? getEmailBucket({ classification: email.classification, actioned: email.actioned })
+    // newBucket is one of the 4 picker values; currentDisplay can also be
+    // 'uncertain' which intentionally never matches, so an uncertain email
+    // always commits on the first click.
+    const currentDisplay = email
+      ? getEmailDisplayState({ classification: email.classification, actioned: email.actioned })
       : null
-    if (newBucket === currentBucket) return
+    if (newBucket === currentDisplay) return
     setClassifying(true)
     try {
       const res = await fetch(`/api/emails/${emailId}`, {
@@ -426,9 +434,16 @@ export default function EmailDetailPage() {
     )
   }
 
-  const bucket = getEmailBucket({ classification: email.classification, actioned: email.actioned })
-  const cls = EMAIL_BUCKET_CONFIG[bucket]
+  const displayState = getEmailDisplayState({
+    classification: email.classification,
+    actioned: email.actioned,
+  })
+  const cls = EMAIL_DISPLAY_CONFIG[displayState]
   const ClsIcon = cls.icon
+  // Picker can't represent 'uncertain' (it's an AI-only state); leave the
+  // Select unselected so the user is nudged to commit a real bucket.
+  const pickerValue: EmailBucket | undefined =
+    displayState === 'uncertain' ? undefined : displayState
   const senderName = email.sender?.split('<')[0]?.trim()
   const senderEmail = email.sender?.match(/<(.+?)>/)?.[1] || email.sender
   const senderInitial = (senderName || 'U')[0].toUpperCase()
@@ -861,7 +876,7 @@ export default function EmailDetailPage() {
               </div>
               <Label className="text-xs text-gray-500">Mark this email as</Label>
               <Select
-                value={bucket}
+                value={pickerValue}
                 onValueChange={(value) => { if (value) handleClassify(value as EmailBucket) }}
                 disabled={classifying}
               >

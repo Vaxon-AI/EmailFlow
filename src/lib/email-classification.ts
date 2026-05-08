@@ -32,7 +32,7 @@ export const EMAIL_CLASS_CONFIG: Record<EmailCategory, EmailClassConfig> = {
     icon: Trash2,
   },
   uncertain: {
-    label: 'Needs Action',
+    label: 'Uncertain',
     color: 'bg-yellow-50 text-yellow-700 border-yellow-200',
     bg: 'from-yellow-50/50 to-white',
     icon: AlertTriangle,
@@ -45,11 +45,19 @@ export function getEmailClassConfig(classification?: string | null): EmailClassC
 }
 
 // ---------------------------------------------------------------------------
-// Bucket model — what the user sees (Needs Action / Tracked / FYI / Ignored).
-// `actioned: true` overrides classification so a once-action email that's been
-// turned into a task or manually marked handled lives in Tracked, not in
-// Needs Action. `uncertain` rolls up into Needs Action since the user-facing
-// vocabulary doesn't expose the AI-internal "uncertain" state.
+// Two layers, deliberately decoupled:
+//
+//  1. EmailBucket (4 values) — what the user can SELECT in the picker.
+//     Each bucket maps deterministically to a (classification, actioned) pair
+//     written by `setEmailBucket` in email-repo.ts.
+//
+//  2. EmailDisplayState (5 values) — what the UI SHOWS, including 'uncertain'
+//     for emails the AI couldn't confidently classify. The picker can't
+//     produce 'uncertain' (it's an AI-internal state), but rows / headers /
+//     badges need to surface it visually so users notice and can resolve.
+//
+// `actioned: true` always wins for both — a once-uncertain email that became
+// a task lives in Tracked, not Uncertain.
 // ---------------------------------------------------------------------------
 
 export type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
@@ -81,13 +89,26 @@ export const EMAIL_BUCKET_CONFIG: Record<EmailBucket, EmailClassConfig> = {
   },
 }
 
-export function getEmailBucket(input: {
+export type EmailDisplayState = EmailBucket | 'uncertain'
+
+export const EMAIL_DISPLAY_CONFIG: Record<EmailDisplayState, EmailClassConfig> = {
+  ...EMAIL_BUCKET_CONFIG,
+  uncertain: {
+    label: 'Uncertain',
+    color: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    bg: 'from-yellow-50/50 to-white',
+    icon: AlertTriangle,
+  },
+}
+
+export function getEmailDisplayState(input: {
   classification?: string | null
   actioned?: boolean | null
-}): EmailBucket {
+}): EmailDisplayState {
   if (input.actioned) return 'tracked'
   if (input.classification === 'ignore') return 'ignored'
   if (input.classification === 'awareness') return 'fyi'
-  // action, uncertain, null/undefined, anything else → needs_action
+  if (input.classification === 'uncertain') return 'uncertain'
+  // action, null/undefined, anything else → needs_action
   return 'needs_action'
 }

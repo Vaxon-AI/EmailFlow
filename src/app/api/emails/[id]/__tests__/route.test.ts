@@ -184,19 +184,19 @@ describe('PATCH /api/emails/[id]', () => {
 })
 
 describe('email-classification helpers', () => {
-  it('rolls uncertain emails into the needs_action bucket', async () => {
-    const { getEmailBucket } = await import('@/lib/email-classification')
-    expect(getEmailBucket({ classification: 'uncertain', actioned: false })).toBe('needs_action')
-    expect(getEmailBucket({ classification: 'action', actioned: false })).toBe('needs_action')
-    expect(getEmailBucket({ classification: 'awareness', actioned: false })).toBe('fyi')
-    expect(getEmailBucket({ classification: 'ignore', actioned: false })).toBe('ignored')
-    expect(getEmailBucket({ classification: null })).toBe('needs_action')
+  it('keeps uncertain as its own display state (not rolled into needs_action)', async () => {
+    const { getEmailDisplayState } = await import('@/lib/email-classification')
+    expect(getEmailDisplayState({ classification: 'uncertain', actioned: false })).toBe('uncertain')
+    expect(getEmailDisplayState({ classification: 'action', actioned: false })).toBe('needs_action')
+    expect(getEmailDisplayState({ classification: 'awareness', actioned: false })).toBe('fyi')
+    expect(getEmailDisplayState({ classification: 'ignore', actioned: false })).toBe('ignored')
+    expect(getEmailDisplayState({ classification: null })).toBe('needs_action')
   })
 
   it('returns tracked when actioned is true regardless of classification', async () => {
-    const { getEmailBucket } = await import('@/lib/email-classification')
-    expect(getEmailBucket({ classification: 'action', actioned: true })).toBe('tracked')
-    expect(getEmailBucket({ classification: 'awareness', actioned: true })).toBe('tracked')
-    expect(getEmailBucket({ classification: 'uncertain', actioned: true })).toBe('tracked')
+    const { getEmailDisplayState } = await import('@/lib/email-classification')
+    expect(getEmailDisplayState({ classification: 'action', actioned: true })).toBe('tracked')
+    expect(getEmailDisplayState({ classification: 'awareness', actioned: true })).toBe('tracked')
+    expect(getEmailDisplayState({ classification: 'uncertain', actioned: true })).toBe('tracked')
   })
 })
