@@ -70,7 +70,12 @@ describe('POST /api/emails/create-task', () => {
     expect(mockProjectContext.findFirst).not.toHaveBeenCalled()
     expect(mockMatterMemory.create).not.toHaveBeenCalled()
     expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ matterId: undefined }),
+      data: expect.objectContaining({
+        matterId: undefined,
+        status: 'confirmed',
+        confirmedAt: expect.any(Date),
+        source: 'manual',
+      }),
     }))
   })
 

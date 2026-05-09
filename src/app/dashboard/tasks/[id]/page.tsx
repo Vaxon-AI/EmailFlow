@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/page-header'
 import { StatePanel } from '@/components/state-panel'
 import { InlineNotice } from '@/components/inline-notice'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Select, SelectContent, SelectItem, SelectTrigger,
 } from '@/components/ui/select'
@@ -22,9 +23,9 @@ import {
   ArrowLeft, Mail, Calendar, TrendingUp, ExternalLink,
   CheckCircle2, ListChecks, FileText, Sparkles, ThumbsUp,
   X, AlertTriangle, Shield, RotateCcw, Square, CheckSquare, Plus,
-  UserRound, ChevronRight, FolderOpen, Pencil,
+  UserRound, ChevronRight, FolderOpen, Pencil, Check, Trash2,
 } from 'lucide-react'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { getPriorityBand, getPriorityColor, getPriorityLabel } from '@/types'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
@@ -64,6 +65,14 @@ type TaskEmailLink = {
     receivedAt: string
     threadId?: string | null
   }
+}
+
+type RecentEmail = {
+  id: string
+  subject: string
+  sender: string
+  receivedAt: string
+  project: { id: string; name: string } | null
 }
 
 function parseActionItems(raw: unknown): ChecklistItem[] {
@@ -217,11 +226,50 @@ export default function TaskDetailPage() {
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [unlinkingEmailId, setUnlinkingEmailId] = useState<string | null>(null)
+  const [linkingEmailId, setLinkingEmailId] = useState<string | null>(null)
+  const [emailPickerOpen, setEmailPickerOpen] = useState(false)
+  const [emailPickerQuery, setEmailPickerQuery] = useState('')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [editingField, setEditingField] = useState<string | null>(null)
   const [showReassign, setShowReassign] = useState(false)
   const [showChecklistCompleteDialog, setShowChecklistCompleteDialog] = useState(false)
   const waitingItemIdRef = useRef<string | null>(null)
+
+  const goBack = useCallback(() => {
+    if (window.history.length > 1) {
+      router.back()
+      return
+    }
+    router.push('/dashboard/tasks')
+  }, [router])
+
+  const emailLinks = useMemo(
+    () => ((task?.emailLinks as TaskEmailLink[] | undefined) ?? []),
+    [task?.emailLinks]
+  )
+  const linkedEmailIdSet = useMemo(
+    () => new Set(emailLinks.map((link) => link.email.id)),
+    [emailLinks]
+  )
+
+  const { data: recentEmailsRes } = useQuery({
+    queryKey: ['recent-emails-for-task-link', taskId],
+    queryFn: () => fetch('/api/emails?page=1&limit=50').then((r) => r.json()),
+    staleTime: CACHE_TIME.list,
+    enabled: Boolean(task),
+  })
+  const recentEmails = useMemo<RecentEmail[]>(
+    () => recentEmailsRes?.data ?? [],
+    [recentEmailsRes]
+  )
+  const filteredRecentEmails = useMemo(() => {
+    const q = emailPickerQuery.trim().toLowerCase()
+    return recentEmails.filter((email) => {
+      if (linkedEmailIdSet.has(email.id)) return false
+      if (!q) return true
+      return email.subject?.toLowerCase().includes(q) || email.sender?.toLowerCase().includes(q)
+    })
+  }, [emailPickerQuery, linkedEmailIdSet, recentEmails])
 
   useEffect(() => {
     if (task) {
@@ -326,6 +374,25 @@ export default function TaskDetailPage() {
         },
       }
     )
+  }
+
+  const handleDeleteTask = async () => {
+    setActionCooldown(true)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        showError('Failed to delete task')
+        setActionCooldown(false)
+        return
+      }
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      toast.success('Task deleted')
+      router.push('/dashboard/tasks')
+    } catch {
+      showError('Failed to delete task')
+      setActionCooldown(false)
+    }
   }
 
   const autoSaveChecklist = (items: ChecklistItem[]) => {
@@ -479,6 +546,28 @@ export default function TaskDetailPage() {
     }
   }
 
+  const linkEmail = async (emailId: string) => {
+    setLinkingEmailId(emailId)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/emails/${emailId}`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+        queryClient.invalidateQueries({ queryKey: ['tasks'] })
+        setEmailPickerOpen(false)
+        setEmailPickerQuery('')
+        toast.success('Email linked')
+      } else {
+        showError('Failed to link email')
+      }
+    } catch {
+      showError('Failed to link email')
+    } finally {
+      setLinkingEmailId(null)
+    }
+  }
+
   if (isLoading) {
     return (
       <StatePanel
@@ -492,7 +581,7 @@ export default function TaskDetailPage() {
   if (!task) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" onClick={() => router.push('/dashboard/tasks')} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
+        <Button variant="ghost" onClick={goBack} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
           <ArrowLeft className="h-4 w-4" />
           Back to tasks
         </Button>
@@ -517,11 +606,14 @@ export default function TaskDetailPage() {
   const StsIcon = sts.icon
   const project = task.project ?? null
   const matter = task.matter ?? null
-  const threadId = task.emailLinks?.[0]?.email?.threadId ?? null
+  const threadId = emailLinks[0]?.email?.threadId ?? null
+  const hasAiAnalysis = Boolean(
+    task.priorityReason && (task.source === 'ai_auto' || task.source === 'copy_text')
+  )
 
   return (
     <div className="animate-in fade-in duration-200">
-      <Button variant="ghost" onClick={() => router.push('/dashboard/tasks')} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
+      <Button variant="ghost" onClick={goBack} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
         <ArrowLeft className="h-4 w-4" />
         Back to tasks
       </Button>
@@ -533,7 +625,7 @@ export default function TaskDetailPage() {
             month: 'short',
             day: 'numeric',
             year: 'numeric',
-          })} · ${task.emailLinks?.length || 0} linked email${task.emailLinks?.length === 1 ? '' : 's'}`}
+          })} · ${emailLinks.length} linked email${emailLinks.length === 1 ? '' : 's'}`}
         />
 
         <button
@@ -601,9 +693,9 @@ export default function TaskDetailPage() {
                         <ThumbsUp className="h-3.5 w-3.5" />
                         Activate
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => handleStatusChange('dismissed')}>
-                        <X className="h-3.5 w-3.5" />
-                        Dismiss
+                      <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={handleDeleteTask}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
                       </Button>
                     </div>
                   </div>
@@ -911,7 +1003,7 @@ export default function TaskDetailPage() {
         {/* Right sidebar */}
         <div className="space-y-4">
           {/* AI Analysis */}
-          {task.priorityReason && (
+          {hasAiAnalysis && (
             <Card className="animate-fade-in-up stagger-4 border-yellow-200 bg-gradient-to-br from-yellow-50/50 to-white shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm">
@@ -926,8 +1018,7 @@ export default function TaskDetailPage() {
           )}
 
           {/* Checklist — fully editable */}
-          {checklistItems.length > 0 && (
-            <Card className="animate-fade-in-up stagger-5 border-white/70 bg-white/95 shadow-sm">
+          <Card className="animate-fade-in-up stagger-5 border-white/70 bg-white/95 shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-sm">
@@ -947,6 +1038,17 @@ export default function TaskDetailPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 px-3 pt-3">
+                {checklistItems.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => addItem()}
+                    className="flex w-full items-center gap-2 rounded-lg border border-dashed border-blue-200 bg-blue-50/40 px-3 py-3 text-left text-xs text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-50"
+                  >
+                    <Plus className="h-4 w-4 shrink-0" />
+                    <span>Add the first checklist item</span>
+                  </button>
+                )}
+
                 {/* Progress bar */}
                 {checklistItems.length > 1 && (
                   <div className="mb-3 h-1.5 rounded-full bg-gray-100 overflow-hidden">
@@ -1137,20 +1239,71 @@ export default function TaskDetailPage() {
                 </ul>
               </CardContent>
             </Card>
-          )}
 
           {/* Source Emails */}
-          {task.emailLinks?.length > 0 && (
-            <Card className="animate-fade-in-up stagger-6 border-white/70 bg-white/95 shadow-sm">
+          <Card className="animate-fade-in-up stagger-6 border-white/70 bg-white/95 shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4 text-blue-600" />
-                  Source Emails
-                  <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">{task.emailLinks.length}</span>
-                </CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Mail className="h-4 w-4 text-blue-600" />
+                    Source Emails
+                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">{emailLinks.length}</span>
+                  </CardTitle>
+                  <Popover open={emailPickerOpen} onOpenChange={setEmailPickerOpen}>
+                    <PopoverTrigger
+                      render={
+                        <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-xs">
+                          <Plus className="h-3.5 w-3.5" />
+                          Link
+                        </Button>
+                      }
+                    />
+                    <PopoverContent className="w-[360px] p-0" align="end">
+                      <div className="space-y-2 border-b p-2">
+                        <Input
+                          placeholder="Search by subject or sender..."
+                          value={emailPickerQuery}
+                          onChange={(e) => setEmailPickerQuery(e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <div className="max-h-[260px] overflow-y-auto">
+                        {filteredRecentEmails.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-muted-foreground">
+                            {recentEmails.length === 0 ? 'No emails available' : 'No emails match your search'}
+                          </div>
+                        ) : (
+                          filteredRecentEmails.map((email) => {
+                            const isLinking = linkingEmailId === email.id
+                            return (
+                              <button
+                                key={email.id}
+                                type="button"
+                                onClick={() => linkEmail(email.id)}
+                                disabled={isLinking}
+                                className="flex w-full items-start gap-2 border-b border-border/50 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 disabled:opacity-50"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate font-medium">{email.subject || '(no subject)'}</div>
+                                  <div className="truncate text-muted-foreground">{email.sender}</div>
+                                </div>
+                                {isLinking && <Check className="size-3.5 shrink-0 text-blue-600" />}
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {(task.emailLinks as TaskEmailLink[]).map((link) => {
+                {emailLinks.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3 text-xs text-slate-500">
+                    No source email linked.
+                  </div>
+                )}
+                {emailLinks.map((link) => {
                   const senderName = link.email.sender?.split('<')[0]?.trim()
                   const senderInitial = (senderName || 'U')[0].toUpperCase()
                   const isUnlinking = unlinkingEmailId === link.email.id
@@ -1193,7 +1346,6 @@ export default function TaskDetailPage() {
                 })}
               </CardContent>
             </Card>
-          )}
 
           {/* Task metadata */}
           <Card className="animate-fade-in-up stagger-7 border-white/70 bg-white/95 shadow-sm">

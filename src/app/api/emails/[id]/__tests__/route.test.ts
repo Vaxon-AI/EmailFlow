@@ -80,10 +80,10 @@ describe('PATCH /api/emails/[id]', () => {
     expect(res.status).toBe(404)
   })
 
-  it('updates classification and returns updated email', async () => {
+  it('routes legacy classification updates through manual bucket handling', async () => {
     mockFindEmailById.mockResolvedValue(STORED_EMAIL as never)
     const updated = { ...STORED_EMAIL, classification: 'ignore' }
-    mockUpdateClassification.mockResolvedValue(updated as never)
+    mockSetEmailBucket.mockResolvedValue(updated as never)
 
     const req = new NextRequest('http://localhost/api/emails/email-1', {
       method: 'PATCH',
@@ -93,12 +93,8 @@ describe('PATCH /api/emails/[id]', () => {
 
     const res = await PATCH(req, { params: Promise.resolve({ id: 'email-1' }) })
 
-    expect(mockUpdateClassification).toHaveBeenCalledWith('email-1', {
-      category: 'ignore',
-      confidence: 0.9,
-      reasoning: 'Manually updated to ignore',
-      isWorkRelated: false,
-    })
+    expect(mockSetEmailBucket).toHaveBeenCalledWith('email-1', 'ignored')
+    expect(mockUpdateClassification).not.toHaveBeenCalled()
     expect(res.status).toBe(200)
     expect((await res.json()).data.classification).toBe('ignore')
   })
@@ -117,9 +113,9 @@ describe('PATCH /api/emails/[id]', () => {
     expect(res.status).toBe(400)
   })
 
-  it('sets isWorkRelated to true for non-ignore classifications', async () => {
+  it('maps legacy action classification to needs_action bucket', async () => {
     mockFindEmailById.mockResolvedValue({ ...STORED_EMAIL, classConfidence: 0.8 } as never)
-    mockUpdateClassification.mockResolvedValue({} as never)
+    mockSetEmailBucket.mockResolvedValue({} as never)
 
     const req = new NextRequest('http://localhost/api/emails/email-1', {
       method: 'PATCH',
@@ -129,9 +125,8 @@ describe('PATCH /api/emails/[id]', () => {
 
     await PATCH(req, { params: Promise.resolve({ id: 'email-1' }) })
 
-    expect(mockUpdateClassification).toHaveBeenCalledWith('email-1', expect.objectContaining({
-      isWorkRelated: true,
-    }))
+    expect(mockSetEmailBucket).toHaveBeenCalledWith('email-1', 'needs_action')
+    expect(mockUpdateClassification).not.toHaveBeenCalled()
   })
 
   it('routes bucket=tracked to setEmailBucket (not updateClassification)', async () => {

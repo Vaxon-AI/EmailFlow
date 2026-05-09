@@ -177,7 +177,8 @@ describe('POST /api/tasks', () => {
         userId: 'user-1',
         title: 'Follow up',
         summary: 'Call the client',
-        status: 'pending',
+        status: 'confirmed',
+        confirmedAt: expect.any(Date),
         urgency: 4,
         impact: 5,
         priorityScore: 20,
@@ -211,7 +212,8 @@ describe('POST /api/tasks', () => {
         userId: 'user-1',
         title: 'Inbox zero',
         summary: '',
-        status: 'pending',
+        status: 'confirmed',
+        confirmedAt: expect.any(Date),
         urgency: 3,
         impact: 3,
         priorityScore: 9,
@@ -237,6 +239,26 @@ describe('POST /api/tasks', () => {
 
     expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ startDate: new Date('2026-05-10') }),
+    }))
+  })
+
+  it('keeps copy_text AI extraction tasks pending for review', async () => {
+    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'Drafted by AI' } as never)
+
+    const req = new NextRequest('http://localhost/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Drafted by AI', source: 'copy_text' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    await POST(req)
+
+    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'pending',
+        confirmedAt: null,
+        source: 'copy_text',
+      }),
     }))
   })
 

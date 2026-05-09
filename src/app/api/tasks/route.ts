@@ -47,6 +47,8 @@ export async function POST(req: NextRequest) {
     const user = await getAuthUser()
 
     const { title, summary, actionItems, userSetDeadline, startDate, urgency, impact, priorityScore, projectId, source, emailIds } = await req.json()
+    const taskSource = source ?? 'manual'
+    const taskStatus = taskSource === 'copy_text' ? 'pending' : 'confirmed'
 
     if (!title) {
       return error('BAD_REQUEST', 'Title is required', 400)
@@ -79,14 +81,15 @@ export async function POST(req: NextRequest) {
         userId: user.id,
         title,
         summary: summary || '',
-        status: 'pending',
+        status: taskStatus,
+        confirmedAt: taskStatus === 'confirmed' ? new Date() : null,
         urgency: urgency ?? 3,
         impact: impact ?? 3,
         priorityScore: priorityScore ?? 9,
         actionItems: actionItems ?? '[]',
         userSetDeadline: userSetDeadline ? new Date(userSetDeadline) : undefined,
         startDate: startDate ? new Date(startDate) : undefined,
-        source: source ?? 'manual',
+        source: taskSource,
         matterId,
       },
     })

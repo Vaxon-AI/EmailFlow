@@ -61,6 +61,12 @@ export async function PATCH(
     const existing = await taskRepo.findTaskById(user.id, id)
     if (!existing) return error('NOT_FOUND', 'Task not found', 404)
 
+    if (body.status === 'dismissed') {
+      await taskRepo.deleteTask(id, user.id)
+      invalidateStatsCache(user.id)
+      return success({ deleted: true })
+    }
+
     const allowed: AllowedTaskField[] = [
       'title', 'summary', 'status', 'urgency', 'impact',
       'startDate', 'userSetDeadline', 'userNotes', 'checkedActionItems', 'actionItems',
@@ -124,9 +130,6 @@ export async function PATCH(
     if (body.status === 'confirmed') {
       data.confirmedAt = new Date()
       data.dismissedAt = null
-      data.completedAt = null
-    } else if (body.status === 'dismissed') {
-      data.dismissedAt = new Date()
       data.completedAt = null
     } else if (body.status === 'completed') {
       data.completedAt = new Date()

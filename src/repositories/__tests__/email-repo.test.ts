@@ -264,6 +264,8 @@ describe('setEmailBucket', () => {
         classification: 'action',
         actioned: false,
         awaitingReview: false,
+        classConfidence: null,
+        classReasoning: null,
         processingStatus: 'done',
       }),
     })

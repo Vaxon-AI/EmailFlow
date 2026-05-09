@@ -44,12 +44,16 @@ export async function PATCH(
     }
 
     if (body.classification) {
-      const updated = await emailRepo.updateClassification(id, {
-        category: body.classification,
-        confidence: existing.classConfidence || 0.5,
-        reasoning: `Manually updated to ${body.classification}`,
-        isWorkRelated: body.classification !== 'ignore',
-      })
+      const legacyBucketMap: Record<string, emailRepo.EmailBucket> = {
+        action: 'needs_action',
+        awareness: 'fyi',
+        ignore: 'ignored',
+      }
+      const bucket = legacyBucketMap[body.classification]
+      if (!bucket) {
+        return error('BAD_REQUEST', `Invalid classification: ${body.classification}`, 400)
+      }
+      const updated = await emailRepo.setEmailBucket(id, bucket)
       return success(updated)
     }
 

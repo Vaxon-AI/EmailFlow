@@ -173,6 +173,22 @@ describe('PATCH /api/tasks/[id]', () => {
     )
   })
 
+  it('hard deletes task when legacy callers send dismissed status', async () => {
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'dismissed' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'task-1' }) })
+
+    expect(mockDeleteTask).toHaveBeenCalledWith('task-1', 'user-1')
+    expect(mockUpdateTask).not.toHaveBeenCalled()
+    expect(mockInvalidateStatsCache).toHaveBeenCalledWith('user-1')
+    expect(res.status).toBe(200)
+    expect((await res.json()).data.deleted).toBe(true)
+  })
+
   it('clears all timestamps when status changes to pending', async () => {
     const req = new NextRequest('http://localhost', {
       method: 'PATCH',

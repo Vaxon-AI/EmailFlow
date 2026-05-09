@@ -31,7 +31,7 @@ import {
   Copy, RefreshCw, Save, CheckCircle2, TriangleAlert, EyeOff,
 } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import {
@@ -98,6 +98,14 @@ export default function EmailDetailPage() {
   const [taskJustCreated, setTaskJustCreated] = useState(false)
   const [extractionTimedOut, setExtractionTimedOut] = useState(false)
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const goBack = useCallback(() => {
+    if (window.history.length > 1) {
+      router.back()
+      return
+    }
+    router.push('/dashboard/emails')
+  }, [router])
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['email', emailId],
@@ -417,7 +425,7 @@ export default function EmailDetailPage() {
   if (!email) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" onClick={() => router.push('/dashboard/emails')} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
+        <Button variant="ghost" onClick={goBack} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
           <ArrowLeft className="h-4 w-4" />
           Back to inbox
         </Button>
@@ -453,11 +461,16 @@ export default function EmailDetailPage() {
   const canShowReplyDraft = email.classification === 'action' || taskLinks.length > 0 || !!email.aiReplyDraft
   const canGenerateReply = email.retentionStatus !== 'PURGED'
   const canExtractTask = email.classification === 'action' && taskLinks.length === 0
+  const hasAiAnalysis = Boolean(
+    email.classReasoning &&
+    typeof email.classConfidence === 'number' &&
+    !email.classReasoning.startsWith('Manually updated')
+  )
 
   return (
     <div className="animate-in fade-in duration-200">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => router.push('/dashboard/emails')} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
+        <Button variant="ghost" onClick={goBack} className="w-fit gap-2 px-0 text-gray-500 hover:bg-transparent hover:text-gray-900">
           <ArrowLeft className="h-4 w-4" />
           Back to inbox
         </Button>
@@ -536,12 +549,6 @@ export default function EmailDetailPage() {
                   <ClsIcon className="h-3 w-3" />
                   {cls.label}
                 </Badge>
-                {email.classConfidence && (
-                  <Badge variant="outline" className="gap-1 bg-white/60 text-gray-500 border-gray-200 text-[10px]">
-                    <Sparkles className="h-3 w-3" />
-                    {Math.round(email.classConfidence * 100)}% confidence
-                  </Badge>
-                )}
                 {email.hasAttachments && (
                   <Badge variant="outline" className="gap-1 bg-white/60 text-gray-500 border-gray-200 text-[10px]">
                     <Paperclip className="h-3 w-3" />
@@ -705,13 +712,18 @@ export default function EmailDetailPage() {
             </Card>
           )}
 
-          {email.classReasoning && (
+          {hasAiAnalysis && (
             <Card className="animate-fade-in-up stagger-6 border-yellow-200 bg-gradient-to-br from-yellow-50/55 to-white shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <Sparkles className="h-4 w-4 text-yellow-600" />
-                  AI Analysis
-                </CardTitle>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Sparkles className="h-4 w-4 text-yellow-600" />
+                    AI Analysis
+                  </CardTitle>
+                  <Badge variant="outline" className="shrink-0 gap-1 bg-white/70 text-yellow-700 border-yellow-200 text-[10px]">
+                    {Math.round(email.classConfidence * 100)}% confidence
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent>
                 <p className="text-sm leading-6 text-yellow-900/85">{email.classReasoning}</p>
@@ -919,12 +931,6 @@ export default function EmailDetailPage() {
                   <dt className="text-gray-400">Classification</dt>
                   <dd className="font-medium text-gray-700">{cls.label}</dd>
                 </div>
-                {email.classConfidence && (
-                  <div className="flex justify-between">
-                    <dt className="text-gray-400">Confidence</dt>
-                    <dd className="font-medium text-gray-700">{Math.round(email.classConfidence * 100)}%</dd>
-                  </div>
-                )}
                 <div className="flex justify-between">
                   <dt className="text-gray-400">Received</dt>
                   <dd className="font-medium text-gray-700">{new Date(email.receivedAt).toLocaleDateString()}</dd>

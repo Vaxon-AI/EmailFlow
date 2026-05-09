@@ -169,7 +169,12 @@ export async function setEmailBucket(emailId: string, bucket: EmailBucket) {
   })()
   return prisma.email.update({
     where: { id: emailId },
-    data: { ...data, classConfidence: 1, processingStatus: 'done' },
+    data: {
+      ...data,
+      classConfidence: null,
+      classReasoning: null,
+      processingStatus: 'done',
+    },
   })
 }
 
