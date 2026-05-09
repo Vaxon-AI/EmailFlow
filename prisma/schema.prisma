@@ -38,6 +38,7 @@ model User {
   planActivatedAt             DateTime?
   classifyUsed                Int                  @default(0)
   extractUsed                 Int                  @default(0)
+  pasteTextUsed               Int                  @default(0)
   quotaResetAt                DateTime             @default(now())
   accounts                    Account[]
   digests                     Digest[]

@@ -2,13 +2,14 @@ import { prisma } from '@/lib/prisma'
 
 export const FREE_CLASSIFY_LIMIT = 100
 export const FREE_EXTRACT_LIMIT = 10
+export const FREE_PASTE_TEXT_LIMIT = 3
 const QUOTA_PERIOD_MS = 30 * 24 * 60 * 60 * 1000
 
 async function maybeResetQuota(userId: string): Promise<void> {
   const cutoff = new Date(Date.now() - QUOTA_PERIOD_MS)
   await prisma.user.updateMany({
     where: { id: userId, quotaResetAt: { lt: cutoff } },
-    data: { classifyUsed: 0, extractUsed: 0, quotaResetAt: new Date() },
+    data: { classifyUsed: 0, extractUsed: 0, pasteTextUsed: 0, quotaResetAt: new Date() },
   })
 }
 
@@ -32,6 +33,16 @@ export async function getExtractRemaining(userId: string): Promise<number> {
   return Math.max(0, FREE_EXTRACT_LIMIT - user.extractUsed)
 }
 
+export async function getPasteTextRemaining(userId: string): Promise<number> {
+  await maybeResetQuota(userId)
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { plan: true, pasteTextUsed: true },
+  })
+  if (user.plan !== 'free') return Infinity
+  return Math.max(0, FREE_PASTE_TEXT_LIMIT - user.pasteTextUsed)
+}
+
 export async function incrementClassifyUsed(userId: string): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
@@ -46,11 +57,18 @@ export async function incrementExtractUsed(userId: string): Promise<void> {
   })
 }
 
+export async function incrementPasteTextUsed(userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { pasteTextUsed: { increment: 1 } },
+  })
+}
+
 export async function getQuotaStatus(userId: string) {
   await maybeResetQuota(userId)
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { plan: true, classifyUsed: true, extractUsed: true, quotaResetAt: true },
+    select: { plan: true, classifyUsed: true, extractUsed: true, pasteTextUsed: true, quotaResetAt: true },
   })
   const isPro = user.plan !== 'free'
   const resetAt = new Date(user.quotaResetAt.getTime() + QUOTA_PERIOD_MS)
@@ -64,6 +82,11 @@ export async function getQuotaStatus(userId: string) {
     extract: {
       used: user.extractUsed,
       limit: isPro ? null : FREE_EXTRACT_LIMIT,
+      resetAt,
+    },
+    pasteText: {
+      used: user.pasteTextUsed,
+      limit: isPro ? null : FREE_PASTE_TEXT_LIMIT,
       resetAt,
     },
   }

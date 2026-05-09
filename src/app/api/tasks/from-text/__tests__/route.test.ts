@@ -17,14 +17,23 @@ vi.mock('@/ai/skills/score-priority', () => ({
   scorePriority: vi.fn(),
 }))
 
+vi.mock('@/lib/quota', () => ({
+  getPasteTextRemaining: vi.fn(),
+  incrementPasteTextUsed: vi.fn(),
+  FREE_PASTE_TEXT_LIMIT: 3,
+}))
+
 import { getAuthUser } from '@/lib/api-helpers'
 import { extractTask } from '@/ai/skills/extract-task'
 import { scorePriority } from '@/ai/skills/score-priority'
+import { getPasteTextRemaining, incrementPasteTextUsed } from '@/lib/quota'
 import { POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockExtractTask = vi.mocked(extractTask)
 const mockScorePriority = vi.mocked(scorePriority)
+const mockGetPasteTextRemaining = vi.mocked(getPasteTextRemaining)
+const mockIncrementPasteTextUsed = vi.mocked(incrementPasteTextUsed)
 
 const EXTRACTED_TASK = {
   title: 'Review the contract',
@@ -54,7 +63,8 @@ function postRequest(body: object): NextRequest {
 describe('POST /api/tasks/from-text', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetAuthUser.mockResolvedValue({ id: 'user-1' } as never)
+    mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'free' } as never)
+    mockGetPasteTextRemaining.mockResolvedValue(3)
     mockExtractTask.mockResolvedValue({ tasks: [EXTRACTED_TASK] } as never)
     mockScorePriority.mockResolvedValue(PRIORITY_RESULT as never)
   })
@@ -97,6 +107,28 @@ describe('POST /api/tasks/from-text', () => {
     expect(body.data.tasks[0].impact).toBe(5)
     expect(body.data.tasks[0].priorityScore).toBe(20)
     expect(body.data.tasks[0].splitReason).toBeNull()
+    expect(mockIncrementPasteTextUsed).toHaveBeenCalledWith('user-1')
+  })
+
+  it('returns 402 when a free user has exhausted Paste Text quota', async () => {
+    mockGetPasteTextRemaining.mockResolvedValue(0)
+
+    const res = await POST(postRequest({ text: 'Please review the contract.' }))
+
+    expect(res.status).toBe(402)
+    expect((await res.json()).error.code).toBe('QUOTA_EXCEEDED')
+    expect(mockExtractTask).not.toHaveBeenCalled()
+    expect(mockIncrementPasteTextUsed).not.toHaveBeenCalled()
+  })
+
+  it('does not check or increment Paste Text quota for pro users', async () => {
+    mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'pro' } as never)
+
+    const res = await POST(postRequest({ text: 'Please review the contract.' }))
+
+    expect(res.status).toBe(200)
+    expect(mockGetPasteTextRemaining).not.toHaveBeenCalled()
+    expect(mockIncrementPasteTextUsed).not.toHaveBeenCalled()
   })
 
   it('returns multiple drafts and scores priority for each candidate', async () => {

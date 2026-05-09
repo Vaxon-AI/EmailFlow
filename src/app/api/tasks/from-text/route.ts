@@ -3,15 +3,23 @@ import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
 import { extractTask } from '@/ai/skills/extract-task'
 import { scorePriority } from '@/ai/skills/score-priority'
+import { FREE_PASTE_TEXT_LIMIT, getPasteTextRemaining, incrementPasteTextUsed } from '@/lib/quota'
 
 export async function POST(req: NextRequest) {
   try {
-    await getAuthUser()
+    const user = await getAuthUser()
 
     const { text } = await req.json()
 
     if (!text || typeof text !== 'string') {
       return error('BAD_REQUEST', 'Text is required', 400)
+    }
+
+    if (user.plan === 'free') {
+      const remaining = await getPasteTextRemaining(user.id)
+      if (remaining <= 0) {
+        return error('QUOTA_EXCEEDED', `Free plan limit of ${FREE_PASTE_TEXT_LIMIT} Paste Text extractions reached. Upgrade to Pro for unlimited access.`, 402)
+      }
     }
 
     const truncated = text.slice(0, 1000)
@@ -51,6 +59,10 @@ export async function POST(req: NextRequest) {
         splitReason: task.splitReason,
       }
     }))
+
+    if (user.plan === 'free') {
+      await incrementPasteTextUsed(user.id)
+    }
 
     return success({ tasks })
   } catch (err) {
