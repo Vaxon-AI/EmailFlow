@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     email: {
-      findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
@@ -30,6 +30,7 @@ import {
   countQuotaSkipped,
   countAwaitingReview,
   setEmailBucket,
+  bulkSetEmailBucket,
 } from '../email-repo'
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,14 @@ function makeMessage(id = 'gmail-msg-1') {
   }
 }
 
+function makeAccountMessage(id = 'gmail-msg-1', accountId = 'account-1') {
+  return {
+    ...makeMessage(id),
+    accountId,
+    accountEmail: `${accountId}@gmail.com`,
+  }
+}
+
 const EXISTING_EMAIL = { id: 'email-1', gmailMessageId: 'gmail-msg-1' }
 const CREATED_EMAIL = { id: 'email-new', gmailMessageId: 'gmail-msg-2' }
 
@@ -67,7 +76,7 @@ beforeEach(() => {
 
 describe('storeEmail — dedup logic', () => {
   it('returns wasCreated: false and the existing record without calling create', async () => {
-    mockPrismaEmail.findUnique.mockResolvedValue(EXISTING_EMAIL as any)
+    mockPrismaEmail.findFirst.mockResolvedValue(EXISTING_EMAIL as any)
 
     const result = await storeEmail({ userId: 'user-1', message: makeMessage() })
 
@@ -77,7 +86,7 @@ describe('storeEmail — dedup logic', () => {
   })
 
   it('calls create and returns wasCreated: true for a new message ID', async () => {
-    mockPrismaEmail.findUnique.mockResolvedValue(null)
+    mockPrismaEmail.findFirst.mockResolvedValue(null)
     mockPrismaEmail.create.mockResolvedValue(CREATED_EMAIL as any)
 
     const result = await storeEmail({ userId: 'user-1', message: makeMessage('gmail-msg-2') })
@@ -87,7 +96,7 @@ describe('storeEmail — dedup logic', () => {
   })
 
   it('passes the correct userId and gmailMessageId to create', async () => {
-    mockPrismaEmail.findUnique.mockResolvedValue(null)
+    mockPrismaEmail.findFirst.mockResolvedValue(null)
     mockPrismaEmail.create.mockResolvedValue(CREATED_EMAIL as any)
 
     await storeEmail({ userId: 'user-42', message: makeMessage('msg-x') })
@@ -103,7 +112,7 @@ describe('storeEmail — dedup logic', () => {
   })
 
   it('encodes labels and recipients as JSON strings', async () => {
-    mockPrismaEmail.findUnique.mockResolvedValue(null)
+    mockPrismaEmail.findFirst.mockResolvedValue(null)
     mockPrismaEmail.create.mockResolvedValue(CREATED_EMAIL as any)
 
     const message = { ...makeMessage('msg-y'), labels: ['INBOX', 'IMPORTANT'], recipients: ['a@b.com', 'c@d.com'] }
@@ -115,7 +124,7 @@ describe('storeEmail — dedup logic', () => {
   })
 
   it('sets processingStatus to "pending" on creation', async () => {
-    mockPrismaEmail.findUnique.mockResolvedValue(null)
+    mockPrismaEmail.findFirst.mockResolvedValue(null)
     mockPrismaEmail.create.mockResolvedValue(CREATED_EMAIL as any)
 
     await storeEmail({ userId: 'user-1', message: makeMessage('msg-z') })
@@ -125,12 +134,35 @@ describe('storeEmail — dedup logic', () => {
   })
 
   it('does not call create a second time for the same message ID', async () => {
-    mockPrismaEmail.findUnique.mockResolvedValue(EXISTING_EMAIL as any)
+    mockPrismaEmail.findFirst.mockResolvedValue(EXISTING_EMAIL as any)
 
     await storeEmail({ userId: 'user-1', message: makeMessage() })
     await storeEmail({ userId: 'user-1', message: makeMessage() })
 
     expect(mockPrismaEmail.create).not.toHaveBeenCalled()
+  })
+
+  it('deduplicates by user, account, and provider message ID', async () => {
+    mockPrismaEmail.findFirst.mockResolvedValue(null)
+    mockPrismaEmail.create.mockResolvedValue(CREATED_EMAIL as any)
+
+    await storeEmail({ userId: 'user-1', message: makeAccountMessage('shared-msg', 'account-1') })
+
+    expect(mockPrismaEmail.findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-1',
+        gmailMessageId: 'shared-msg',
+        accountId: 'account-1',
+      },
+    })
+    expect(mockPrismaEmail.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          accountId: 'account-1',
+          accountEmail: 'account-1@gmail.com',
+        }),
+      })
+    )
   })
 })
 
@@ -299,6 +331,26 @@ describe('setEmailBucket', () => {
     const call = (mockPrismaEmail.update as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.data.classification).toBe('ignore')
     expect(call.data.actioned).toBe(true)
+  })
+})
+
+describe('bulkSetEmailBucket', () => {
+  it('maps selected emails to a bucket scoped to userId', async () => {
+    mockPrismaEmail.updateMany.mockResolvedValue({ count: 2 } as never)
+
+    await bulkSetEmailBucket('user-1', ['email-1', 'email-2'], 'tracked')
+
+    expect(mockPrismaEmail.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['email-1', 'email-2'] }, userId: 'user-1' },
+      data: expect.objectContaining({
+        classification: 'action',
+        actioned: true,
+        awaitingReview: false,
+        classConfidence: null,
+        classReasoning: null,
+        processingStatus: 'done',
+      }),
+    })
   })
 })
 

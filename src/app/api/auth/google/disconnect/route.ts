@@ -1,12 +1,13 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { errorFromException } from '@/lib/api-helpers'
 import { gmailProvider } from '@/integrations'
 import { requireCurrentUser } from '@/lib/auth-session'
 import { prisma } from '@/lib/prisma'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     const user = await requireCurrentUser()
+    const { accountId } = await req.json().catch(() => ({ accountId: undefined }))
 
     const fullUser = await prisma.user.findUnique({
       where: { id: user.id },
@@ -20,10 +21,11 @@ export async function POST() {
       )
     }
 
-    await Promise.all([
-      gmailProvider.disconnect(user.id),
-      prisma.account.deleteMany({ where: { userId: user.id, provider: 'google' } }),
-    ])
+    if (accountId && typeof accountId !== 'string') {
+      return NextResponse.json({ success: false, error: 'Invalid accountId' }, { status: 400 })
+    }
+
+    await gmailProvider.disconnect(user.id, accountId)
 
     return NextResponse.json({ success: true })
   } catch (err) {

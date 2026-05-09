@@ -502,11 +502,17 @@ async function main() {
   ]
 
   for (const e of emails) {
-    await prisma.email.upsert({
-      where: { gmailMessageId: e.gmailMessageId },
-      update: { userId: user.id, ...e, processedAt: new Date() },
-      create: { userId: user.id, ...e, processedAt: new Date() },
-    })
+    const existing = await prisma.email.findFirst({ where: { userId: user.id, gmailMessageId: e.gmailMessageId } })
+    if (existing) {
+      await prisma.email.update({
+        where: { id: existing.id },
+        data: { userId: user.id, ...e, processedAt: new Date() },
+      })
+    } else {
+      await prisma.email.create({
+        data: { userId: user.id, ...e, processedAt: new Date() },
+      })
+    }
   }
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
@@ -630,7 +636,7 @@ async function main() {
   const createdTasks: Record<string, string> = {} // msgId → taskId
 
   for (const bp of taskBlueprints) {
-    const sourceEmail = await prisma.email.findUnique({ where: { gmailMessageId: bp.msgId } })
+    const sourceEmail = await prisma.email.findFirst({ where: { userId: user.id, gmailMessageId: bp.msgId } })
     if (!sourceEmail) continue
 
     let task = await prisma.task.findFirst({ where: { userId: user.id, title: bp.title } })

@@ -32,7 +32,7 @@ import * as emailRepo from '@/repositories/email-repo'
 import * as taskRepo from '@/repositories/task-repo'
 import * as digestRepo from '@/repositories/digest-repo'
 import { prisma } from '@/lib/prisma'
-import { createDailyDigest, createWeeklyDigest } from '../digest-pipeline'
+import { createDailyDigest, createWeeklyDigest, previewDigest } from '../digest-pipeline'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -44,7 +44,7 @@ function makeEmail(subject: string, sender = 'sender@example.com') {
   return { subject, sender }
 }
 
-function makeTask(title: string, status: 'confirmed' | 'pending', priorityScore: number | null = null) {
+function makeTask(title: string, status: 'confirmed' | 'pending' | 'completed', priorityScore: number | null = null) {
   return { title, status, priorityScore, userSetDeadline: null, explicitDeadline: null, inferredDeadline: null }
 }
 
@@ -100,14 +100,14 @@ describe('createDailyDigest', () => {
     expect(content).toContain('### FYI (1)')
   })
 
-  it('includes uncertain section header when uncertain emails exist', async () => {
+  it('includes unclassified section header when uncertain emails exist', async () => {
     mockEmailRepo.findEmailsByClassification.mockImplementation(async (_, category) => {
       if (category === 'uncertain') return [makeEmail('Ambiguous subject')]
       return []
     })
     await createDailyDigest(USER_ID)
     const content = mockDigestRepo.createDigest.mock.calls[0][0].content
-    expect(content).toContain('### Uncertain (1)')
+    expect(content).toContain('### Unclassified (1)')
   })
 
   it('shows confirmed and pending task counts in the header line', async () => {
@@ -148,6 +148,7 @@ describe('createDailyDigest', () => {
     mockTaskRepo.findTasksByDateRange.mockResolvedValue([
       makeTask('T1', 'confirmed') as never,
       makeTask('T2', 'pending') as never,
+      makeTask('T3', 'completed') as never,
     ])
     await createDailyDigest(USER_ID)
     const stats = mockDigestRepo.createDigest.mock.calls[0][0].stats
@@ -156,8 +157,10 @@ describe('createDailyDigest', () => {
       awarenessCount: 1,
       unresolvedCount: 0,
       ignoredCount: 0,
-      taskTotal: 2,
+      taskTotal: 3,
+      taskActive: 1,
       taskPending: 1,
+      taskCompleted: 1,
     })
   })
 
@@ -169,6 +172,28 @@ describe('createDailyDigest', () => {
     await createDailyDigest(USER_ID)
     const content = mockDigestRepo.createDigest.mock.calls[0][0].content
     expect(content).toContain('Jun')
+  })
+})
+
+describe('previewDigest', () => {
+  it('builds a live digest without saving it', async () => {
+    mockTaskRepo.findTasksByDateRange.mockResolvedValue([
+      makeTask('Active task', 'confirmed') as never,
+      makeTask('AI suggestion', 'pending') as never,
+      makeTask('Done task', 'completed') as never,
+    ])
+
+    const digest = await previewDigest(USER_ID, 'daily')
+
+    expect(digest.id).toBe('current-daily')
+    expect(digest.isCurrent).toBe(true)
+    expect(digest.isPreview).toBe(true)
+    expect(JSON.parse(digest.stats as string)).toMatchObject({
+      taskActive: 1,
+      taskPending: 1,
+      taskCompleted: 1,
+    })
+    expect(mockDigestRepo.createDigest).not.toHaveBeenCalled()
   })
 })
 

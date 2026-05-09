@@ -30,6 +30,8 @@ vi.mock('@/repositories/email-repo', () => ({
 vi.mock('@/repositories/user-repo', () => ({
   getUserSyncInfo: vi.fn(),
   updateLastSync: vi.fn(),
+  listEnabledGmailAccounts: vi.fn(),
+  updateAccountLastSync: vi.fn(),
 }))
 
 vi.mock('@/repositories/failed-email-sync-repo', () => ({
@@ -112,6 +114,8 @@ beforeEach(() => {
 
   vi.mocked(userRepo.getUserSyncInfo).mockResolvedValue(DEFAULT_SYNC_INFO as any)
   vi.mocked(userRepo.updateLastSync).mockResolvedValue({} as any)
+  vi.mocked(userRepo.listEnabledGmailAccounts).mockResolvedValue([] as any)
+  vi.mocked(userRepo.updateAccountLastSync).mockResolvedValue({} as any)
   vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([])
   vi.mocked(emailRepo.storeEmail).mockResolvedValue({ email: makeStoredEmail('e1') as any, wasCreated: true })
   vi.mocked(emailRepo.fixStuckEmails).mockResolvedValue(0)

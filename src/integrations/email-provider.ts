@@ -5,6 +5,8 @@
 // ============================================================
 
 export interface EmailMessage {
+  accountId?: string | null
+  accountEmail?: string | null
   providerMessageId: string
   threadId: string | null
   subject: string
@@ -37,6 +39,9 @@ export interface EmailMessage {
 export type NormalizedCategory = 'spam' | 'promotions' | 'social' | 'updates'
 
 export interface FetchNewEmailsOptions {
+  /** Provider account row to sync. Omitted keeps legacy single-account behavior. */
+  accountId?: string
+
   /**
    * If provided, fetch emails received after this date.
    * If omitted, falls back to the user's persisted syncStartDate
@@ -77,8 +82,8 @@ export interface EmailProvider {
    * preview UI. Used to show the user how much of their monthly quota a given
    * time window would consume before they commit to syncing it.
    */
-  previewCount(userId: string, options: { since: Date }): Promise<PreviewCount>
+  previewCount(userId: string, options: { since: Date; accountId?: string }): Promise<PreviewCount>
 
   /** Disconnect the provider and clean up tokens */
-  disconnect(userId: string): Promise<void>
+  disconnect(userId: string, accountId?: string): Promise<void>
 }

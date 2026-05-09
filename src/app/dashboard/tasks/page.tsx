@@ -184,9 +184,8 @@ function TasksContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const focusProjectId = searchParams.get('project') ?? undefined
-  const initialStatus = parseStatusFilter(searchParams.get('status'))
+  const statusFilter = parseStatusFilter(searchParams.get('status'))
   const initialPriority = parsePriorityFilter(searchParams.get('priority'))
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus)
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(initialPriority)
   const [dateFilter, setDateFilter] = useState<{ from?: Date; to?: Date } | null>(() => {
     const from = searchParams.get('from')
@@ -205,7 +204,21 @@ function TasksContent() {
   const [taskSummary, setTaskSummary] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
   const [reassignTask, setReassignTask] = useState<TaskItem | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selection, setSelection] = useState<{ status: StatusFilter; ids: Set<string> }>({
+    status: statusFilter,
+    ids: new Set(),
+  })
+  const selectedIds = useMemo(
+    () => (selection.status === statusFilter ? selection.ids : new Set<string>()),
+    [selection, statusFilter]
+  )
+  const setSelectedIds = useCallback((updater: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+    setSelection((prev) => {
+      const current = prev.status === statusFilter ? prev.ids : new Set<string>()
+      const ids = typeof updater === 'function' ? updater(current) : updater
+      return { status: statusFilter, ids }
+    })
+  }, [statusFilter])
   const [showBatchReassign, setShowBatchReassign] = useState(false)
   // Paste Text AI extraction state
   const [extractText, setExtractText] = useState('')
@@ -613,7 +626,7 @@ function TasksContent() {
 
   const handleStatusFilterChange = (value: string | null) => {
     const nextStatus = parseStatusFilter(value)
-    setStatusFilter(nextStatus)
+    setSelection({ status: nextStatus, ids: new Set() })
 
     const params = new URLSearchParams(searchParams.toString())
     if (nextStatus === 'all') params.delete('status')
@@ -630,7 +643,7 @@ function TasksContent() {
       else ids.forEach((id) => next.delete(id))
       return next
     })
-  }, [])
+  }, [setSelectedIds])
 
   const selectAll = () => setSelectedIds(new Set(tasks.map((t) => t.id)))
 
@@ -847,7 +860,7 @@ function TasksContent() {
               ]}
             />
             <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              <DropdownMenuTrigger className="inline-flex h-8 items-center gap-2 rounded-md bg-brand-600 px-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200">
                 <Plus className="h-4 w-4" />
                 Create Task
                 <ChevronDown className="h-3.5 w-3.5 opacity-80" />

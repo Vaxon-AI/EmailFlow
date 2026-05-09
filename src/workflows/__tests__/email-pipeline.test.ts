@@ -429,7 +429,7 @@ describe('processEmail — action classification (full pipeline)', () => {
     expect(result.taskIds).toEqual(['task-1', 'task-2'])
   })
 
-  it('creates Active tasks when a manual review email is approved', async () => {
+  it('creates AI suggestion tasks when a manual review email is approved', async () => {
     await createTaskFromClassifiedEmail('user-1', 'email-1')
 
     expect(prisma.email.updateMany).toHaveBeenCalledWith({
@@ -437,7 +437,7 @@ describe('processEmail — action classification (full pipeline)', () => {
       data: { awaitingReview: false },
     })
     expect(taskRepo.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'confirmed' })
+      expect.objectContaining({ status: 'pending' })
     )
   })
 

@@ -15,8 +15,10 @@ export interface StoreEmailData {
 export async function storeEmail(data: StoreEmailData) {
   const fields = {
     userId: data.userId,
+    accountId: data.message.accountId ?? undefined,
     gmailMessageId: data.message.providerMessageId,
     threadId: data.message.threadId,
+    accountEmail: data.message.accountEmail ?? '',
     subject: data.message.subject,
     sender: data.message.sender,
     recipients: JSON.stringify(data.message.recipients),
@@ -28,8 +30,12 @@ export async function storeEmail(data: StoreEmailData) {
     processingStatus: 'pending',
     syncBatchId: data.syncBatchId,
   }
-  const existing = await prisma.email.findUnique({
-    where: { gmailMessageId: data.message.providerMessageId },
+  const existing = await prisma.email.findFirst({
+    where: {
+      userId: data.userId,
+      gmailMessageId: data.message.providerMessageId,
+      accountId: data.message.accountId ?? null,
+    },
   })
   if (existing) {
     return { email: existing, wasCreated: false }
@@ -154,23 +160,38 @@ export async function markActioned(emailId: string) {
 // emails — if you wanted FYI, you'd pick FYI directly.
 export type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
 
+function emailBucketData(bucket: EmailBucket) {
+  switch (bucket) {
+    case 'needs_action':
+      return { classification: 'action', actioned: false, awaitingReview: false }
+    case 'tracked':
+      return { classification: 'action', actioned: true, awaitingReview: false }
+    case 'fyi':
+      return { classification: 'awareness', actioned: false, awaitingReview: false }
+    case 'ignored':
+      return { classification: 'ignore', actioned: true, awaitingReview: false }
+  }
+}
+
 export async function setEmailBucket(emailId: string, bucket: EmailBucket) {
-  const data = (() => {
-    switch (bucket) {
-      case 'needs_action':
-        return { classification: 'action', actioned: false, awaitingReview: false }
-      case 'tracked':
-        return { classification: 'action', actioned: true, awaitingReview: false }
-      case 'fyi':
-        return { classification: 'awareness', actioned: false, awaitingReview: false }
-      case 'ignored':
-        return { classification: 'ignore', actioned: true, awaitingReview: false }
-    }
-  })()
+  const data = emailBucketData(bucket)
   return prisma.email.update({
     where: { id: emailId },
     data: {
       ...data,
+      classConfidence: null,
+      classReasoning: null,
+      processingStatus: 'done',
+    },
+  })
+}
+
+export async function bulkSetEmailBucket(userId: string, emailIds: string[], bucket: EmailBucket) {
+  if (emailIds.length === 0) return { count: 0 }
+  return prisma.email.updateMany({
+    where: { id: { in: emailIds }, userId },
+    data: {
+      ...emailBucketData(bucket),
       classConfidence: null,
       classReasoning: null,
       processingStatus: 'done',

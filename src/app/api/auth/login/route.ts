@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { verifyPassword } from '@/lib/auth-password'
 import { createToken, setSessionCookie } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
+import { isAppError } from '@/lib/app-errors'
 
 export async function POST(req: Request) {
   try {
@@ -63,6 +64,22 @@ export async function POST(req: Request) {
       data: { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin },
     })
   } catch (err) {
+    if (isAppError(err) && err.code === 'DEVICE_LIMIT_REACHED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: err.message,
+          code: err.code,
+          deviceLimitToken: createToken({
+            userId: err.details?.userId as string,
+            purpose: 'device-limit',
+            remember: Boolean(err.details?.remember),
+          }),
+          data: err.details,
+        },
+        { status: 409 }
+      )
+    }
     console.error('[api/auth/login]', err)
     return NextResponse.json(
       { success: false, error: 'Login failed' },

@@ -685,6 +685,7 @@ export async function processEmail(
     threadId?: string | null
     awaitingReview?: boolean
     taskStatus?: 'pending' | 'confirmed'
+    forceAction?: boolean
   }
 ): Promise<PipelineResult> {
   // Tracks whether classification has been persisted to the DB.
@@ -698,7 +699,7 @@ export async function processEmail(
   try {
   // ── 0. Pre-filter (rule-based, no AI) ─────────────────────
   const rawBodyForCheck = email.bodyFull || email.bodyPreview
-  if (rawBodyForCheck.trim().length < 10) {
+  if (!email.forceAction && rawBodyForCheck.trim().length < 10) {
     await emailRepo.updateClassification(email.id, {
       category: 'uncertain',
       confidence: 0,
@@ -715,7 +716,7 @@ export async function processEmail(
     }
   }
 
-  const preFilter = stepPreFilter(email)
+  const preFilter = email.forceAction ? { skipped: false } : stepPreFilter(email)
 
   if (preFilter.skipped) {
     await emailRepo.updateClassification(email.id, {
@@ -758,7 +759,14 @@ export async function processEmail(
   )
 
   // ── 3. Classify ────────────────────────────────────────────
-  const classification = await stepClassify(email, memoryContext)
+  const classification = email.forceAction
+    ? {
+        category: 'action',
+        confidence: 1,
+        reasoning: 'User confirmed this email should be extracted into a task',
+        isWorkRelated: true,
+      }
+    : await stepClassify(email, memoryContext)
   await updateSenderMemory(userId, email.sender, classification.category)
 
   // In manual review mode:
@@ -1001,7 +1009,7 @@ export async function processEmail(
 export async function createTaskFromClassifiedEmail(
   userId: string,
   emailId: string,
-  taskStatus: 'pending' | 'confirmed' = 'confirmed'
+  taskStatus: 'pending' | 'confirmed' = 'pending'
 ): Promise<PipelineResult | null> {
   // Atomic claim: only the first caller sees count=1; subsequent callers see count=0
   const { count } = await prisma.email.updateMany({

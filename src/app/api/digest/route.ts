@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
-import { createDailyDigest, createWeeklyDigest } from '@/workflows/digest-pipeline'
+import { createDailyDigest, createWeeklyDigest, previewDigest } from '@/workflows/digest-pipeline'
 import * as digestRepo from '@/repositories/digest-repo'
 
 // GET /api/digest — get latest digests
@@ -12,10 +12,14 @@ export async function GET(req: NextRequest) {
     const url = req.nextUrl
     const page = parseInt(url.searchParams.get('page') || '1')
     const limit = parseInt(url.searchParams.get('limit') || '10')
+    const currentPeriod = url.searchParams.get('current')
 
     const { digests, total } = await digestRepo.findDigestsPaginated(user.id, { page, limit })
+    const data = currentPeriod === 'daily' || currentPeriod === 'weekly'
+      ? [await previewDigest(user.id, currentPeriod), ...digests]
+      : digests
 
-    return success(digests, {
+    return success(data, {
       page,
       totalPages: Math.ceil(total / limit),
       totalCount: total,

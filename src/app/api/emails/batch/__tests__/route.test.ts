@@ -40,6 +40,7 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/repositories/email-repo', () => ({
   bulkIgnoreEmails: vi.fn(),
+  bulkSetEmailBucket: vi.fn(),
 }))
 
 vi.mock('@/workflows', () => ({
@@ -53,7 +54,7 @@ vi.mock('@/lib/quota', () => ({
 
 import { getAuthUser } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
-import { bulkIgnoreEmails } from '@/repositories/email-repo'
+import { bulkIgnoreEmails, bulkSetEmailBucket } from '@/repositories/email-repo'
 import { processEmail } from '@/workflows'
 import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 import { POST } from '../route'
@@ -64,6 +65,7 @@ const mockMatterMemory = vi.mocked(prisma.matterMemory)
 const mockEmail = vi.mocked(prisma.email)
 const mockThreadMemory = vi.mocked(prisma.threadMemory)
 const mockBulkIgnore = vi.mocked(bulkIgnoreEmails)
+const mockBulkSetEmailBucket = vi.mocked(bulkSetEmailBucket)
 const mockProcessEmail = vi.mocked(processEmail)
 const mockGetExtractRemaining = vi.mocked(getExtractRemaining)
 const mockIncrementExtractUsed = vi.mocked(incrementExtractUsed)
@@ -179,6 +181,31 @@ describe('POST /api/emails/batch', () => {
     })
   })
 
+  describe("action: 'classify'", () => {
+    it.each([
+      ['needs_action'],
+      ['tracked'],
+      ['fyi'],
+      ['ignored'],
+    ] as const)('marks selected emails as %s', async (bucket) => {
+      mockBulkSetEmailBucket.mockResolvedValue({ count: 2 } as never)
+
+      const res = await POST(postRequest({ ids: ['e1', 'e2'], action: 'classify', bucket }))
+
+      expect(res.status).toBe(200)
+      expect(mockBulkSetEmailBucket).toHaveBeenCalledWith('user-1', ['e1', 'e2'], bucket)
+      const body = await res.json()
+      expect(body.data).toEqual({ affected: 2, bucket })
+    })
+
+    it('returns 400 for invalid classify bucket', async () => {
+      const res = await POST(postRequest({ ids: ['e1'], action: 'classify', bucket: 'archive' }))
+
+      expect(res.status).toBe(400)
+      expect(mockBulkSetEmailBucket).not.toHaveBeenCalled()
+    })
+  })
+
   describe("action: 'generate_tasks'", () => {
     const eligibleEmail = (id: string, classification: 'action' | 'uncertain' = 'action') => ({
       id,
@@ -216,6 +243,10 @@ describe('POST /api/emails/batch', () => {
       expect(mockIncrementExtractUsed).toHaveBeenCalledTimes(1)
       // Pipeline runs via after() — our mock executes the callback immediately
       expect(mockProcessEmail).toHaveBeenCalledTimes(1)
+      expect(mockProcessEmail).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ taskStatus: 'pending' })
+      )
     })
 
     it('skips ids that are not Needs Action (DB filtering)', async () => {

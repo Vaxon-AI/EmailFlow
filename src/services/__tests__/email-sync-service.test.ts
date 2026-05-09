@@ -18,6 +18,8 @@ vi.mock('@/repositories/email-repo', () => ({
 vi.mock('@/repositories/user-repo', () => ({
   getUserSyncInfo: vi.fn(),
   updateLastSync: vi.fn(),
+  listEnabledGmailAccounts: vi.fn(),
+  updateAccountLastSync: vi.fn(),
 }))
 
 vi.mock('@/repositories/failed-email-sync-repo', () => ({
@@ -101,6 +103,8 @@ beforeEach(() => {
 
   vi.mocked(userRepo.getUserSyncInfo).mockResolvedValue(DEFAULT_SYNC_INFO as any)
   vi.mocked(userRepo.updateLastSync).mockResolvedValue({} as any)
+  vi.mocked(userRepo.listEnabledGmailAccounts).mockResolvedValue([] as any)
+  vi.mocked(userRepo.updateAccountLastSync).mockResolvedValue({} as any)
   vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([])
   vi.mocked(emailRepo.storeEmail).mockResolvedValue({ email: makeStoredEmail('e1') as any, wasCreated: true })
   vi.mocked(emailRepo.fixStuckEmails).mockResolvedValue(0)
@@ -113,6 +117,25 @@ beforeEach(() => {
     emailId: 'e1', classification: 'action', confidence: 0.9,
     taskCreated: false, skippedByRule: false,
   })
+})
+
+it('syncs each enabled Gmail account independently', async () => {
+  vi.mocked(userRepo.listEnabledGmailAccounts).mockResolvedValue([
+    { id: 'account-1', email: 'one@gmail.com', reauthRequired: false },
+    { id: 'account-2', email: 'two@gmail.com', reauthRequired: false },
+  ] as any)
+  vi.mocked(gmailProvider.fetchNewEmails)
+    .mockResolvedValueOnce([{ ...makeGmailMessage('msg-1'), accountId: 'account-1', accountEmail: 'one@gmail.com' }])
+    .mockResolvedValueOnce([{ ...makeGmailMessage('msg-2'), accountId: 'account-2', accountEmail: 'two@gmail.com' }])
+
+  const result = await syncEmailsPhase1('user-1')
+
+  expect(gmailProvider.fetchNewEmails).toHaveBeenCalledWith('user-1', { maxResults: 100, accountId: 'account-1' })
+  expect(gmailProvider.fetchNewEmails).toHaveBeenCalledWith('user-1', { maxResults: 99, accountId: 'account-2' })
+  expect(emailRepo.storeEmail).toHaveBeenCalledTimes(2)
+  expect(userRepo.updateAccountLastSync).toHaveBeenCalledWith('account-1')
+  expect(userRepo.updateAccountLastSync).toHaveBeenCalledWith('account-2')
+  expect(result.totalFetched).toBe(2)
 })
 
 // ---------------------------------------------------------------------------

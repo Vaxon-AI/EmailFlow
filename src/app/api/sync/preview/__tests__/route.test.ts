@@ -10,6 +10,14 @@ vi.mock('@/lib/quota', () => ({
   getClassifyRemaining: vi.fn(),
 }))
 
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    account: {
+      findMany: vi.fn(),
+    },
+  },
+}))
+
 vi.mock('@/lib/api-helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api-helpers')>()
   return {
@@ -21,11 +29,13 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
 import { gmailProvider } from '@/integrations'
 import { getClassifyRemaining } from '@/lib/quota'
 import { getAuthUser } from '@/lib/api-helpers'
+import { prisma } from '@/lib/prisma'
 import { GET } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockPreviewCount = vi.mocked(gmailProvider.previewCount)
 const mockGetRemaining = vi.mocked(getClassifyRemaining)
+const mockAccount = vi.mocked(prisma.account)
 
 function getRequest(query: string): Request {
   return new Request(`http://localhost/api/sync/preview${query}`)
@@ -35,6 +45,7 @@ describe('GET /api/sync/preview', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthUser.mockResolvedValue({ id: 'user-1' } as never)
+    mockAccount.findMany.mockResolvedValue([] as never)
     mockPreviewCount.mockResolvedValue({ quotaImpactCount: 42, capped: false })
     mockGetRemaining.mockResolvedValue(80)
   })

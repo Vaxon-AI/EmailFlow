@@ -15,8 +15,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   CheckSquare, Paperclip, Mail,
-  Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap, Eye, EyeOff,
+  Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap, Eye, EyeOff, Tag,
 } from 'lucide-react'
 import { Suspense, useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
@@ -58,7 +64,15 @@ type BatchStatus = {
 // for AI-classified ignore + user-dismissed soft-deletes. Unclassified only
 // appears when there are quota-skipped emails awaiting manual classification.
 type Tab = 'needs_action' | 'tracked' | 'fyi' | 'ignored' | 'unclassified'
+type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
 type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
+
+const EMAIL_BUCKET_LABELS: Record<EmailBucket, string> = {
+  needs_action: 'Needs Action',
+  tracked: 'Tracked',
+  fyi: 'FYI',
+  ignored: 'Ignored',
+}
 
 type LinkedTask = {
   id: string
@@ -237,9 +251,7 @@ function EmailsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const focusIdentityId = searchParams.get('identity') ?? undefined
-  const [tab, setTab] = useState<Tab>(() =>
-    parseEmailTab(searchParams.get('tab'), searchParams.get('classification'))
-  )
+  const tab = parseEmailTab(searchParams.get('tab'), searchParams.get('classification'))
   const [accountFilter, setAccountFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -255,7 +267,15 @@ function EmailsContent() {
   const [selectingStep, setSelectingStep] = useState<'from' | 'to'>('from')
   const [page, setPage] = useState(1)
   const [reassignEmail, setReassignEmail] = useState<EmailItem | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selection, setSelection] = useState<{ tab: Tab; ids: Set<string> }>({ tab, ids: new Set() })
+  const selectedIds = selection.tab === tab ? selection.ids : new Set<string>()
+  const setSelectedIds = useCallback((updater: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+    setSelection((prev) => {
+      const current = prev.tab === tab ? prev.ids : new Set<string>()
+      const ids = typeof updater === 'function' ? updater(current) : updater
+      return { tab, ids }
+    })
+  }, [tab])
   const [showBatchReassign, setShowBatchReassign] = useState(false)
 
   // Manual review mode
@@ -291,11 +311,6 @@ function EmailsContent() {
     sessionStorage.removeItem('emailflow:reviewBannerAckBatchId')
     setAckedReviewBatchId(null)
   }, [])
-
-  // Keep local tab state in sync with URL for browser back/forward navigation
-  useEffect(() => {
-    setTab(parseEmailTab(searchParams.get('tab'), searchParams.get('classification')))
-  }, [searchParams])
 
   const updateEmailUrlFilter = useCallback((next: { tab?: Tab }) => {
     // Use window.location.search instead of searchParams to always read the
@@ -396,6 +411,28 @@ function EmailsContent() {
     onError: (err: Error) => toast.error(err.message),
   })
 
+  const bulkClassifyMutation = useMutation({
+    mutationFn: async ({ ids, bucket }: { ids: string[]; bucket: EmailBucket }) => {
+      const res = await fetch('/api/emails/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'classify', bucket }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to classify emails')
+      return json.data as { affected: number; bucket: EmailBucket }
+    },
+    onSuccess: (data) => {
+      toast.success(`Marked ${data.affected} email${data.affected === 1 ? '' : 's'} as ${EMAIL_BUCKET_LABELS[data.bucket]}`)
+      clearSelection()
+      queryClient.invalidateQueries({ queryKey: ['emails'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
+      queryClient.invalidateQueries({ queryKey: ['emails', 'unclassified-count'] })
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
   // Batch generate tasks: queues a pipeline pass for Needs Action emails
   // and respects extract quota. Server caps the queue at remaining quota and
   // tells us how many got queued vs skipped.
@@ -447,7 +484,7 @@ function EmailsContent() {
       else ids.forEach((id) => next.delete(id))
       return next
     })
-  }, [])
+  }, [setSelectedIds])
 
   const selectAll = () => setSelectedIds(new Set(filtered.map((e) => e.id)))
 
@@ -590,7 +627,7 @@ function EmailsContent() {
             size="sm"
             className="shrink-0 bg-warning text-white hover:bg-warning-700"
             onClick={() => {
-              setTab('unclassified')
+              clearSelection()
               setPage(1)
               updateEmailUrlFilter({ tab: 'unclassified' })
             }}
@@ -605,7 +642,7 @@ function EmailsContent() {
         <SegmentedControl
           value={tab}
           onChange={(nextTab) => {
-            setTab(nextTab)
+            clearSelection()
             setPage(1)
             updateEmailUrlFilter({ tab: nextTab })
           }}
@@ -865,7 +902,7 @@ function EmailsContent() {
             onClick={() => {
               ackCurrentReviewBatch()
               if (tab !== 'needs_action') {
-                setTab('needs_action')
+                clearSelection()
                 setPage(1)
                 updateEmailUrlFilter({ tab: 'needs_action' })
               }
@@ -903,7 +940,9 @@ function EmailsContent() {
         const uncertainSelected = selectedEmails.filter(isUncertainEmail).length
         const generating = bulkGenerateTasksMutation.isPending
         const ignoring = bulkIgnoreMutation.isPending
+        const classifying = bulkClassifyMutation.isPending
         const ids = [...selectedIds]
+        const busy = generating || ignoring || classifying
         return (
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/80 px-4 py-2.5 shadow-sm">
             <span className="text-sm font-medium text-brand-700">{selectedIds.size} selected</span>
@@ -917,7 +956,7 @@ function EmailsContent() {
               size="sm"
               variant="outline"
               className="h-7 gap-1 text-xs"
-              disabled={eligibleForGenerate === 0 || generating || ignoring}
+              disabled={eligibleForGenerate === 0 || busy}
               onClick={() => bulkGenerateTasksMutation.mutate(ids)}
               title={eligibleForGenerate === 0 ? 'No Needs Action emails selected' : `Extract tasks from ${eligibleForGenerate} email${eligibleForGenerate === 1 ? '' : 's'}`}
             >
@@ -933,17 +972,38 @@ function EmailsContent() {
               size="sm"
               variant="outline"
               className="h-7 gap-1 text-xs"
-              disabled={generating || ignoring}
+              disabled={busy}
               onClick={() => bulkIgnoreMutation.mutate(ids)}
             >
               {ignoring ? <Loader2 className="h-3 w-3 animate-spin" /> : <EyeOff className="h-3 w-3" />}
               Ignore
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                disabled={busy}
+                className="inline-flex h-7 items-center justify-center gap-1 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-gray-600 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:pointer-events-none disabled:opacity-50"
+              >
+                {classifying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Tag className="h-3 w-3" />}
+                Mark as
+                <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                {(Object.keys(EMAIL_BUCKET_LABELS) as EmailBucket[]).map((bucket) => (
+                  <DropdownMenuItem
+                    key={bucket}
+                    onClick={() => bulkClassifyMutation.mutate({ ids, bucket })}
+                    className="cursor-pointer"
+                  >
+                    {EMAIL_BUCKET_LABELS[bucket]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               size="sm"
               variant="outline"
               className="h-7 gap-1 text-xs"
-              disabled={generating || ignoring}
+              disabled={busy}
               onClick={() => setShowBatchReassign(true)}
             >
               <FolderOpen className="h-3 w-3" /> Change Project

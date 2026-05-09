@@ -354,7 +354,7 @@ export function RetentionPolicyCard() {
               <select
                 value={newRuleType}
                 onChange={(e) => setNewRuleType(e.target.value as ProtectionRule['ruleType'])}
-                className="h-8 rounded-md border border-gray-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="h-8 rounded-md border border-gray-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
               >
                 <option value="CONTACT">Contact (email)</option>
                 <option value="DOMAIN">Domain</option>

@@ -6,18 +6,19 @@ import * as emailRepo from '@/repositories/email-repo'
 import { processEmail } from '@/workflows'
 import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 
-type BatchAction = 'reassign' | 'ignore' | 'generate_tasks'
+type BatchAction = 'reassign' | 'ignore' | 'generate_tasks' | 'classify'
 
 type BatchBody = {
   ids: string[]
   action: BatchAction
   projectId?: string
+  bucket?: emailRepo.EmailBucket
 }
 
 export async function POST(req: Request) {
   try {
     const user = await getAuthUser()
-    const { ids, action, projectId }: BatchBody = await req.json()
+    const { ids, action, projectId, bucket }: BatchBody = await req.json()
 
     if (!ids || ids.length === 0) return error('BAD_REQUEST', 'ids is required', 400)
     if (!action) return error('BAD_REQUEST', 'action is required', 400)
@@ -78,6 +79,16 @@ export async function POST(req: Request) {
       return success({ affected: result?.count ?? 0 })
     }
 
+    if (action === 'classify') {
+      const valid: emailRepo.EmailBucket[] = ['needs_action', 'tracked', 'fyi', 'ignored']
+      if (!bucket || !valid.includes(bucket)) {
+        return error('BAD_REQUEST', 'Valid bucket is required for classify', 400)
+      }
+
+      const result = await emailRepo.bulkSetEmailBucket(user.id, ids, bucket)
+      return success({ affected: result?.count ?? 0, bucket })
+    }
+
     if (action === 'generate_tasks') {
       // Only action emails can generate tasks. Uncertain emails need a human
       // classification first; client UI also disables/skips them, but we
@@ -136,7 +147,7 @@ export async function POST(req: Request) {
               labels: email.labels,
               threadId: email.threadId,
               awaitingReview: false,
-              taskStatus: 'confirmed',
+              taskStatus: 'pending',
             })
           } catch (err) {
             console.error(`[batch generate_tasks] processEmail failed for ${email.id}:`, err)

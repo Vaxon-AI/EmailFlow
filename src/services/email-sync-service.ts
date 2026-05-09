@@ -1,6 +1,7 @@
 import { AppError } from '@/lib/app-errors'
 import * as Sentry from '@sentry/nextjs'
 import { gmailProvider } from '@/integrations'
+import type { EmailMessage } from '@/integrations'
 import { processEmail } from '@/workflows'
 import * as emailRepo from '@/repositories/email-repo'
 import * as userRepo from '@/repositories/user-repo'
@@ -57,15 +58,18 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
   if (!syncInfo.gmailConnected) throw new AppError('SYNC_FAILED', 'Email not connected', 400)
   if (!syncInfo.syncEnabled) throw new Error('Email sync is disabled')
   if (syncInfo.emailProviderReauthRequired) {
-    throw new AppError(
-      'PROVIDER_REAUTH_REQUIRED',
-      'Your email provider connection needs to be reauthorized before sync can continue.',
-      401,
-      {
-        provider: syncInfo.emailProviderReauthProvider || 'gmail',
-        reason: syncInfo.emailProviderReauthReason || 'refresh_failed',
-      },
-    )
+    const enabledAccounts = await userRepo.listEnabledGmailAccounts(userId)
+    if (enabledAccounts.length === 0) {
+      throw new AppError(
+        'PROVIDER_REAUTH_REQUIRED',
+        'Your email provider connection needs to be reauthorized before sync can continue.',
+        401,
+        {
+          provider: syncInfo.emailProviderReauthProvider || 'gmail',
+          reason: syncInfo.emailProviderReauthReason || 'refresh_failed',
+        },
+      )
+    }
   }
 
   // Cap Gmail fetch by the user's remaining classify quota. Without this cap,
@@ -93,10 +97,58 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
     }
   }
 
+  const gmailAccounts = await userRepo.listEnabledGmailAccounts(userId)
+  const accountsToSync = gmailAccounts.length > 0
+    ? gmailAccounts
+    : [{ id: undefined, email: null, reauthRequired: false }]
+
+  if (accountsToSync.length === 0) {
+    throw new AppError('SYNC_FAILED', 'Email not connected', 400)
+  }
+
   // 1) Fetch new emails from Gmail
   const tFetch = Date.now()
-  const messages = await gmailProvider.fetchNewEmails(userId, { maxResults: fetchCap })
-  console.log(`[sync] fetchNewEmails: ${Date.now() - tFetch}ms, count=${messages.length}, cap=${fetchCap}`)
+  const messages: EmailMessage[] = []
+  let remainingFetchBudget = fetchCap
+  let lastFetchError: unknown = null
+  let fetchedAccountCount = 0
+
+  for (const account of accountsToSync) {
+    if (account.reauthRequired) {
+      console.warn(`[sync] skipping Gmail account ${account.email || account.id || 'legacy'}: reauth required`)
+      continue
+    }
+
+    if (remainingFetchBudget !== Infinity && remainingFetchBudget <= 0) break
+
+    const accountCap = remainingFetchBudget === Infinity ? 100 : Math.min(remainingFetchBudget, 100)
+    try {
+      const accountMessages = await gmailProvider.fetchNewEmails(userId, {
+        maxResults: accountCap,
+        accountId: account.id,
+      })
+      messages.push(...accountMessages)
+      fetchedAccountCount++
+      if (account.id) {
+        await userRepo.updateAccountLastSync(account.id)
+      }
+      if (remainingFetchBudget !== Infinity) {
+        remainingFetchBudget = Math.max(0, remainingFetchBudget - accountMessages.length)
+      }
+    } catch (err) {
+      lastFetchError = err
+      if (err instanceof AppError && err.code === 'PROVIDER_REAUTH_REQUIRED') {
+        console.warn(`[sync] Gmail account ${account.email || account.id || 'legacy'} needs reauth`)
+        continue
+      }
+      console.error(`[sync] fetch failed for Gmail account ${account.email || account.id || 'legacy'}:`, err)
+      if (accountsToSync.length === 1) throw err
+    }
+  }
+
+  if (fetchedAccountCount === 0 && lastFetchError) throw lastFetchError
+
+  console.log(`[sync] fetchNewEmails: ${Date.now() - tFetch}ms, count=${messages.length}, cap=${fetchCap}, accounts=${fetchedAccountCount}`)
 
   // 2) Store emails one-by-one so a single failure cannot prevent
   //    updateLastSync from running.  Promise.all would reject on the

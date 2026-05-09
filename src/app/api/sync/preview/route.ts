@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { error, errorFromException, getAuthUser, success } from '@/lib/api-helpers'
 import { gmailProvider } from '@/integrations'
 import { getClassifyRemaining } from '@/lib/quota'
+import { prisma } from '@/lib/prisma'
 
 // Read-only preview of how many emails a sync window would consume from the
 // user's monthly classification quota. The dashboard's first-login dialog calls
@@ -34,8 +35,21 @@ export async function GET(req: Request) {
       since = new Date(Date.now() - days * 86_400_000)
     }
 
+    const accounts = await prisma.account.findMany({
+      where: { userId: user.id, provider: 'google', syncEnabled: true, reauthRequired: false },
+      select: { id: true },
+    })
+
+    const previewPromise = accounts.length > 0
+      ? Promise.all(accounts.map((account) => gmailProvider.previewCount(user.id, { since, accountId: account.id })))
+          .then((previews) => ({
+            quotaImpactCount: previews.reduce((sum, preview) => sum + preview.quotaImpactCount, 0),
+            capped: previews.some((preview) => preview.capped),
+          }))
+      : gmailProvider.previewCount(user.id, { since })
+
     const [preview, quotaRemaining] = await Promise.all([
-      gmailProvider.previewCount(user.id, { since }),
+      previewPromise,
       getClassifyRemaining(user.id),
     ])
 

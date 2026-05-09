@@ -39,6 +39,7 @@ import {
   EMAIL_DISPLAY_CONFIG,
   getEmailDisplayState,
   type EmailBucket,
+  type EmailDisplayState,
 } from '@/lib/email-classification'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
@@ -64,6 +65,30 @@ type EmailTaskLink = {
 
 type ApiErrorPayload = {
   error?: { message?: string } | string
+}
+
+const DETAIL_CLASS_TONE: Record<EmailDisplayState, string> = {
+  needs_action: 'bg-critical-50/70 text-critical border-critical-100',
+  tracked: 'bg-brand-50 text-brand-700 border-brand-100',
+  fyi: 'bg-white text-gray-700 border-gray-200',
+  ignored: 'bg-transparent text-gray-400 border-gray-200',
+  uncertain: 'bg-warning-50/70 text-warning-700 border-warning-100',
+}
+
+const DETAIL_HEADER_TONE: Record<EmailDisplayState, string> = {
+  needs_action: 'from-critical-50/25 via-white to-white',
+  tracked: 'from-brand-50/30 via-white to-white',
+  fyi: 'from-gray-50/30 via-white to-white',
+  ignored: 'from-gray-50/25 via-white to-white',
+  uncertain: 'from-warning-50/20 via-white to-white',
+}
+
+const DETAIL_SENDER_TONE: Record<EmailDisplayState, string> = {
+  needs_action: 'border-critical-50 bg-white/85',
+  tracked: 'border-brand-50 bg-white/85',
+  fyi: 'border-gray-100 bg-white/85',
+  ignored: 'border-gray-100 bg-white/85',
+  uncertain: 'border-warning-50 bg-white/85',
 }
 
 export default function EmailDetailPage() {
@@ -297,8 +322,8 @@ export default function EmailDetailPage() {
 
   const handleExtractToTask = async () => {
     if (extracting) return
-    if (email?.classification !== 'action') {
-      showError('AI is uncertain about this email. Confirm it as Needs Action before extracting a task.')
+    if (email?.classification !== 'action' && email?.classification !== 'uncertain') {
+      showError('Only Needs Action or Uncertain emails can be extracted into tasks.')
       return
     }
     setExtracting(true)
@@ -311,6 +336,9 @@ export default function EmailDetailPage() {
         return
       }
       setPollingForTask(true)
+      queryClient.invalidateQueries({ queryKey: ['email', emailId] })
+      queryClient.invalidateQueries({ queryKey: ['emails'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
       pollTimeoutRef.current = setTimeout(() => {
         setPollingForTask(false)
         setExtractionTimedOut(true)
@@ -448,6 +476,9 @@ export default function EmailDetailPage() {
   })
   const cls = EMAIL_DISPLAY_CONFIG[displayState]
   const ClsIcon = cls.icon
+  const detailClassTone = DETAIL_CLASS_TONE[displayState]
+  const detailHeaderTone = DETAIL_HEADER_TONE[displayState]
+  const detailSenderTone = DETAIL_SENDER_TONE[displayState]
   // Picker can't represent 'uncertain' (it's an AI-only state); leave the
   // Select unselected so the user is nudged to commit a real bucket.
   const pickerValue: EmailBucket | undefined =
@@ -458,9 +489,9 @@ export default function EmailDetailPage() {
   const project = email.project ?? null
   const matter = email.matter ?? null
   const taskLinks = (email.taskLinks ?? []) as EmailTaskLink[]
-  const canShowReplyDraft = email.classification === 'action' || taskLinks.length > 0 || !!email.aiReplyDraft
+  const canShowReplyDraft = email.classification === 'action' || email.classification === 'uncertain' || taskLinks.length > 0 || !!email.aiReplyDraft
   const canGenerateReply = email.retentionStatus !== 'PURGED'
-  const canExtractTask = email.classification === 'action' && taskLinks.length === 0
+  const canExtractTask = (email.classification === 'action' || email.classification === 'uncertain') && taskLinks.length === 0
   const hasAiAnalysis = Boolean(
     email.classReasoning &&
     typeof email.classConfidence === 'number' &&
@@ -541,11 +572,11 @@ export default function EmailDetailPage() {
         {/* Left: Email content */}
         <div className="space-y-4">
           {/* Header card */}
-          <Card className={`animate-fade-in-up stagger-3 overflow-hidden border-white/70 bg-gradient-to-br ${cls.bg} shadow-sm`}>
+          <Card className={`animate-fade-in-up stagger-3 overflow-hidden border-white/70 bg-gradient-to-br ${detailHeaderTone} shadow-sm`}>
             <CardContent className="py-5 space-y-4">
               {/* Meta badges */}
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className={`gap-1 ${cls.color}`}>
+                <Badge variant="outline" className={`gap-1 ${detailClassTone}`}>
                   <ClsIcon className="h-3 w-3" />
                   {cls.label}
                 </Badge>
@@ -558,7 +589,7 @@ export default function EmailDetailPage() {
               </div>
 
               {/* Sender row */}
-              <div className="flex items-center gap-3 rounded-xl bg-white/70 backdrop-blur-sm border px-4 py-3">
+              <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 backdrop-blur-sm ${detailSenderTone}`}>
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white text-sm font-bold">
                   {senderInitial}
                 </div>
@@ -629,7 +660,7 @@ export default function EmailDetailPage() {
 
           {/* Reply draft */}
           {canShowReplyDraft && (
-            <Card className="animate-fade-in-up stagger-5 border-white/70 bg-white/95 shadow-sm">
+            <Card className="animate-fade-in-up stagger-5 border-warning-100/70 bg-gradient-to-br from-yellow-50/35 to-white shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="flex items-center gap-2 text-sm">
@@ -653,7 +684,7 @@ export default function EmailDetailPage() {
                       value={replyDraft}
                       onChange={(e) => setReplyDraft(e.target.value)}
                       rows={8}
-                      className="resize-y bg-white text-sm leading-6"
+                      className="resize-y bg-white/85 text-sm leading-6"
                       placeholder="AI reply draft will appear here..."
                     />
                     <div className="flex flex-wrap items-center gap-2">
@@ -689,8 +720,8 @@ export default function EmailDetailPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-warning-200 bg-warning-100/60 px-4 py-4">
-                    <p className="text-sm font-medium text-amber-950">No reply draft yet</p>
+                  <div className="rounded-xl border border-dashed border-warning-100/80 bg-white/70 px-4 py-4">
+                    <p className="text-sm font-medium text-warning-700">No reply draft yet</p>
                     <p className="mt-1 text-xs leading-5 text-warning-700/80">
                       Generate a draft when you want a starting point, then edit it before using it.
                     </p>
@@ -698,7 +729,8 @@ export default function EmailDetailPage() {
                       size="sm"
                       onClick={() => generateReply()}
                       disabled={generatingReply || !canGenerateReply}
-                      className="mt-3 h-8 gap-1.5 bg-warning text-warning-700 hover:bg-warning-200"
+                      variant="outline"
+                      className="mt-3 h-8 gap-1.5 border-warning-200 bg-warning-100/80 text-warning-700 hover:bg-warning-100"
                     >
                       {generatingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                       Generate reply
@@ -773,7 +805,7 @@ export default function EmailDetailPage() {
                 {pollingForTask && (
                   <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-3 text-sm text-brand-700">
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
-                    <span>Generating your task — this may take a moment...</span>
+                    <span>Generating an AI suggestion - this may take a moment...</span>
                   </div>
                 )}
                 {taskJustCreated && taskLinks.length > 0 && (
@@ -786,17 +818,6 @@ export default function EmailDetailPage() {
                   <div className="flex items-center gap-2 rounded-xl border border-warning-200 bg-warning-100/70 px-4 py-3 text-sm text-warning-700">
                     <TriangleAlert className="h-4 w-4 shrink-0" />
                     <span>Task extraction is taking longer than expected — try refreshing the page.</span>
-                  </div>
-                )}
-                {email.classification === 'uncertain' && taskLinks.length === 0 && !pollingForTask && !extractionTimedOut && (
-                  <div className="flex items-start gap-2 rounded-xl border border-warning-200 bg-warning-100/70 px-4 py-3 text-sm text-warning-700">
-                    <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div>
-                      <p className="font-medium">AI is uncertain about this email.</p>
-                      <p className="mt-0.5 text-xs leading-5 text-warning-700">
-                        Confirm it as Needs Action before extracting a task, or mark it as FYI/ignored if no work is needed.
-                      </p>
-                    </div>
                   </div>
                 )}
                 {taskLinks.length ? (
@@ -863,7 +884,7 @@ export default function EmailDetailPage() {
                       {email.classification === 'action'
                         ? 'Click "Extract to Task" to let AI extract and create a task from this email.'
                         : email.classification === 'uncertain'
-                          ? 'AI could not confidently classify this email yet, so task extraction is paused until you confirm it.'
+                          ? 'Use "Extract to Task" if this needs follow-up, or create a task manually to link it yourself.'
                         : 'Create a task here to keep this email connected to work that follows from it.'}
                     </p>
                   </div>
@@ -880,7 +901,7 @@ export default function EmailDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className={`rounded-xl border px-3 py-3 ${cls.color}`}>
+              <div className={`rounded-xl border px-3 py-3 ${detailClassTone}`}>
                 <div className="flex items-center gap-2">
                   <ClsIcon className="h-4 w-4" />
                   <div>

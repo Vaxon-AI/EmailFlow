@@ -56,6 +56,19 @@ type CurrentUser = {
   emailProviderReauthAt?: string | null
   emailProviderReauthProvider?: string | null
   googleAccount?: { email: string | null } | null
+  emailAccounts?: EmailAccount[]
+}
+
+type EmailAccount = {
+  id: string
+  provider: string
+  email: string | null
+  syncEnabled: boolean
+  lastSyncAt: string | null
+  reauthRequired: boolean
+  reauthReason: string | null
+  reauthAt: string | null
+  reauthProvider: string | null
 }
 
 type DeviceSession = {
@@ -70,6 +83,12 @@ type DeviceSession = {
   expiresAt: string
   createdAt: string
   isCurrent: boolean
+}
+
+type QuotaStatus = {
+  classify: { used: number; limit: number | null; resetAt: string }
+  extract: { used: number; limit: number | null; resetAt: string }
+  pasteText?: { used: number; limit: number | null; resetAt: string }
 }
 
 const SYNC_PRESETS = [7, 15, 30] as const
@@ -159,7 +178,7 @@ type SettingsSection = 'account' | 'email' | 'privacy'
 const SETTINGS_SECTIONS = [
   { id: 'account' as const, label: 'Account', icon: User },
   { id: 'email' as const, label: 'Email', icon: Mail },
-  { id: 'privacy' as const, label: 'Privacy', icon: Shield },
+  { id: 'privacy' as const, label: 'Security & Privacy', icon: Shield },
 ]
 
 export default function SettingsPage() {
@@ -189,7 +208,7 @@ export default function SettingsPage() {
     staleTime: CACHE_TIME.auth,
   })
 
-  const { data: quotaRes } = useQuery({
+  const { data: quotaRes } = useQuery<{ data: QuotaStatus }>({
     queryKey: ['quota'],
     queryFn: () => fetch('/api/settings/quota').then((r) => r.json()),
     staleTime: CACHE_TIME.stats,
@@ -204,7 +223,6 @@ export default function SettingsPage() {
   )
   const providerReauthProvider =
     currentUser?.emailProviderReauthProvider || syncData?.providerReauthProvider || 'gmail'
-  const connectedGmail = currentUser?.gmailEmail || null
   const supportedTimezones = useMemo(() => {
     if (typeof Intl !== 'undefined' && 'supportedValuesOf' in Intl) {
       return Intl.supportedValuesOf('timeZone')
@@ -304,14 +322,6 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
             <PasswordCard />
-            <TwoFactorCard
-              totpEnabled={Boolean(currentUser?.totpEnabled)}
-              onDisabled={() => queryClient.invalidateQueries({ queryKey: ['auth-me'] })}
-            />
-            <DeviceSessionsCard
-              currentSessionId={currentUser?.currentSessionId || null}
-              onLogoutCurrent={() => logout()}
-            />
 
             {/* Plan & Usage */}
             <Card className="border-white/80 bg-white/95 shadow-sm">
@@ -361,16 +371,16 @@ export default function SettingsPage() {
                         <div
                           className={cn(
                             'h-full rounded-full transition-all',
-                            quota.classify.used / quota.classify.limit >= 0.9
-                              ? 'bg-critical-500'
-                              : quota.classify.used / quota.classify.limit >= 0.7
-                                ? 'bg-warning-500'
+                            quota.classify.used / quota.classify.limit! >= 0.9
+                              ? 'bg-critical'
+                              : quota.classify.used / quota.classify.limit! >= 0.7
+                                ? 'bg-warning'
                                 : 'bg-brand-500'
                           )}
-                          style={{ width: `${Math.min(100, (quota.classify.used / quota.classify.limit) * 100)}%` }}
+                          style={{ width: `${Math.min(100, (quota.classify.used / quota.classify.limit!) * 100)}%` }}
                         />
                       </div>
-                      {quota.classify.used >= quota.classify.limit && (
+                      {quota.classify.used >= quota.classify.limit! && (
                         <p className="text-xs text-critical">Limit reached. Upgrade to Pro for unlimited classification.</p>
                       )}
                     </div>
@@ -387,16 +397,16 @@ export default function SettingsPage() {
                         <div
                           className={cn(
                             'h-full rounded-full transition-all',
-                            quota.extract.used / quota.extract.limit >= 1
-                              ? 'bg-critical-500'
-                              : quota.extract.used / quota.extract.limit >= 0.67
-                                ? 'bg-warning-500'
+                            quota.extract.used / quota.extract.limit! >= 1
+                              ? 'bg-critical'
+                              : quota.extract.used / quota.extract.limit! >= 0.67
+                                ? 'bg-warning'
                                 : 'bg-brand-500'
                           )}
-                          style={{ width: `${Math.min(100, (quota.extract.used / quota.extract.limit) * 100)}%` }}
+                          style={{ width: `${Math.min(100, (quota.extract.used / quota.extract.limit!) * 100)}%` }}
                         />
                       </div>
-                      {quota.extract.used >= quota.extract.limit && (
+                      {quota.extract.used >= quota.extract.limit! && (
                         <p className="text-xs text-critical">Limit reached. Upgrade to Pro for unlimited extractions.</p>
                       )}
                     </div>
@@ -414,16 +424,16 @@ export default function SettingsPage() {
                           <div
                             className={cn(
                               'h-full rounded-full transition-all',
-                              quota.pasteText.used / quota.pasteText.limit >= 1
-                                ? 'bg-critical-500'
-                                : quota.pasteText.used / quota.pasteText.limit >= 0.67
-                                  ? 'bg-warning-500'
-                                  : 'bg-violet-500'
+                              quota.pasteText.used / quota.pasteText.limit! >= 1
+                                ? 'bg-critical'
+                                : quota.pasteText.used / quota.pasteText.limit! >= 0.67
+                                  ? 'bg-warning'
+                                  : 'bg-ai'
                             )}
-                            style={{ width: `${Math.min(100, (quota.pasteText.used / quota.pasteText.limit) * 100)}%` }}
+                            style={{ width: `${Math.min(100, (quota.pasteText.used / quota.pasteText.limit!) * 100)}%` }}
                           />
                         </div>
-                        {quota.pasteText.used >= quota.pasteText.limit && (
+                        {quota.pasteText.used >= quota.pasteText.limit! && (
                           <p className="text-xs text-critical">Limit reached. Upgrade to Pro for unlimited Paste Text extraction.</p>
                         )}
                       </div>
@@ -515,7 +525,7 @@ export default function SettingsPage() {
                               <Globe className="h-4 w-4" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-blue-900">
+                              <p className="truncate text-sm font-medium text-gray-900">
                                 {getTimezonePrimaryLabel(deviceTimezone)}
                               </p>
                               <p className="text-xs text-brand-700/80">
@@ -577,33 +587,39 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+            <RetentionPolicyCard />
           </>
         )
       case 'email':
         return (
           <>
+            <ReviewModeCard manualReviewMode={currentUser?.manualReviewMode ?? true} />
             <LinkAccountCard
-              googleAccount={currentUser?.googleAccount ?? null}
-              gmailConnected={gmailConnected}
+              accounts={currentUser?.emailAccounts ?? []}
               providerReauthRequired={providerReauthRequired}
               providerReauthProvider={providerReauthProvider}
-              connectedGmail={connectedGmail}
               providerReauthAt={syncData?.providerReauthAt ?? null}
               lastSyncAt={syncData?.lastSyncAt ?? null}
             />
             <EmailSyncWindowCard syncStartDate={currentUser?.syncStartDate ?? null} />
-            <ReviewModeCard manualReviewMode={currentUser?.manualReviewMode ?? true} />
-            <RetentionPolicyCard />
           </>
         )
       case 'privacy':
         return (
           <>
+            <TwoFactorCard
+              totpEnabled={Boolean(currentUser?.totpEnabled)}
+              onDisabled={() => queryClient.invalidateQueries({ queryKey: ['auth-me'] })}
+            />
+            <DeviceSessionsCard
+              currentSessionId={currentUser?.currentSessionId || null}
+              onLogoutCurrent={() => logout()}
+            />
             <Card className="border-white/80 bg-white/95 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Shield className="h-4 w-4 text-brand-700" />
-                  Privacy and Data Handling
+                  Security & Privacy
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -758,7 +774,7 @@ function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string | null }
         <div className="rounded-2xl border border-brand-100 bg-brand-50/70 p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-blue-900">{syncSummary.label}</p>
+              <p className="text-sm font-semibold text-gray-900">{syncSummary.label}</p>
               <p className="mt-1 text-sm text-brand-700/80">{syncSummary.helper}</p>
             </div>
             {syncSummary.exactPreset ? (
@@ -806,7 +822,7 @@ function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string | null }
                 disabled={(date) => date > new Date(todayMs) || date < new Date(todayMs - 365 * 86400000)}
               />
               <div className="border-t border-gray-100 bg-brand-50/40 px-4 py-3">
-                <p className="text-xs font-medium text-blue-900">
+                <p className="text-xs font-medium text-gray-900">
                   {pendingDate
                     ? `Selected start date: ${pendingDate.toLocaleDateString()}`
                     : 'Pick a start date to preview the next sync window.'}
@@ -864,7 +880,7 @@ function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string | null }
                 disabled={syncRangeMutation.isPending}
                 className={`transition-all duration-200 ${
                   isActive
-                    ? 'scale-110 shadow-md ring-2 ring-blue-500/30'
+                    ? 'scale-110 shadow-md ring-2 ring-brand-300/40'
                     : 'scale-90 opacity-60 hover:opacity-80'
                 }`}
               >
@@ -1082,7 +1098,7 @@ function DeviceSessionsCard({
       <CardHeader >
         <CardTitle className="flex items-center gap-2 text-base">
           <MonitorSmartphone className="h-4 w-4 text-brand-700" />
-          Device Sessions
+          Browsers & Devices
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -1090,7 +1106,7 @@ function DeviceSessionsCard({
           <div className="space-y-1">
             <p className="text-sm font-semibold text-gray-900">Manage where your account stays signed in</p>
             <p className="text-sm text-gray-500">
-              Up to 3 active sessions are kept. When a new device signs in beyond that, the least recently active one is revoked automatically.
+              You can stay signed in on up to 3 browsers or devices. If you reach the limit, choose one here or during sign-in to sign out.
             </p>
           </div>
           <Button
@@ -1450,28 +1466,28 @@ function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
 // ---------------------------------------------------------------------------
 
 function LinkAccountCard({
-  googleAccount,
-  gmailConnected,
+  accounts,
   providerReauthRequired,
   providerReauthProvider,
-  connectedGmail,
   providerReauthAt,
   lastSyncAt,
 }: {
-  googleAccount: { email: string | null } | null
-  gmailConnected: boolean
+  accounts: EmailAccount[]
   providerReauthRequired: boolean
   providerReauthProvider: string
-  connectedGmail: string | null
   providerReauthAt: string | null
   lastSyncAt: string | null
 }) {
   const queryClient = useQueryClient()
-  const bound = Boolean(googleAccount)
+  const bound = accounts.length > 0
 
   const disconnect = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/auth/google/disconnect', { method: 'POST' })
+    mutationFn: async (accountId: string) => {
+      const res = await fetch('/api/auth/google/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId }),
+      })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || 'Disconnect failed')
     },
@@ -1490,99 +1506,112 @@ function LinkAccountCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <KeyRound className="h-4 w-4 text-brand-700" />
-          Link Account
+          Email Connections
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-2xl border border-gray-200/80 bg-gray-50/70 p-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-gray-900">Google</p>
+                <p className="text-sm font-semibold text-gray-900">Connected inboxes</p>
                 <Badge
                   variant={bound ? 'default' : 'outline'}
                   className={bound ? 'bg-success-100 text-success hover:bg-success-100' : ''}
                 >
-                  {bound ? 'Bound' : 'Not bound'}
+                  {bound ? `${accounts.length} connected` : 'None connected'}
                 </Badge>
-                {bound && (
+                {bound && accounts.some((account) => account.reauthRequired) && (
                   <Badge
-                    variant={providerReauthRequired || gmailConnected ? 'default' : 'outline'}
-                    className={
-                      providerReauthRequired
-                        ? 'bg-warning-100 text-warning-700 hover:bg-warning-100'
-                        : gmailConnected
-                          ? 'bg-brand-100 text-brand-700 hover:bg-brand-100'
-                          : ''
-                    }
+                    variant="default"
+                    className="bg-warning-100 text-warning-700 hover:bg-warning-100"
                   >
-                    {providerReauthRequired ? 'Reconnect required' : gmailConnected ? 'Gmail syncing' : 'Gmail not syncing'}
+                    Reconnect required
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-gray-600">
-                {bound
-                  ? googleAccount?.email || 'Google account linked'
-                  : 'Bind your Google/Gmail account to sign in with Google.'}
-              </p>
-              {bound && (
-                <>
-                  <p className="text-sm text-gray-600">
-                    {providerReauthRequired
-                      ? 'Your Gmail connection has expired. Reconnect it to resume syncing.'
-                      : gmailConnected
-                        ? connectedGmail || 'Connected Gmail account'
-                        : 'Connect Gmail to start syncing mail.'}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {providerReauthRequired
-                      ? `Last valid connection: ${providerReauthAt ? new Date(providerReauthAt).toLocaleString() : 'unknown'}`
-                      : lastSyncAt
-                      ? `Last synced ${new Date(lastSyncAt).toLocaleString()}`
-                      : gmailConnected
-                        ? 'Connection is ready. Your next sync will use the current window below.'
-                        : 'Read-only OAuth connection. We never send, delete, or edit your emails.'}
-                  </p>
-                </>
-              )}
+              <p className="text-sm text-gray-600">Connect one or more Gmail accounts. EmailFlow uses read-only access and keeps each email connection separate for sync and filtering.</p>
             </div>
 
-            {providerReauthRequired ? (
-              <Button
-                size="sm"
-                className="gap-2 self-start"
-                onClick={() => { window.location.href = '/api/auth/google' }}
-              >
-                <Mail className="h-3.5 w-3.5" />
-                Reconnect
-              </Button>
-            ) : bound ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 self-start border-critical-100 text-critical-700 hover:bg-critical-50 hover:text-critical-700"
-                onClick={() => disconnect.mutate()}
-                disabled={disconnect.isPending}
-              >
-                {disconnect.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Unplug className="h-3.5 w-3.5" />
-                )}
-                Disconnect Google
-              </Button>
+            {accounts.length > 0 ? (
+              <div className="space-y-2">
+                {accounts.map((account) => {
+                  const reauthRequired = account.reauthRequired || (providerReauthRequired && accounts.length === 1)
+                  const syncedAt = account.lastSyncAt || lastSyncAt
+                  return (
+                    <div key={account.id} className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="border-brand-200 bg-brand-50 text-brand-700">
+                            Gmail
+                          </Badge>
+                          <span className="truncate text-sm font-medium text-gray-900">{account.email || 'Gmail account'}</span>
+                          <Badge
+                            variant={reauthRequired ? 'default' : account.syncEnabled ? 'outline' : 'outline'}
+                            className={reauthRequired ? 'bg-warning-100 text-warning-700 hover:bg-warning-100' : account.syncEnabled ? 'border-success-100 bg-success-50 text-success' : ''}
+                          >
+                            {reauthRequired ? 'Reconnect required' : account.syncEnabled ? 'Sync enabled' : 'Sync off'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                          {reauthRequired
+                            ? `Last valid connection: ${account.reauthAt || providerReauthAt ? new Date(account.reauthAt || providerReauthAt || '').toLocaleString() : 'unknown'}`
+                            : syncedAt
+                              ? `Last synced ${new Date(syncedAt).toLocaleString()}`
+                              : 'Connection is ready. Your next sync will use the current window below.'}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        {reauthRequired ? (
+                          <Button
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => { window.location.href = '/api/auth/google' }}
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                            Reconnect
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 border-critical-100 text-critical-700 hover:bg-critical-50 hover:text-critical-700"
+                          onClick={() => disconnect.mutate(account.id)}
+                          disabled={disconnect.isPending}
+                        >
+                          {disconnect.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Unplug className="h-3.5 w-3.5" />
+                          )}
+                          Disconnect
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             ) : (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-5 text-sm text-gray-500">
+                No email accounts connected yet.
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
               <a href="/api/auth/google" className="self-start">
                 <Button size="sm" className="gap-2">
                   <KeyRound className="h-3.5 w-3.5" />
-                  Connect Google
+                  Add Gmail account
                 </Button>
               </a>
-            )}
+              <Button size="sm" variant="outline" disabled className="gap-2">
+                Outlook coming soon
+              </Button>
+            </div>
           </div>
         </div>
 
-        {providerReauthRequired && (
+        {(providerReauthRequired || accounts.some((account) => account.reauthRequired)) && (
           <InlineNotice variant="warning">
             <p className="text-sm">
               Your {providerReauthProvider === 'outlook' ? 'Outlook' : 'Gmail'} connection can no longer refresh access.
@@ -1593,7 +1622,7 @@ function LinkAccountCard({
 
         <InlineNotice variant="info">
           <p className="text-sm">
-            Outlook and additional providers can be added later. For now, the settings flow is optimized for one Gmail connection.
+            Gmail is available now. Outlook and additional providers can use this same account list when they are added.
           </p>
         </InlineNotice>
       </CardContent>

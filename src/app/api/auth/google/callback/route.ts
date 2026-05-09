@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-session'
 import { createUserSession } from '@/lib/auth-sessions'
 import { setSessionCookie } from '@/lib/auth-token'
+import { isAppError } from '@/lib/app-errors'
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
@@ -130,6 +131,11 @@ export async function GET(req: NextRequest) {
     const accountTokenFields = {
       access_token: accessToken,
       expires_at: expiresAtEpoch,
+      syncEnabled: true,
+      reauthRequired: false,
+      reauthReason: null,
+      reauthAt: null,
+      reauthProvider: null,
       ...(refreshToken ? { refresh_token: refreshToken } : {}),
       ...(gmailEmail ? { email: gmailEmail } : {}),
     }
@@ -154,8 +160,24 @@ export async function GET(req: NextRequest) {
         )
       }
 
+      const existingUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { gmailConnected: true },
+      })
+
+      const userGmailFields = existingUser?.gmailConnected
+        ? {
+            gmailConnected: true,
+            syncEnabled: true,
+            emailProviderReauthRequired: false,
+            emailProviderReauthReason: null,
+            emailProviderReauthAt: null,
+            emailProviderReauthProvider: 'gmail' as const,
+          }
+        : gmailFields
+
       await prisma.$transaction([
-        prisma.user.update({ where: { id: user.id }, data: gmailFields }),
+        prisma.user.update({ where: { id: user.id }, data: userGmailFields }),
         prisma.account.upsert({
           where: { provider_providerAccountId: { provider: 'google', providerAccountId } },
           create: {
@@ -264,6 +286,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.redirect(await dashboardRedirectFor(targetUserId))
   } catch (err) {
+    if (isAppError(err) && err.code === 'DEVICE_LIMIT_REACHED') {
+      return NextResponse.redirect(new URL('/auth/signin?reason=DEVICE_LIMIT_REACHED', APP_URL))
+    }
     console.error('[google callback]', err)
     return NextResponse.redirect(new URL('/auth/signup?gmail_error=server_error', APP_URL))
   }

@@ -13,8 +13,9 @@ export async function POST(
 
     const email = await emailRepo.findEmailById(user.id, emailId)
     if (!email) return error('NOT_FOUND', 'Email not found', 404)
-    if (email.classification !== 'action') {
-      return error('INVALID_STATE', 'Confirm this email as Needs Action before extracting a task', 400)
+    const canExtract = email.classification === 'action' || email.classification === 'uncertain'
+    if (!canExtract) {
+      return error('INVALID_STATE', 'Only Needs Action or Uncertain emails can be extracted into tasks', 400)
     }
 
     // Prevent duplicate if an active task is already linked
@@ -26,17 +27,23 @@ export async function POST(
       return error('ALREADY_HAS_TASK', 'A task is already linked to this email', 409)
     }
 
-    if (email.awaitingReview) {
+    const wasUncertain = email.classification === 'uncertain'
+    if (wasUncertain) {
+      await emailRepo.setEmailBucket(emailId, 'tracked')
+    }
+
+    if (email.awaitingReview && !wasUncertain) {
       // Existing path: atomic claim prevents double-extraction
       after(async () => {
         try {
-          await createTaskFromClassifiedEmail(user.id, emailId, 'confirmed')
+          await createTaskFromClassifiedEmail(user.id, emailId, 'pending')
         } catch (err) {
           console.error(`[extract-task] awaitingReview path failed for ${emailId}:`, err)
         }
       })
     } else {
-      // Manual reclassification path: run pipeline directly (re-classifies then extracts)
+      // User-confirmed extraction: treat the email as actionable and create an
+      // AI suggestion, even when the original AI classification was uncertain.
       after(async () => {
         try {
           await processEmail(user.id, {
@@ -49,7 +56,8 @@ export async function POST(
             labels: email.labels,
             threadId: email.threadId,
             awaitingReview: false,
-            taskStatus: 'confirmed',
+            taskStatus: 'pending',
+            forceAction: true,
           })
         } catch (err) {
           console.error(`[extract-task] manual path failed for ${emailId}:`, err)

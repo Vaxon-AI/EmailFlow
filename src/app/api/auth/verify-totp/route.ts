@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { verify } from 'otplib'
 
-import { verifyToken, setSessionCookie } from '@/lib/auth-token'
+import { verifyToken, setSessionCookie, createToken } from '@/lib/auth-token'
 import { prisma } from '@/lib/prisma'
 import { createUserSession } from '@/lib/auth-sessions'
+import { isAppError } from '@/lib/app-errors'
 
 export async function POST(req: Request) {
   try {
@@ -74,6 +75,22 @@ export async function POST(req: Request) {
       },
     })
   } catch (err) {
+    if (isAppError(err) && err.code === 'DEVICE_LIMIT_REACHED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: err.message,
+          code: err.code,
+          deviceLimitToken: createToken({
+            userId: err.details?.userId as string,
+            purpose: 'device-limit',
+            remember: Boolean(err.details?.remember),
+          }),
+          data: err.details,
+        },
+        { status: 409 }
+      )
+    }
     console.error('[api/auth/verify-totp]', err)
     return NextResponse.json(
       { success: false, error: 'Verification failed' },

@@ -21,6 +21,15 @@ type TaskRow = {
   inferredDeadline?: Date | null
 }
 
+type DigestBuildResult = {
+  period: 'daily' | 'weekly'
+  periodStart: Date
+  periodEnd: Date
+  content: string
+  stats: Record<string, number>
+  isPreview?: boolean
+}
+
 function fmtDate(d: Date) {
   return d.toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
@@ -63,7 +72,7 @@ function buildDailyContent({
   }
 
   if (uncertain.length) {
-    lines.push(`### Uncertain (${uncertain.length})`)
+    lines.push(`### Unclassified (${uncertain.length})`)
     uncertain.forEach(e => lines.push(`- ${e.subject} · ${e.sender}`))
     lines.push('')
   }
@@ -239,7 +248,7 @@ async function resolveUserContext(userId: string, timezoneOverride?: string): Pr
 
 // ── Public API ───────────────────────────────────────────────
 
-export async function createDailyDigest(userId: string, timezone?: string) {
+async function buildDailyDigest(userId: string, timezone?: string, useAi = true): Promise<DigestBuildResult> {
   const { tz, plan } = await resolveUserContext(userId, timezone)
   const now = new Date()
   const start = startOfTodayInTz(now, tz)
@@ -255,6 +264,7 @@ export async function createDailyDigest(userId: string, timezone?: string) {
 
   const confirmed = tasks.filter(t => t.status === 'confirmed').sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
   const pending = tasks.filter(t => t.status === 'pending')
+  const completed = tasks.filter(t => t.status === 'completed')
 
   const stats = {
     actionCount: action.length,
@@ -262,12 +272,14 @@ export async function createDailyDigest(userId: string, timezone?: string) {
     unresolvedCount: uncertain.length,
     ignoredCount: ignored.length,
     taskTotal: tasks.length,
+    taskActive: confirmed.length,
     taskPending: pending.length,
+    taskCompleted: completed.length,
   }
 
   const dateLabel = fmtDate(start)
   let content: string
-  if (plan === 'pro') {
+  if (useAi && plan === 'pro') {
     try {
       content = await generateAIDigest({
         period: 'daily',
@@ -283,14 +295,102 @@ export async function createDailyDigest(userId: string, timezone?: string) {
     content = buildDailyContent({ action, awareness, uncertain, ignored, confirmed, pending, date: dateLabel })
   }
 
+  return { period: 'daily', periodStart: start, periodEnd: end, content, stats }
+}
+
+export async function createDailyDigest(userId: string, timezone?: string) {
+  const built = await buildDailyDigest(userId, timezone)
   return digestRepo.createDigest({
     userId,
-    period: 'daily',
+    ...built,
+  })
+}
+
+async function buildWeeklyDigest(userId: string, timezone?: string, useAi = true): Promise<DigestBuildResult> {
+  const { tz, plan } = await resolveUserContext(userId, timezone)
+  const now = new Date()
+  const start = startOfWeekInTz(now, tz)
+  const end = now
+
+  const days: Date[] = []
+  for (let i = 0; i < 7; i++) {
+    const dayStart = new Date(start.getTime() + i * 24 * 60 * 60 * 1000)
+    if (dayStart.getTime() > now.getTime()) break
+    days.push(dayStart)
+  }
+
+  const byDay = await Promise.all(
+    days.map(async (dayStart) => {
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1)
+      const range = { start: dayStart, end: dayEnd }
+
+      const [action, awareness, uncertain, ignored] = await Promise.all([
+        emailRepo.findEmailsByClassification(userId, 'action', range),
+        emailRepo.findEmailsByClassification(userId, 'awareness', range),
+        emailRepo.findEmailsByClassification(userId, 'uncertain', range),
+        emailRepo.findEmailsByClassification(userId, 'ignore', range),
+      ])
+
+      return { date: dayStart, action, awareness, uncertain, ignored }
+    })
+  )
+
+  const tasks = await taskRepo.findTasksByDateRange(userId, { start, end })
+  const confirmed = tasks.filter(t => t.status === 'confirmed')
+  const pending = tasks.filter(t => t.status === 'pending')
+  const completed = tasks.filter(t => t.status === 'completed')
+
+  const totalAction = byDay.reduce((s, d) => s + d.action.length, 0)
+  const totalAwareness = byDay.reduce((s, d) => s + d.awareness.length, 0)
+  const totalUncertain = byDay.reduce((s, d) => s + d.uncertain.length, 0)
+  const totalIgnored = byDay.reduce((s, d) => s + d.ignored.length, 0)
+
+  const stats = {
+    actionCount: totalAction,
+    awarenessCount: totalAwareness,
+    unresolvedCount: totalUncertain,
+    ignoredCount: totalIgnored,
+    taskTotal: tasks.length,
+    taskActive: confirmed.length,
+    taskPending: pending.length,
+    taskCompleted: completed.length,
+  }
+
+  const weekLabel = `${fmtShort(start)} - ${fmtShort(end)}`
+  let content: string
+  if (useAi && plan === 'pro') {
+    try {
+      content = await generateAIDigest({
+        period: 'weekly',
+        weekLabel,
+        byDay: byDay.map((d) => ({
+          dateLabel: fmtShort(d.date),
+          counts: {
+            action: d.action.length,
+            awareness: d.awareness.length,
+            uncertain: d.uncertain.length,
+            ignored: d.ignored.length,
+          },
+          actionEmails: d.action,
+        })),
+        tasks: { confirmed, pending },
+      })
+    } catch (err) {
+      console.warn('[digest-pipeline] AI weekly digest failed for user, falling back to template:', err)
+      content = buildWeeklyContent({ byDay, confirmed, pending, weekLabel })
+    }
+  } else {
+    content = buildWeeklyContent({ byDay, confirmed, pending, weekLabel })
+  }
+
+  return {
+    period: 'weekly',
     periodStart: start,
     periodEnd: end,
     content,
     stats,
-  })
+    isPreview: !isAfterSunday20InTz(now, tz),
+  }
 }
 
 export async function createWeeklyDigest(userId: string, timezone?: string) {
@@ -326,6 +426,7 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
   const tasks = await taskRepo.findTasksByDateRange(userId, { start, end })
   const confirmed = tasks.filter(t => t.status === 'confirmed')
   const pending = tasks.filter(t => t.status === 'pending')
+  const completed = tasks.filter(t => t.status === 'completed')
 
   const totalAction = byDay.reduce((s, d) => s + d.action.length, 0)
   const totalAwareness = byDay.reduce((s, d) => s + d.awareness.length, 0)
@@ -338,7 +439,9 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
     unresolvedCount: totalUncertain,
     ignoredCount: totalIgnored,
     taskTotal: tasks.length,
+    taskActive: confirmed.length,
     taskPending: pending.length,
+    taskCompleted: completed.length,
   }
 
   const weekLabel = `${fmtShort(start)} – ${fmtShort(end)}`
@@ -377,4 +480,22 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
     stats,
     isPreview: !isAfterSunday20InTz(now, tz),
   })
+}
+
+export async function previewDigest(userId: string, period: 'daily' | 'weekly', timezone?: string) {
+  const built = period === 'weekly'
+    ? await buildWeeklyDigest(userId, timezone, false)
+    : await buildDailyDigest(userId, timezone, false)
+  const now = new Date()
+
+  return {
+    id: `current-${period}`,
+    userId,
+    ...built,
+    stats: JSON.stringify(built.stats),
+    isPreview: true,
+    isCurrent: true,
+    createdAt: now,
+    updatedAt: now,
+  }
 }

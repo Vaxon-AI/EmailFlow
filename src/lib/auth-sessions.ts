@@ -17,6 +17,33 @@ const ROTATION_GRACE_PERIOD_MS = 30 * 1000
 
 type DeviceType = 'desktop' | 'mobile' | 'tablet' | 'bot' | 'unknown'
 
+type ActiveSessionDevice = {
+  id: string
+  deviceName: string
+  browser: string
+  os: string
+  userAgent: string
+  deviceType: string
+  deviceFingerprint: string | null
+  ipAddress?: string
+  lastActiveAt?: Date
+  expiresAt?: Date
+  createdAt?: Date
+}
+
+export type DeviceLimitDevice = {
+  id: string
+  deviceName: string
+  deviceType: string
+  browser: string
+  os: string
+  ipAddress: string
+  userAgent: string
+  lastActiveAt: Date
+  expiresAt: Date
+  createdAt: Date
+}
+
 export interface SessionUser {
   id: string
   email: string
@@ -160,6 +187,61 @@ function sessionTokenHash(token: string) {
   return crypto.createHash('sha256').update(token).digest('hex')
 }
 
+function deviceKey(session: Pick<ActiveSessionDevice, 'id' | 'deviceName' | 'browser' | 'os' | 'userAgent' | 'deviceFingerprint'>) {
+  return session.deviceFingerprint || [
+    session.deviceName,
+    session.browser,
+    session.os,
+    session.userAgent,
+  ].map((value) => String(value || '').trim().toLowerCase()).join('|') || session.id
+}
+
+function isSameDevice(session: ActiveSessionDevice, device: ReturnType<typeof getDeviceInfo>) {
+  if (session.deviceFingerprint && session.deviceFingerprint === device.deviceFingerprint) return true
+  return (
+    session.deviceName === device.deviceName &&
+    session.browser === device.browser &&
+    session.os === device.os &&
+    session.userAgent === device.userAgent
+  )
+}
+
+function uniqueLatestDevices<T extends ActiveSessionDevice>(sessions: T[]) {
+  const byDevice = new Map<string, T>()
+  const sorted = [...sessions].sort((a, b) => {
+    const aLast = a.lastActiveAt?.getTime() ?? 0
+    const bLast = b.lastActiveAt?.getTime() ?? 0
+    if (aLast !== bLast) return bLast - aLast
+    return (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0)
+  })
+
+  for (const session of sorted) {
+    const key = deviceKey(session)
+    if (!byDevice.has(key)) byDevice.set(key, session)
+  }
+
+  return [...byDevice.values()]
+}
+
+function toDeviceLimitDevices(sessions: ActiveSessionDevice[]): DeviceLimitDevice[] {
+  return uniqueLatestDevices(sessions)
+    .filter((session): session is ActiveSessionDevice & { lastActiveAt: Date; expiresAt: Date; createdAt: Date } =>
+      Boolean(session.lastActiveAt && session.expiresAt && session.createdAt)
+    )
+    .map((session) => ({
+      id: session.id,
+      deviceName: session.deviceName,
+      deviceType: session.deviceType,
+      browser: session.browser,
+      os: session.os,
+      ipAddress: session.ipAddress || '',
+      userAgent: session.userAgent,
+      lastActiveAt: session.lastActiveAt,
+      expiresAt: session.expiresAt,
+      createdAt: session.createdAt,
+    }))
+}
+
 function createRawSessionToken() {
   return crypto.randomBytes(32).toString('base64url')
 }
@@ -225,27 +307,33 @@ export async function createUserSession(input: {
         userAgent: true,
         deviceType: true,
         deviceFingerprint: true,
+        ipAddress: true,
+        lastActiveAt: true,
+        expiresAt: true,
+        createdAt: true,
       },
     })
 
-    const isKnownDevice = activeSessions.some((existingSession) => {
-      if (existingSession.deviceFingerprint && existingSession.deviceFingerprint === device.deviceFingerprint) {
-        return true
-      }
+    const matchingDeviceIds = activeSessions
+      .filter((existingSession) => isSameDevice(existingSession, device))
+      .map((session) => session.id)
+    const isKnownDevice = matchingDeviceIds.length > 0
+    const activeOtherDevices = uniqueLatestDevices(
+      activeSessions.filter((existingSession) => !isSameDevice(existingSession, device))
+    )
 
-      return (
-        existingSession.deviceName === device.deviceName &&
-        existingSession.browser === device.browser &&
-        existingSession.os === device.os
+    if (!isKnownDevice && activeOtherDevices.length >= MAX_ACTIVE_SESSIONS) {
+      throw new AppError(
+        'DEVICE_LIMIT_REACHED',
+        'You can stay signed in on up to 3 browsers or devices. Sign out one device to continue.',
+        409,
+        { userId: input.userId, remember, devices: toDeviceLimitDevices(activeOtherDevices) }
       )
-    })
+    }
 
-    const sessionsToRevoke = Math.max(0, activeSessions.length - MAX_ACTIVE_SESSIONS + 1)
-    const oldestIds = activeSessions.slice(0, sessionsToRevoke).map((item) => item.id)
-
-    if (oldestIds.length > 0) {
+    if (matchingDeviceIds.length > 0) {
       await tx.session.updateMany({
-        where: { id: { in: oldestIds } },
+        where: { id: { in: matchingDeviceIds } },
         data: {
           status: REVOKED_STATUS,
           revokedAt: now,
@@ -529,13 +617,42 @@ export async function rotateSessionToken(
 
 export async function revokeSessionById(sessionId: string, userId: string) {
   const now = new Date()
-  const result = await prisma.session.updateMany({
+  const target = await prisma.session.findFirst({
     where: {
       id: sessionId,
       userId,
       status: ACTIVE_STATUS,
       revokedAt: null,
       expiresAt: { gt: now },
+    },
+    select: {
+      id: true,
+      deviceFingerprint: true,
+      deviceName: true,
+      browser: true,
+      os: true,
+      userAgent: true,
+    },
+  })
+
+  if (!target) return false
+
+  const fingerprintFilter = target.deviceFingerprint
+    ? { deviceFingerprint: target.deviceFingerprint }
+    : {
+        deviceName: target.deviceName,
+        browser: target.browser,
+        os: target.os,
+        userAgent: target.userAgent,
+      }
+
+  const result = await prisma.session.updateMany({
+    where: {
+      userId,
+      status: ACTIVE_STATUS,
+      revokedAt: null,
+      expiresAt: { gt: now },
+      ...fingerprintFilter,
     },
     data: {
       status: REVOKED_STATUS,
@@ -601,7 +718,7 @@ export async function listActiveSessions(userId: string) {
     data: { status: EXPIRED_STATUS },
   })
 
-  return prisma.session.findMany({
+  const sessions = await prisma.session.findMany({
     where: {
       userId,
       status: ACTIVE_STATUS,
@@ -618,10 +735,13 @@ export async function listActiveSessions(userId: string) {
       os: true,
       ipAddress: true,
       userAgent: true,
+      deviceFingerprint: true,
       isNewDevice: true,
       lastActiveAt: true,
       expiresAt: true,
       createdAt: true,
     },
   })
+
+  return uniqueLatestDevices(sessions)
 }

@@ -72,9 +72,17 @@ model Account {
   createdAt         DateTime @default(now())
   email             String?
   updatedAt         DateTime @updatedAt
+  syncEnabled       Boolean  @default(true)
+  lastSyncAt        DateTime?
+  reauthRequired    Boolean  @default(false)
+  reauthReason      String?
+  reauthAt          DateTime?
+  reauthProvider    String?
+  emails            Email[]
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId, provider, syncEnabled])
 }
 
 model Session {
@@ -108,7 +116,8 @@ model Session {
 model Email {
   id               String          @id @default(cuid())
   userId           String
-  gmailMessageId   String          @unique
+  accountId        String?
+  gmailMessageId   String
   threadId         String?
   accountEmail     String          @default("")
   subject          String
@@ -138,11 +147,14 @@ model Email {
   aiReplyDraft      String?
   aiReplyGeneratedAt DateTime?
   aiReplyEditedAt   DateTime?
+  account          Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
   attachments      Attachment[]
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskLinks        TaskEmail[]
 
+  @@unique([userId, accountId, gmailMessageId])
   @@index([userId, receivedAt(sort: Desc)])
+  @@index([accountId, receivedAt(sort: Desc)])
   @@index([userId, classification, receivedAt(sort: Desc)])
   @@index([userId, processingStatus, receivedAt(sort: Desc)])
   @@index([userId, syncBatchId])

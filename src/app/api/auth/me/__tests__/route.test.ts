@@ -7,7 +7,7 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
     },
     account: {
-      findFirst: vi.fn(),
+      findMany: vi.fn(),
     },
   },
 }))
@@ -57,7 +57,7 @@ describe('GET /api/auth/me', () => {
       },
     })
     expect(mockUser.findUnique).not.toHaveBeenCalled()
-    expect(mockAccount.findFirst).not.toHaveBeenCalled()
+    expect(mockAccount.findMany).not.toHaveBeenCalled()
   })
 
   it('returns expanded account details when requested', async () => {
@@ -77,7 +77,30 @@ describe('GET /api/auth/me', () => {
       emailProviderReauthAt: syncStartDate,
       emailProviderReauthProvider: 'google',
     } as never)
-    mockAccount.findFirst.mockResolvedValue({ id: 'account-1' } as never)
+    mockAccount.findMany.mockResolvedValue([
+      {
+        id: 'account-1',
+        provider: 'google',
+        email: 'alice@gmail.com',
+        syncEnabled: true,
+        lastSyncAt: null,
+        reauthRequired: false,
+        reauthReason: null,
+        reauthAt: null,
+        reauthProvider: null,
+      },
+      {
+        id: 'account-2',
+        provider: 'google',
+        email: 'work@gmail.com',
+        syncEnabled: true,
+        lastSyncAt: syncStartDate,
+        reauthRequired: true,
+        reauthReason: 'refresh_failed',
+        reauthAt: syncStartDate,
+        reauthProvider: 'gmail',
+      },
+    ] as never)
 
     const res = await GET(new NextRequest('http://localhost/api/auth/me?details=full'))
 
@@ -85,14 +108,20 @@ describe('GET /api/auth/me', () => {
     const body = await res.json()
     expect(body.success).toBe(true)
     expect(body.user.googleAccount).toEqual({ email: 'alice@gmail.com' })
+    expect(body.user.emailAccounts).toHaveLength(2)
+    expect(body.user.emailAccounts[1]).toMatchObject({
+      id: 'account-2',
+      email: 'work@gmail.com',
+      reauthRequired: true,
+    })
     expect(body.user.currentSessionId).toBe('session-1')
     expect(mockUser.findUnique).toHaveBeenCalled()
-    expect(mockAccount.findFirst).toHaveBeenCalled()
+    expect(mockAccount.findMany).toHaveBeenCalled()
   })
 
   it('returns 404 when the stored user record is missing', async () => {
     mockUser.findUnique.mockResolvedValue(null)
-    mockAccount.findFirst.mockResolvedValue(null)
+    mockAccount.findMany.mockResolvedValue([] as never)
 
     const res = await GET(new NextRequest('http://localhost/api/auth/me?details=full'))
 

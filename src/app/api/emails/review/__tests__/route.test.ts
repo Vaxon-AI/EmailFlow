@@ -82,8 +82,8 @@ describe('POST /api/emails/review', () => {
     const res = await POST(postRequest({ action: 'approve', emailIds: ['email-1', 'email-2'] }))
 
     expect(mockCreateTaskFromClassifiedEmail).toHaveBeenCalledTimes(2)
-    expect(mockCreateTaskFromClassifiedEmail).toHaveBeenNthCalledWith(1, 'user-1', 'email-1')
-    expect(mockCreateTaskFromClassifiedEmail).toHaveBeenNthCalledWith(2, 'user-1', 'email-2')
+    expect(mockCreateTaskFromClassifiedEmail).toHaveBeenNthCalledWith(1, 'user-1', 'email-1', 'pending')
+    expect(mockCreateTaskFromClassifiedEmail).toHaveBeenNthCalledWith(2, 'user-1', 'email-2', 'pending')
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.data.action).toBe('approve')

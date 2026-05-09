@@ -3,7 +3,8 @@ import { GaxiosError } from 'gaxios'
 import { AppError } from '@/lib/app-errors'
 import { prisma } from '@/lib/prisma'
 import { clearProviderReauthRequired, markProviderReauthRequired } from '@/lib/provider-reauth'
-import type { EmailProvider, EmailMessage, NormalizedCategory } from '../email-provider'
+import type { ProviderReauthReason } from '@/lib/provider-reauth'
+import type { EmailProvider, EmailMessage, FetchNewEmailsOptions, NormalizedCategory } from '../email-provider'
 
 // ============================================================
 // Gmail Integration
@@ -64,10 +65,26 @@ function isInvalidCredentialError(error: unknown) {
 
 async function persistRefreshedTokens(input: {
   userId: string
+  accountId?: string
   accessToken: string
   refreshToken?: string | null
   expiryDate?: Date | null
 }) {
+  if (input.accountId) {
+    await prisma.account.update({
+      where: { id: input.accountId },
+      data: {
+        access_token: input.accessToken,
+        refresh_token: input.refreshToken ?? undefined,
+        expires_at: input.expiryDate ? Math.floor(input.expiryDate.getTime() / 1000) : null,
+        reauthRequired: false,
+        reauthReason: null,
+        reauthAt: null,
+        reauthProvider: null,
+      },
+    })
+  }
+
   await prisma.user.update({
     where: { id: input.userId },
     data: {
@@ -78,14 +95,41 @@ async function persistRefreshedTokens(input: {
   })
 }
 
-async function refreshAccessToken(userId: string, oauth2: InstanceType<typeof google.auth.OAuth2>) {
+async function markAccountReauthRequired(userId: string, accountId: string | undefined, reason: ProviderReauthReason) {
+  if (accountId) {
+    await prisma.account.update({
+      where: { id: accountId },
+      data: {
+        reauthRequired: true,
+        reauthReason: reason,
+        reauthAt: new Date(),
+        reauthProvider: 'gmail',
+      },
+    })
+  } else {
+    await markProviderReauthRequired(userId, 'gmail', reason)
+  }
+}
+
+async function clearAccountReauthRequired(userId: string, accountId?: string) {
+  if (accountId) {
+    await prisma.account.update({
+      where: { id: accountId },
+      data: { reauthRequired: false, reauthReason: null, reauthAt: null, reauthProvider: null },
+    })
+  } else {
+    await clearProviderReauthRequired(userId, 'gmail')
+  }
+}
+
+async function refreshAccessToken(userId: string, oauth2: InstanceType<typeof google.auth.OAuth2>, accountId?: string) {
   try {
     const refreshed = await oauth2.refreshAccessToken()
     const credentials = refreshed.credentials
     const accessToken = credentials.access_token
 
     if (!accessToken) {
-      await markProviderReauthRequired(userId, 'gmail', 'refresh_failed')
+      await markAccountReauthRequired(userId, accountId, 'refresh_failed')
       throw new AppError(
         'PROVIDER_REAUTH_REQUIRED',
         'Your Gmail connection has expired. Please reconnect it to continue syncing.',
@@ -98,11 +142,12 @@ async function refreshAccessToken(userId: string, oauth2: InstanceType<typeof go
 
     await persistRefreshedTokens({
       userId,
+      accountId,
       accessToken,
       refreshToken: credentials.refresh_token,
       expiryDate,
     })
-    await clearProviderReauthRequired(userId, 'gmail')
+    await clearAccountReauthRequired(userId, accountId)
     oauth2.setCredentials({
       access_token: accessToken,
       refresh_token: credentials.refresh_token || oauth2.credentials.refresh_token || undefined,
@@ -124,7 +169,7 @@ async function refreshAccessToken(userId: string, oauth2: InstanceType<typeof go
         ? 'invalid_grant'
         : 'refresh_failed'
 
-    await markProviderReauthRequired(userId, 'gmail', mappedReason)
+    await markAccountReauthRequired(userId, accountId, mappedReason)
     console.error('[gmail] refresh token failed', { userId, reason: mappedReason, error: getErrorText(error) })
 
     throw new AppError(
@@ -136,7 +181,58 @@ async function refreshAccessToken(userId: string, oauth2: InstanceType<typeof go
   }
 }
 
-async function getAuthenticatedClient(userId: string) {
+async function getAuthenticatedClient(userId: string, accountId?: string) {
+  if (accountId) {
+    const account = await prisma.account.findFirst({
+      where: { id: accountId, userId, provider: 'google' },
+      select: {
+        access_token: true,
+        refresh_token: true,
+        expires_at: true,
+        reauthRequired: true,
+        reauthReason: true,
+      },
+    })
+
+    if (!account?.refresh_token) {
+      await markAccountReauthRequired(userId, accountId, 'missing_refresh_token')
+      throw new AppError(
+        'PROVIDER_REAUTH_REQUIRED',
+        'Your Gmail connection is missing a refresh token. Please reconnect it.',
+        401,
+        { provider: 'gmail', reason: 'missing_refresh_token', accountId },
+      )
+    }
+
+    if (account.reauthRequired) {
+      throw new AppError(
+        'PROVIDER_REAUTH_REQUIRED',
+        'Your Gmail connection has expired. Please reconnect it to continue syncing.',
+        401,
+        { provider: 'gmail', reason: account.reauthReason || 'refresh_failed', accountId },
+      )
+    }
+
+    const oauth2 = getOAuth2Client()
+    const expiryMs = account.expires_at ? account.expires_at * 1000 : undefined
+    oauth2.setCredentials({
+      access_token: account.access_token || undefined,
+      refresh_token: account.refresh_token,
+      expiry_date: expiryMs,
+    })
+
+    const expiresSoon =
+      !account.access_token ||
+      !expiryMs ||
+      expiryMs <= Date.now() + 60 * 1000
+
+    if (expiresSoon) {
+      await refreshAccessToken(userId, oauth2, accountId)
+    }
+
+    return oauth2
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -248,9 +344,16 @@ function mapGmailLabelsToCategories(labels: string[]): NormalizedCategory[] {
 export const gmailProvider: EmailProvider = {
   name: 'gmail',
 
-  async fetchNewEmails(userId: string, options?: { since?: Date; maxResults?: number }): Promise<EmailMessage[]> {
+  async fetchNewEmails(userId: string, options?: FetchNewEmailsOptions): Promise<EmailMessage[]> {
     try {
-      const auth = await getAuthenticatedClient(userId)
+      const accountId = options?.accountId
+      const account = accountId
+        ? await prisma.account.findFirst({
+            where: { id: accountId, userId, provider: 'google' },
+            select: { id: true, email: true },
+          })
+        : null
+      const auth = await getAuthenticatedClient(userId, accountId)
       const gmail = google.gmail({ version: 'v1', auth })
 
       let startDate: Date
@@ -279,7 +382,7 @@ export const gmailProvider: EmailProvider = {
       const existingIds = new Set(
         (
           await prisma.email.findMany({
-            where: { userId },
+            where: { userId, accountId: accountId ?? null },
             select: { gmailMessageId: true },
           })
         ).map((e) => e.gmailMessageId)
@@ -345,6 +448,8 @@ export const gmailProvider: EmailProvider = {
           const providerCategories = mapGmailLabelsToCategories(gmailLabels)
 
           messages.push({
+            accountId: account?.id ?? null,
+            accountEmail: account?.email ?? '',
             providerMessageId: msg.id!,
             threadId: msg.threadId || null,
             subject,
@@ -360,7 +465,7 @@ export const gmailProvider: EmailProvider = {
         }
       }
 
-      await clearProviderReauthRequired(userId, 'gmail')
+      await clearAccountReauthRequired(userId, accountId)
       return messages
     } catch (error) {
       if (error instanceof AppError) {
@@ -368,7 +473,7 @@ export const gmailProvider: EmailProvider = {
       }
 
       if (isInvalidCredentialError(error)) {
-        await markProviderReauthRequired(userId, 'gmail', 'access_token_invalid')
+        await markAccountReauthRequired(userId, options?.accountId, 'access_token_invalid')
         console.error('[gmail] provider auth invalid during fetch', { userId, error: getErrorText(error) })
         throw new AppError(
           'PROVIDER_REAUTH_REQUIRED',
@@ -392,9 +497,9 @@ export const gmailProvider: EmailProvider = {
     }
   },
 
-  async previewCount(userId: string, { since }: { since: Date }): Promise<{ quotaImpactCount: number; capped: boolean }> {
+  async previewCount(userId: string, { since, accountId }: { since: Date; accountId?: string }): Promise<{ quotaImpactCount: number; capped: boolean }> {
     try {
-      const auth = await getAuthenticatedClient(userId)
+      const auth = await getAuthenticatedClient(userId, accountId)
       const gmail = google.gmail({ version: 'v1', auth })
       const afterStr = Math.floor(since.getTime() / 1000).toString()
 
@@ -450,19 +555,64 @@ export const gmailProvider: EmailProvider = {
     }
   },
 
-  async disconnect(userId: string): Promise<void> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { gmailAccessToken: true },
-    })
+  async disconnect(userId: string, accountId?: string): Promise<void> {
+    const account = accountId
+      ? await prisma.account.findFirst({
+          where: { id: accountId, userId, provider: 'google' },
+          select: { access_token: true },
+        })
+      : null
+    const user = !accountId
+      ? await prisma.user.findUnique({
+          where: { id: userId },
+          select: { gmailAccessToken: true },
+        })
+      : null
 
-    if (user?.gmailAccessToken) {
+    const token = account?.access_token || user?.gmailAccessToken
+    if (token) {
       try {
         const oauth2 = getOAuth2Client()
-        await oauth2.revokeToken(user.gmailAccessToken)
+        await oauth2.revokeToken(token)
       } catch {
         // Token might already be invalid
       }
+    }
+
+    if (accountId) {
+      await prisma.account.update({
+        where: { id: accountId },
+        data: {
+          access_token: null,
+          refresh_token: null,
+          expires_at: null,
+          syncEnabled: false,
+          reauthRequired: false,
+          reauthReason: null,
+          reauthAt: null,
+          reauthProvider: null,
+        },
+      })
+      const remaining = await prisma.account.count({ where: { userId, provider: 'google', syncEnabled: true } })
+      if (remaining === 0) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            gmailEmail: null,
+            gmailAccessToken: null,
+            gmailRefreshToken: null,
+            gmailTokenExpiry: null,
+            gmailConnected: false,
+            syncEnabled: false,
+            lastSyncAt: null,
+            emailProviderReauthRequired: false,
+            emailProviderReauthReason: null,
+            emailProviderReauthAt: null,
+            emailProviderReauthProvider: null,
+          },
+        })
+      }
+      return
     }
 
     await prisma.user.update({

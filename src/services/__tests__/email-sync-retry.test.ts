@@ -34,6 +34,8 @@ vi.mock('@/repositories/failed-email-sync-repo', () => ({
 vi.mock('@/repositories/user-repo', () => ({
   getUserSyncInfo: vi.fn(),
   updateLastSync: vi.fn(),
+  listEnabledGmailAccounts: vi.fn(),
+  updateAccountLastSync: vi.fn(),
 }))
 
 vi.mock('@/integrations', () => ({

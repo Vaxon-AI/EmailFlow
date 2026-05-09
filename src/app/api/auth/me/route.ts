@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const [user, googleAccount] = await Promise.all([
+    const [user, googleAccounts] = await Promise.all([
       prisma.user.findUnique({
         where: { id: context.user.id },
         select: {
@@ -42,9 +42,20 @@ export async function GET(request: NextRequest) {
           emailProviderReauthProvider: true,
         },
       }),
-      prisma.account.findFirst({
+      prisma.account.findMany({
         where: { userId: context.user.id, provider: 'google' },
-        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          provider: true,
+          email: true,
+          syncEnabled: true,
+          lastSyncAt: true,
+          reauthRequired: true,
+          reauthReason: true,
+          reauthAt: true,
+          reauthProvider: true,
+        },
       }),
     ])
 
@@ -71,7 +82,18 @@ export async function GET(request: NextRequest) {
         emailProviderReauthReason: user.emailProviderReauthReason,
         emailProviderReauthAt: user.emailProviderReauthAt,
         emailProviderReauthProvider: user.emailProviderReauthProvider,
-        googleAccount: googleAccount ? { email: user.gmailEmail ?? null } : null,
+        googleAccount: googleAccounts[0] ? { email: googleAccounts[0].email ?? user.gmailEmail ?? null } : null,
+        emailAccounts: googleAccounts.map((account) => ({
+          id: account.id,
+          provider: account.provider,
+          email: account.email,
+          syncEnabled: account.syncEnabled,
+          lastSyncAt: account.lastSyncAt,
+          reauthRequired: account.reauthRequired,
+          reauthReason: account.reauthReason,
+          reauthAt: account.reauthAt,
+          reauthProvider: account.reauthProvider,
+        })),
         currentSessionId: context.session.id,
       },
     })

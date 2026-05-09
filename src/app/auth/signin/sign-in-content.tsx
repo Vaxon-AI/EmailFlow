@@ -4,13 +4,27 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, MonitorSmartphone } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AuthShell } from '@/components/auth-shell'
 import { InlineNotice } from '@/components/inline-notice'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+
+type DeviceLimitDevice = {
+  id: string
+  deviceName: string
+  browser: string
+  os: string
+  lastActiveAt: string
+}
+
+type DeviceLimitState = {
+  token: string
+  devices: DeviceLimitDevice[]
+}
 
 export function SignInContent() {
   const router = useRouter()
@@ -22,6 +36,8 @@ export function SignInContent() {
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [deviceLimit, setDeviceLimit] = useState<DeviceLimitState | null>(null)
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null)
 
   useEffect(() => {
     const reason = searchParams.get('reason')
@@ -33,11 +49,30 @@ export function SignInContent() {
 
     if (reason === 'SESSION_REVOKED') {
       setError('This session is no longer valid. Please sign in again.')
+      return
+    }
+
+    if (reason === 'DEVICE_LIMIT_REACHED') {
+      setError('You can stay signed in on up to 3 browsers or devices. Sign in with email to choose one to sign out.')
     }
   }, [searchParams])
 
-  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
-    e.preventDefault()
+  function handleDeviceLimit(data: {
+    deviceLimitToken?: string
+    data?: { devices?: DeviceLimitDevice[] }
+    error?: string
+  }) {
+    if (data.deviceLimitToken && data.data?.devices?.length) {
+      setDeviceLimit({ token: data.deviceLimitToken, devices: data.data.devices })
+      setError('')
+      return true
+    }
+
+    setError(data.error || 'Device limit reached. Sign out an older device to continue.')
+    return true
+  }
+
+  async function submitLogin() {
     setError('')
     setLoading(true)
 
@@ -51,6 +86,10 @@ export function SignInContent() {
       const data = await res.json()
 
       if (!data.success) {
+        if (data.code === 'DEVICE_LIMIT_REACHED') {
+          handleDeviceLimit(data)
+          return
+        }
         setError(data.error || 'Login failed')
         return
       }
@@ -75,19 +114,77 @@ export function SignInContent() {
     }
   }
 
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault()
+    await submitLogin()
+  }
+
+  async function signOutDevice(sessionId: string) {
+    if (!deviceLimit) return
+    setRevokingDeviceId(sessionId)
+    try {
+      const res = await fetch('/api/auth/device-limit/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: deviceLimit.token, sessionId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Failed to sign out device')
+      toast.success('Device signed out')
+      setDeviceLimit(null)
+      await submitLogin()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign out device')
+    } finally {
+      setRevokingDeviceId(null)
+    }
+  }
+
   return (
-    <AuthShell
-      title="Welcome back"
-      description="Sign in to your account to continue"
-      footer={
-        <p className="text-center text-sm text-gray-500">
-          Don&apos;t have an account?{' '}
-          <Link href="/auth/signup" className="font-medium text-brand-600 hover:underline">
-            Create one
-          </Link>
-        </p>
-      }
-    >
+    <>
+      <Dialog open={deviceLimit !== null} onOpenChange={(open) => { if (!open) setDeviceLimit(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Choose a device to sign out</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              You can stay signed in on up to 3 browsers or devices. Sign out one below to continue on this browser.
+            </p>
+            <div className="space-y-2">
+              {deviceLimit?.devices.map((device) => (
+                <button
+                  key={device.id}
+                  type="button"
+                  onClick={() => signOutDevice(device.id)}
+                  disabled={revokingDeviceId !== null}
+                  className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-brand-200 hover:bg-brand-50 disabled:opacity-60"
+                >
+                  <MonitorSmartphone className="h-4 w-4 shrink-0 text-brand-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-900">{device.deviceName || 'Unknown device'}</p>
+                    <p className="truncate text-xs text-gray-500">{[device.browser, device.os].filter(Boolean).join(' · ') || 'Unknown environment'}</p>
+                    <p className="text-[11px] text-gray-400">Last active {new Date(device.lastActiveAt).toLocaleString()}</p>
+                  </div>
+                  {revokingDeviceId === device.id ? <Loader2 className="h-4 w-4 animate-spin text-brand-600" /> : null}
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <AuthShell
+        title="Welcome back"
+        description="Sign in to your account to continue"
+        footer={
+          <p className="text-center text-sm text-gray-500">
+            Don&apos;t have an account?{' '}
+            <Link href="/auth/signup" className="font-medium text-brand-600 hover:underline">
+              Create one
+            </Link>
+          </p>
+        }
+      >
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 space-y-2.5">
           <a
@@ -178,6 +275,7 @@ export function SignInContent() {
         </Button>
         </form>
       </div>
-    </AuthShell>
+      </AuthShell>
+    </>
   )
 }

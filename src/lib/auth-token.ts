@@ -8,7 +8,7 @@ export const SESSION_MAX_AGE_DEFAULT_SECONDS = 24 * 60 * 60
 
 export interface TokenPayload {
   userId: string
-  purpose?: 'pre-2fa'
+  purpose?: 'pre-2fa' | 'device-limit'
   remember?: boolean
 }
 

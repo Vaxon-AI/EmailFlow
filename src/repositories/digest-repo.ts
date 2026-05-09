@@ -14,22 +14,45 @@ export interface CreateDigestData {
   isPreview?: boolean
 }
 
+function periodEndExclusive(period: string, periodStart: Date) {
+  const days = period === 'weekly' ? 7 : 1
+  return new Date(periodStart.getTime() + days * 24 * 60 * 60 * 1000)
+}
+
 export async function createDigest(data: CreateDigestData) {
   const isPreview = data.isPreview ?? false
-  const existing = await prisma.digest.findFirst({
-    where: { userId: data.userId, period: data.period, periodStart: data.periodStart },
+  const existingDigests = await prisma.digest.findMany({
+    where: {
+      userId: data.userId,
+      period: data.period,
+      periodStart: {
+        gte: data.periodStart,
+        lt: periodEndExclusive(data.period, data.periodStart),
+      },
+    },
+    orderBy: { createdAt: 'desc' },
   })
+  const [existing, ...duplicates] = existingDigests
 
   if (existing) {
-    return prisma.digest.update({
-      where: { id: existing.id },
-      data: {
-        content: data.content,
-        stats: JSON.stringify(data.stats),
-        periodEnd: data.periodEnd,
-        isPreview,
-      },
-    })
+    const [updated] = await prisma.$transaction([
+      prisma.digest.update({
+        where: { id: existing.id },
+        data: {
+          periodStart: data.periodStart,
+          periodEnd: data.periodEnd,
+          content: data.content,
+          stats: JSON.stringify(data.stats),
+          isPreview,
+          createdAt: new Date(),
+        },
+      }),
+      ...(duplicates.length
+        ? [prisma.digest.deleteMany({ where: { id: { in: duplicates.map((digest) => digest.id) } } })]
+        : []),
+    ])
+
+    return updated
   }
 
   return prisma.digest.create({

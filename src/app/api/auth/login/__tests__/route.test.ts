@@ -20,6 +20,7 @@ vi.mock('@/lib/auth-sessions', () => ({
 import { prisma } from '@/lib/prisma'
 import { verifyPassword } from '@/lib/auth-password'
 import { createUserSession } from '@/lib/auth-sessions'
+import { AppError } from '@/lib/app-errors'
 import { POST } from '../route'
 
 const mockUser = vi.mocked(prisma.user)
@@ -97,6 +98,29 @@ describe('POST /api/auth/login', () => {
     const body = await res.json()
     expect(body.requiresTwoFactor).toBe(true)
     expect(body.tempToken).toBeDefined()
+  })
+
+  it('returns 409 with device choices when the browser/device limit is reached', async () => {
+    mockUser.findUnique.mockResolvedValue(STORED_USER as never)
+    mockVerify.mockResolvedValue(true)
+    mockCreateSession.mockRejectedValue(new AppError(
+      'DEVICE_LIMIT_REACHED',
+      'Device limit reached',
+      409,
+      {
+        userId: 'user-1',
+        remember: false,
+        devices: [{ id: 'session-1', deviceName: 'Desktop · macOS' }],
+      }
+    ))
+
+    const res = await POST(postRequest({ email: 'alice@example.com', password: 'correct' }))
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.code).toBe('DEVICE_LIMIT_REACHED')
+    expect(body.deviceLimitToken).toBe('mock-temp-token')
+    expect(body.data.devices).toHaveLength(1)
   })
 
   it('returns 500 on unexpected error', async () => {

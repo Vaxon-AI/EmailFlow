@@ -5,14 +5,28 @@ export const dynamic = 'force-dynamic'
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
+import { Loader2, MonitorSmartphone } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { AuthShell } from '@/components/auth-shell'
 import { InlineNotice } from '@/components/inline-notice'
 import { StatePanel } from '@/components/state-panel'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+
+type DeviceLimitDevice = {
+  id: string
+  deviceName: string
+  browser: string
+  os: string
+  lastActiveAt: string
+}
+
+type DeviceLimitState = {
+  token: string
+  devices: DeviceLimitDevice[]
+}
 
 function VerifyTotpContent() {
   const router = useRouter()
@@ -22,9 +36,10 @@ function VerifyTotpContent() {
   const [totpCode, setTotpCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [deviceLimit, setDeviceLimit] = useState<DeviceLimitState | null>(null)
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function submitTotp() {
     setError('')
     setLoading(true)
 
@@ -41,6 +56,10 @@ function VerifyTotpContent() {
       const data = await res.json()
 
       if (!data.success) {
+        if (data.code === 'DEVICE_LIMIT_REACHED' && data.deviceLimitToken && data.data?.devices?.length) {
+          setDeviceLimit({ token: data.deviceLimitToken, devices: data.data.devices })
+          return
+        }
         setError(data.error || 'Verification failed')
         return
       }
@@ -57,18 +76,76 @@ function VerifyTotpContent() {
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    await submitTotp()
+  }
+
+  async function signOutDevice(sessionId: string) {
+    if (!deviceLimit) return
+    setRevokingDeviceId(sessionId)
+    try {
+      const res = await fetch('/api/auth/device-limit/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: deviceLimit.token, sessionId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Failed to sign out device')
+      toast.success('Device signed out')
+      setDeviceLimit(null)
+      await submitTotp()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign out device')
+    } finally {
+      setRevokingDeviceId(null)
+    }
+  }
+
   return (
-    <AuthShell
-      title="Two-factor authentication"
-      description="Enter the 6-digit code from your authenticator app."
-      footer={
-        <p className="text-center text-sm text-gray-500">
-          <Link href="/auth/signin" className="text-brand-600 hover:underline">
-            Back to sign in
-          </Link>
-        </p>
-      }
-    >
+    <>
+      <Dialog open={deviceLimit !== null} onOpenChange={(open) => { if (!open) setDeviceLimit(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Choose a device to sign out</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              You can stay signed in on up to 3 browsers or devices. Sign out one below to continue on this browser.
+            </p>
+            <div className="space-y-2">
+              {deviceLimit?.devices.map((device) => (
+                <button
+                  key={device.id}
+                  type="button"
+                  onClick={() => signOutDevice(device.id)}
+                  disabled={revokingDeviceId !== null}
+                  className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-brand-200 hover:bg-brand-50 disabled:opacity-60"
+                >
+                  <MonitorSmartphone className="h-4 w-4 shrink-0 text-brand-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-900">{device.deviceName || 'Unknown device'}</p>
+                    <p className="truncate text-xs text-gray-500">{[device.browser, device.os].filter(Boolean).join(' · ') || 'Unknown environment'}</p>
+                    <p className="text-[11px] text-gray-400">Last active {new Date(device.lastActiveAt).toLocaleString()}</p>
+                  </div>
+                  {revokingDeviceId === device.id ? <Loader2 className="h-4 w-4 animate-spin text-brand-600" /> : null}
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <AuthShell
+        title="Two-factor authentication"
+        description="Enter the 6-digit code from your authenticator app."
+        footer={
+          <p className="text-center text-sm text-gray-500">
+            <Link href="/auth/signin" className="text-brand-600 hover:underline">
+              Back to sign in
+            </Link>
+          </p>
+        }
+      >
       {!tempToken ? (
         <StatePanel
           variant="danger"
@@ -106,7 +183,8 @@ function VerifyTotpContent() {
           </Button>
         </form>
       )}
-    </AuthShell>
+      </AuthShell>
+    </>
   )
 }
 
