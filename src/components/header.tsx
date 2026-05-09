@@ -197,7 +197,7 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
             <button
               type="button"
               onClick={() => router.push('/dashboard/emails?tab=unclassified')}
-              className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-warning-100 bg-warning-50 px-3 text-sm font-medium text-warning-700 transition-colors hover:bg-warning-100"
               title="Emails AI couldn't categorize on its own — open to classify manually"
             >
               <AlertTriangle className="h-3.5 w-3.5" />
@@ -234,7 +234,7 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
             disabled={syncMutation.isPending || checkingSyncState}
             title={syncMutation.isPending ? 'Syncing...' : 'Sync emails'}
             className={cn(
-              'rounded-full border border-transparent p-2 text-gray-400 transition-colors hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40'
+              'rounded-full border border-transparent p-2 text-gray-400 transition-colors hover:border-brand-100 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-40'
             )}
           >
             <RefreshCw className={cn('h-4 w-4', (syncMutation.isPending || checkingSyncState) && 'animate-spin')} />
@@ -242,7 +242,7 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex items-center gap-2 rounded-xl border border-gray-200/80 bg-white px-3 py-1.5 text-sm shadow-sm transition-colors hover:bg-gray-50">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-50 text-brand-600">
                 <User className="h-4 w-4" />
               </div>
               <span className="max-w-28 truncate">{user?.name || 'User'}</span>
@@ -287,13 +287,13 @@ function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
   const isPartial = ok && (failedCount > 0 || pendingFailedCount > 0)
 
   const statusIcon = !ok
-    ? <AlertCircle className="h-5 w-5 text-red-500" />
+    ? <AlertCircle className="h-5 w-5 text-critical" />
     : isPartial
-    ? <AlertTriangle className="h-5 w-5 text-amber-500" />
-    : <CheckCircle2 className="h-5 w-5 text-green-500" />
+    ? <AlertTriangle className="h-5 w-5 text-warning" />
+    : <CheckCircle2 className="h-5 w-5 text-success" />
 
   const statusLabel = !ok ? 'Sync failed' : isPartial ? 'Partial success' : 'Success'
-  const statusColor = !ok ? 'text-red-600' : isPartial ? 'text-amber-600' : 'text-green-600'
+  const statusColor = !ok ? 'text-critical' : isPartial ? 'text-warning' : 'text-success'
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
@@ -326,18 +326,18 @@ function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
               <SyncLine label={`${pendingFailedCount} failed email${pendingFailedCount === 1 ? '' : 's'} pending retry`} warn />
             )}
             {processing && (
-              <li className="flex items-center gap-2 text-blue-600 pt-0.5">
+              <li className="flex items-center gap-2 text-brand-600 pt-0.5">
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                 <span>Classifying emails and extracting tasks...</span>
               </li>
             )}
             {quotaLimited && (
-              <li className="mt-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
+              <li className="mt-2 rounded-lg border border-warning-100 bg-warning-50/80 px-3 py-2 text-xs text-warning-700">
                 <span className="font-medium">Free plan limit reached.</span>{' '}
                 {quotaRemaining === 0
                   ? 'Newly synced emails are sitting in the Unclassified tab — open any of them to classify manually, or '
                   : `Only ${quotaRemaining} email${quotaRemaining === 1 ? '' : 's'} left to classify this month. `}
-                <a href="mailto:support@emailflow.ai?subject=Pro plan early access" className="font-semibold underline hover:text-amber-900">
+                <a href="mailto:support@emailflow.ai?subject=Pro plan early access" className="font-semibold underline hover:text-warning">
                   upgrade to Pro
                 </a>{' '}
                 for unlimited classification.
@@ -367,7 +367,7 @@ function SyncLine({ label, muted, warn }: { label: string; muted?: boolean; warn
     <li className={cn(
       'flex items-center gap-2',
       muted && 'text-gray-400',
-      warn && 'text-amber-600',
+      warn && 'text-warning',
     )}>
       <span className="h-1 w-1 rounded-full bg-current opacity-60 shrink-0" />
       {label}

@@ -62,7 +62,7 @@ export function MonthYearPanel({
             <button
               type="button"
               onClick={() => onChange(new Date(activeYear - 1, activeMonth, 1))}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-700"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-50 hover:text-brand-700"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -72,14 +72,14 @@ export function MonthYearPanel({
                 setYearPageStart(activeYear - 5)
                 setView('years')
               }}
-              className="rounded-lg px-3 py-1 text-sm font-semibold text-gray-900 transition-colors hover:bg-blue-50 hover:text-blue-800"
+              className="rounded-lg px-3 py-1 text-sm font-semibold text-gray-900 transition-colors hover:bg-brand-50 hover:text-brand-700"
             >
               {activeYear}
             </button>
             <button
               type="button"
               onClick={() => onChange(new Date(activeYear + 1, activeMonth, 1))}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-700"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-50 hover:text-brand-700"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -90,14 +90,14 @@ export function MonthYearPanel({
               type="button"
               onClick={() => setYearPageStart((prev) => Math.max(prev - 12, minYear))}
               disabled={!showPreviousYears}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-30"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               type="button"
               onClick={() => setView('months')}
-              className="rounded-lg px-3 py-1 text-sm font-semibold text-gray-900 transition-colors hover:bg-blue-50 hover:text-blue-800"
+              className="rounded-lg px-3 py-1 text-sm font-semibold text-gray-900 transition-colors hover:bg-brand-50 hover:text-brand-700"
             >
               {yearPageStart} - {yearPageStart + 11}
             </button>
@@ -105,7 +105,7 @@ export function MonthYearPanel({
               type="button"
               onClick={() => setYearPageStart((prev) => Math.min(prev + 12, maxYear - 11))}
               disabled={!showNextYears}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-30"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -124,8 +124,8 @@ export function MonthYearPanel({
                 onClick={() => updateMonth(index)}
                 className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
                   active
-                    ? 'border-blue-300 bg-blue-100 text-blue-900'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800'
+                    ? 'border-brand-300 bg-brand-100 text-blue-900'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700'
                 }`}
               >
                 {monthName.slice(0, 3)}
@@ -144,8 +144,8 @@ export function MonthYearPanel({
                 onClick={() => updateYear(year)}
                 className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
                   active
-                    ? 'border-blue-300 bg-blue-100 text-blue-900'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800'
+                    ? 'border-brand-300 bg-brand-100 text-blue-900'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700'
                 }`}
               >
                 {year}

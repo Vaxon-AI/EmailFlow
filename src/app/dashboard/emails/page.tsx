@@ -25,7 +25,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
-import { getEmailClassConfig } from '@/lib/email-classification'
+import { EMAIL_DISPLAY_CONFIG, getEmailDisplayState } from '@/lib/email-classification'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { BatchReassignModal } from '@/components/batch-reassign-modal'
 import { InlineEditableName } from '@/components/inline-editable-name'
@@ -577,19 +577,19 @@ function EmailsContent() {
       />
 
       {unclassifiedCount > 0 && tab !== 'unclassified' && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm">
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-warning-100 bg-warning-50/70 px-4 py-3 text-sm">
           <div className="min-w-0">
-            <p className="font-medium text-amber-900">
+            <p className="font-medium text-warning-700">
               {unclassifiedCount} unclassified email{unclassifiedCount === 1 ? '' : 's'}
             </p>
-            <p className="mt-0.5 text-xs text-amber-800">
+            <p className="mt-0.5 text-xs text-warning">
               AI was either unsure or hit your free plan limit. Open any of them to classify manually, or upgrade to Pro.
             </p>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="shrink-0 border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+            className="shrink-0 border-warning-100 bg-white text-warning-700 hover:bg-warning-50"
             onClick={() => {
               setTab('unclassified')
               setPage(1)
@@ -644,8 +644,8 @@ function EmailsContent() {
                 <PopoverTrigger
                   className={`inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-xs transition-all ${
                     dateRange?.from
-                      ? 'border-blue-300 bg-blue-50 text-blue-700 shadow-sm'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:bg-blue-50/70 hover:text-blue-700'
+                      ? 'border-brand-300 bg-brand-50 text-brand-700 shadow-sm'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-brand-200 hover:bg-brand-50/70 hover:text-brand-700'
                   }`}
                 >
                   <CalendarIcon className="h-3.5 w-3.5" />
@@ -671,8 +671,8 @@ function EmailsContent() {
                         onClick={() => setSelectingStep('from')}
                         className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                           selectingStep === 'from'
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'bg-brand-50 text-brand-700 hover:bg-brand-100'
                         }`}
                       >
                         {dateRange?.from ? format(dateRange.from, 'MMM d, yyyy') : 'Start date'}
@@ -682,9 +682,9 @@ function EmailsContent() {
                         onClick={() => setSelectingStep('to')}
                         className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                           selectingStep === 'to'
-                            ? 'bg-blue-600 text-white shadow-sm'
+                            ? 'bg-brand-600 text-white shadow-sm'
                             : dateRange?.to
-                              ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                              ? 'bg-brand-50 text-brand-700 hover:bg-brand-100'
                               : 'bg-gray-50 text-gray-400'
                         }`}
                       >
@@ -697,7 +697,7 @@ function EmailsContent() {
                           setDateRange(undefined)
                           setSelectingStep('from')
                         }}
-                        className="ml-3 text-xs font-medium text-gray-400 transition-colors hover:text-red-500"
+                        className="ml-3 text-xs font-medium text-gray-400 transition-colors hover:text-critical"
                       >
                         Clear
                       </button>
@@ -726,7 +726,7 @@ function EmailsContent() {
                   />
                   {/* Footer: only shown when from is selected but to is not yet */}
                   {dateRange?.from && !dateRange?.to && (
-                    <div className="flex items-center justify-between border-t border-gray-100 bg-blue-50/40 px-4 py-2">
+                    <div className="flex items-center justify-between border-t border-gray-100 bg-brand-50/40 px-4 py-2">
                       <p className="text-xs text-gray-500">
                         <span className="font-medium text-gray-700">{format(dateRange.from, 'MMM d')}</span>
                         {' '}selected, now choose an end date
@@ -805,8 +805,8 @@ function EmailsContent() {
           // Classification in progress
           const count = batchStatus?.totalEmails ?? pendingCount
           return (
-            <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-2.5 text-sm text-blue-700">
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
+            <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-2.5 text-sm text-brand-700">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
               <span>
                 {count > 0
                   ? <><span className="font-medium">{count} email{count === 1 ? '' : 's'}</span>{' '}being classified — tags appear once AI finishes.</>
@@ -817,24 +817,24 @@ function EmailsContent() {
         }
         if (batchStatus.actionEmailCount > 0) {
           return (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-warning-100 bg-warning-50 px-4 py-3 shadow-sm">
               <button
                 onClick={() => setShowBatchModal(true)}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                  <Zap className="h-4 w-4 text-amber-600" />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-100">
+                  <Zap className="h-4 w-4 text-warning" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-amber-900">
+                  <p className="text-sm font-semibold text-warning-700">
                     {batchStatus.actionEmailCount} action email{batchStatus.actionEmailCount === 1 ? '' : 's'} found in this sync
                   </p>
-                  <p className="text-xs text-amber-700">Tap to review — see what needs your attention.</p>
+                  <p className="text-xs text-warning-700">Tap to review — see what needs your attention.</p>
                 </div>
               </button>
               <button
                 onClick={dismissBatchBanner}
-                className="shrink-0 rounded-full p-1.5 text-amber-500 transition-colors hover:bg-amber-100 hover:text-amber-700"
+                className="shrink-0 rounded-full p-1.5 text-warning transition-colors hover:bg-warning-100 hover:text-warning-700"
                 title="Dismiss"
               >
                 <X className="h-4 w-4" />
@@ -847,8 +847,8 @@ function EmailsContent() {
 
       {/* Fallback processing banner — shown when no active batch but pending emails exist */}
       {!isLoading && !batchBannerActive && pendingCount > 0 && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-2.5 text-sm text-blue-700">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
+        <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-2.5 text-sm text-brand-700">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
           <span>
             <span className="font-medium">{pendingCount} email{pendingCount === 1 ? '' : 's'}</span>
             {' '}being classified — visible once AI finishes, tags appear shortly.
@@ -861,7 +861,7 @@ function EmailsContent() {
           Change Project). The dedicated review modal was removed; the tab is
           now the single source of truth. */}
       {!isLoading && manualReviewMode && pendingReviewCount > 0 && !reviewBannerDismissed && (
-        <div className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+        <div className="flex w-full items-center gap-3 rounded-xl border border-warning-100 bg-warning-50 px-4 py-3 shadow-sm">
           <button
             onClick={() => {
               ackCurrentReviewBatch()
@@ -873,19 +873,19 @@ function EmailsContent() {
             }}
             className="flex flex-1 items-center gap-3 text-left transition-colors hover:opacity-80"
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-              <Eye className="h-4 w-4 text-amber-600" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-100">
+              <Eye className="h-4 w-4 text-warning" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-amber-900">
+              <p className="text-sm font-semibold text-warning-700">
                 {pendingReviewCount} email{pendingReviewCount === 1 ? '' : 's'} ready for action review
               </p>
-              <p className="text-xs text-amber-700">Tap to triage — generate tasks or ignore in bulk.</p>
+              <p className="text-xs text-warning-700">Tap to triage — generate tasks or ignore in bulk.</p>
             </div>
           </button>
           <button
             onClick={ackCurrentReviewBatch}
-            className="shrink-0 rounded-full p-1.5 text-amber-500 transition-colors hover:bg-amber-100 hover:text-amber-700"
+            className="shrink-0 rounded-full p-1.5 text-warning transition-colors hover:bg-warning-100 hover:text-warning-700"
             title="Hide for this sync"
           >
             <X className="h-4 w-4" />
@@ -906,10 +906,10 @@ function EmailsContent() {
         const ignoring = bulkIgnoreMutation.isPending
         const ids = [...selectedIds]
         return (
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-2.5 shadow-sm">
-            <span className="text-sm font-medium text-blue-700">{selectedIds.size} selected</span>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/80 px-4 py-2.5 shadow-sm">
+            <span className="text-sm font-medium text-brand-700">{selectedIds.size} selected</span>
             {selectedIds.size < filtered.length && (
-              <button onClick={selectAll} className="text-xs text-blue-500 hover:text-blue-700 hover:underline">
+              <button onClick={selectAll} className="text-xs text-brand-500 hover:text-brand-700 hover:underline">
                 Select all {filtered.length}
               </button>
             )}
@@ -926,7 +926,7 @@ function EmailsContent() {
               Generate Tasks{eligibleForGenerate > 0 && eligibleForGenerate < selectedIds.size ? ` (${eligibleForGenerate})` : ''}
             </Button>
             {uncertainSelected > 0 && (
-              <span className="text-xs text-amber-700">
+              <span className="text-xs text-warning-700">
                 {uncertainSelected} uncertain email{uncertainSelected === 1 ? '' : 's'} skipped until you confirm the classification.
               </span>
             )}
@@ -949,7 +949,7 @@ function EmailsContent() {
             >
               <FolderOpen className="h-3 w-3" /> Change Project
             </Button>
-            <button onClick={clearSelection} className="ml-1 rounded p-1 text-blue-400 hover:bg-blue-100 hover:text-blue-600">
+            <button onClick={clearSelection} className="ml-1 rounded p-1 text-brand-400 hover:bg-brand-100 hover:text-brand-600">
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -991,7 +991,7 @@ function EmailsContent() {
               Auto mode will process emails currently waiting for manual review and create tasks for action emails without asking you first. Future action emails will also be handled automatically.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <div className="rounded-xl border border-warning-100 bg-warning-50 px-3 py-2 text-sm text-warning-700">
             This may create tasks from pending review emails in the background.
           </div>
           <div className="flex justify-end gap-2">
@@ -1078,7 +1078,7 @@ function SyncBatchModal({
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-amber-500" />
+            <Zap className="h-4 w-4 text-warning" />
             {batchStatus.actionEmailCount} Action Email{batchStatus.actionEmailCount === 1 ? '' : 's'} — Last Sync
           </DialogTitle>
         </DialogHeader>
@@ -1099,7 +1099,7 @@ function SyncBatchModal({
                 key={email.id}
                 href={`/dashboard/emails/${email.id}`}
                 onClick={onClose}
-                className="flex items-start gap-3 rounded-xl border border-gray-200/80 bg-white px-4 py-3 text-left transition-all hover:border-blue-200 hover:bg-blue-50/60 hover:shadow-sm"
+                className="flex items-start gap-3 rounded-xl border border-gray-200/80 bg-white px-4 py-3 text-left transition-all hover:border-brand-200 hover:bg-brand-50/60 hover:shadow-sm"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-gray-900">
@@ -1118,12 +1118,12 @@ function SyncBatchModal({
 
                 <div className="shrink-0">
                   {linkedTasks.length > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-600">
                       <CheckSquare className="h-2.5 w-2.5" />
                       Task created
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                    <span className="inline-flex items-center rounded-md border border-warning-100 bg-warning-50 px-2 py-0.5 text-[10px] font-medium text-warning-700">
                       No task yet
                     </span>
                   )}
@@ -1263,7 +1263,7 @@ function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onT
                 ref={(el) => { if (el) el.indeterminate = someIdentitySel && !allIdentitySel }}
                 onChange={() => onBulkToggle(identityEmailIds, !allIdentitySel)}
                 onClick={(e) => e.stopPropagation()}
-                className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600 transition-opacity ${allIdentitySel || someIdentitySel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${allIdentitySel || someIdentitySel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
               />
               <div
                 role="button"
@@ -1275,7 +1275,7 @@ function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onT
                     toggleIdentity(identity.id)
                   }
                 }}
-                className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 ${isIdentityCollapsed ? '-rotate-90' : ''}`} />
                 <UserRound className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -1284,7 +1284,7 @@ function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onT
                   : <InlineEditableName name={identity.name} className="text-xs font-semibold uppercase tracking-widest text-slate-500" onSave={(n) => renameIdentity(identity.id, n)} />
                 }
                 {totalAttention > 0 && (
-                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600 ring-1 ring-red-100">
+                  <span className="rounded-full bg-critical-50 px-2 py-0.5 text-[10px] font-semibold text-critical ring-1 ring-critical-100">
                     {totalAttention} need action
                   </span>
                 )}
@@ -1310,7 +1310,7 @@ function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onT
                           ref={(el) => { if (el) el.indeterminate = someProjectSel && !allProjectSel }}
                           onChange={() => onBulkToggle(projectEmailIds, !allProjectSel)}
                           onClick={(e) => e.stopPropagation()}
-                          className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600 transition-opacity ${allProjectSel || someProjectSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${allProjectSel || someProjectSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         />
                         <div
                           role="button"
@@ -1322,13 +1322,13 @@ function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onT
                               toggleProject(project.id)
                             }
                           }}
-                          className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                          className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                         >
                           <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform duration-150 ${isProjectCollapsed ? '-rotate-90' : ''}`} />
                           <FolderOpen className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                           <InlineEditableName name={project.name} className="text-sm font-medium text-slate-700" onSave={(n) => renameProject(project.id, n)} />
                           {projectAttention > 0 && (
-                            <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-500">
+                            <span className="rounded-full bg-critical-50 px-1.5 py-0.5 text-[10px] font-semibold text-critical">
                               {projectAttention}
                             </span>
                           )}
@@ -1360,7 +1360,7 @@ function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onT
               checked={allUngroupedSel}
               ref={(el) => { if (el) el.indeterminate = someUngroupedSel && !allUngroupedSel }}
               onChange={() => onBulkToggle(ungroupedIds, !allUngroupedSel)}
-              className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600 transition-opacity ${allUngroupedSel || someUngroupedSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+              className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${allUngroupedSel || someUngroupedSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             />
             <FolderOpen className="h-3.5 w-3.5 text-slate-400" />
             <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">Uncategorized</span>
@@ -1393,8 +1393,8 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
   return (
     <div className={`group flex items-center gap-3 rounded-xl border px-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:shadow-sm ${
       isSelected
-        ? 'border-blue-300 bg-blue-50/50'
-        : `border-gray-200/80 bg-white hover:border-blue-200 hover:bg-blue-50/60 ${needsAttention ? 'border-l-2 border-l-red-400' : ''}`
+        ? 'border-brand-300 bg-brand-50/50'
+        : `border-gray-200/80 bg-white hover:border-brand-200 hover:bg-brand-50/60 ${needsAttention ? 'border-l-2 border-l-warning' : ''}`
     } ${compact ? 'py-2 opacity-75' : 'py-3'}`}>
       {onToggleSelect && (
         <input
@@ -1402,14 +1402,18 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
           checked={isSelected}
           onChange={(e) => { e.stopPropagation(); onToggleSelect(email.id) }}
           onClick={(e) => e.stopPropagation()}
-          className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+          className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
         />
       )}
       <Link
         href={`/dashboard/emails/${email.id}`}
         className="flex items-center gap-3 min-w-0 flex-1"
       >
-        <ClassBadge classification={email.classification} processingStatus={email.processingStatus} />
+        <ClassBadge
+          classification={email.classification}
+          actioned={email.actioned}
+          processingStatus={email.processingStatus}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className={`truncate font-medium text-gray-900 ${compact ? 'text-xs' : 'text-sm'}`}>{email.subject}</p>
@@ -1440,7 +1444,7 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
               key={task.id}
               href={`/dashboard/tasks/${task.id}`}
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium text-blue-600 bg-blue-50 border-blue-200 hover:bg-blue-100 transition-colors max-w-[140px]"
+              className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium text-brand-600 bg-brand-50 border-brand-200 hover:bg-brand-100 transition-colors max-w-[140px]"
               title={task.title}
             >
               <CheckSquare className="h-2.5 w-2.5 shrink-0" />
@@ -1455,7 +1459,7 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReassign(email) }}
           title="Change project"
-          className="hidden group-hover:flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+          className="hidden group-hover:flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 transition-colors"
         >
           <FolderOpen className="h-3.5 w-3.5" />
         </button>
@@ -1468,8 +1472,8 @@ function RetentionBadge({ status }: { status?: string | null }) {
   if (!status || status === 'ACTIVE') return null
   const cfg = {
     ARCHIVED:      { label: 'Archived',  className: 'border-gray-200 bg-gray-50 text-gray-500' },
-    METADATA_ONLY: { label: 'Body only', className: 'border-amber-200 bg-amber-50 text-amber-700' },
-    PURGED:        { label: 'Purged',    className: 'border-red-200 bg-red-50 text-red-600' },
+    METADATA_ONLY: { label: 'Body only', className: 'border-warning-100 bg-warning-50 text-warning-700' },
+    PURGED:        { label: 'Purged',    className: 'border-critical-100 bg-critical-50 text-critical' },
   }[status] ?? null
   if (!cfg) return null
   return (
@@ -1480,7 +1484,15 @@ function RetentionBadge({ status }: { status?: string | null }) {
 }
 
 /* ========== SHARED COMPONENTS ========== */
-function ClassBadge({ classification, processingStatus }: { classification?: string | null; processingStatus?: string | null }) {
+function ClassBadge({
+  classification,
+  actioned,
+  processingStatus,
+}: {
+  classification?: string | null
+  actioned?: boolean | null
+  processingStatus?: string | null
+}) {
   if (!classification && processingStatus === 'pending') {
     return (
       <Badge variant="outline" className="w-[104px] justify-center gap-1 text-[10px] bg-gray-50 text-gray-400 border-gray-200">
@@ -1489,7 +1501,10 @@ function ClassBadge({ classification, processingStatus }: { classification?: str
       </Badge>
     )
   }
-  const cfg = getEmailClassConfig(classification)
+  // Use display state so a row in the Tracked tab (actioned=true) shows
+  // the "Tracked" badge instead of leaking the underlying classification.
+  const state = getEmailDisplayState({ classification, actioned })
+  const cfg = EMAIL_DISPLAY_CONFIG[state]
   const Icon = cfg.icon
   return (
     <Badge variant="outline" className={`w-[104px] justify-center gap-1 text-[10px] ${cfg.color}`}>

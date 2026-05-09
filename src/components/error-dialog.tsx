@@ -48,7 +48,7 @@ export function ErrorDialogWatcher() {
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+            <AlertCircle className="h-4 w-4 shrink-0 text-critical" />
             {title}
           </DialogTitle>
         </DialogHeader>

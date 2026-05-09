@@ -192,24 +192,24 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       label: 'Action Items',
       value: stats.actionCount || 0,
       icon: CheckCircle2,
-      color: 'text-red-600',
-      bg: 'bg-red-50',
+      color: 'text-critical',
+      bg: 'bg-critical-50',
       href: digestPeriodLink('/dashboard/emails', digest, { tab: 'needs_action' }),
     },
     {
       label: 'FYI',
       value: stats.awarenessCount || 0,
       icon: Eye,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
+      color: 'text-brand-600',
+      bg: 'bg-brand-50',
       href: digestPeriodLink('/dashboard/emails', digest, { tab: 'fyi' }),
     },
     {
       label: 'AI Suggestions',
       value: stats.unresolvedCount || 0,
       icon: AlertTriangle,
-      color: 'text-yellow-600',
-      bg: 'bg-yellow-50',
+      color: 'text-warning',
+      bg: 'bg-warning-50',
       href: digestPeriodLink('/dashboard/emails', digest, { tab: 'uncertain' }),
     },
     {
@@ -231,16 +231,16 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       label: 'Tasks Extracted',
       value: stats.taskTotal || 0,
       icon: CheckCircle2,
-      color: 'text-green-600',
-      bg: 'bg-green-50',
+      color: 'text-success',
+      bg: 'bg-success-50',
       href: digestPeriodLink('/dashboard/tasks', digest),
     },
     {
       label: 'AI Suggestions',
       value: stats.taskPending || 0,
       icon: AlertTriangle,
-      color: 'text-yellow-600',
-      bg: 'bg-yellow-50',
+      color: 'text-warning',
+      bg: 'bg-warning-50',
       href: digestPeriodLink('/dashboard/tasks', digest, { status: 'pending' }),
     },
   ]
@@ -248,7 +248,7 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
   return (
     <div className="animate-fade-in-up stagger-2 space-y-5">
       <div className="flex items-center gap-2 px-1">
-        <TrendingUp className="h-4 w-4 text-blue-600" />
+        <TrendingUp className="h-4 w-4 text-brand-600" />
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
           Latest - {new Date(digest.periodStart).toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric' })}
         </span>
@@ -273,8 +273,8 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       </section>
 
       {(stats.actionCount || 0) > 0 ? (
-        <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-3">
-          <TrendingUp className="h-5 w-5 shrink-0 text-blue-600" />
+        <div className="flex items-center gap-3 rounded-lg border border-brand-100 bg-brand-50/50 px-4 py-3">
+          <TrendingUp className="h-5 w-5 shrink-0 text-brand-600" />
           <div>
             <p className="text-sm font-medium text-blue-900">
               {(stats.actionCount || 0) >= 5
@@ -284,7 +284,7 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
                   : 'Light day'}{' '}
               - {stats.actionCount} action item{stats.actionCount !== 1 ? 's' : ''} identified
             </p>
-            <p className="mt-0.5 text-xs text-blue-700">
+            <p className="mt-0.5 text-xs text-brand-700">
               {(stats.unresolvedCount || 0) > 0
                 ? `${stats.unresolvedCount} item${stats.unresolvedCount !== 1 ? 's' : ''} need${stats.unresolvedCount === 1 ? 's' : ''} your manual review`
                 : 'All emails were confidently classified'}
@@ -329,7 +329,7 @@ function DigestCard({ digest, isLatest }: { digest: DigestRecord; isLatest: bool
   })
 
   return (
-    <Card className={`animate-fade-in-up stagger-3 border-gray-200/80 bg-white/95 shadow-sm ${isLatest ? 'ring-1 ring-blue-200' : ''}`}>
+    <Card className={`animate-fade-in-up stagger-3 border-gray-200/80 bg-white/95 shadow-sm ${isLatest ? 'ring-1 ring-brand-200' : ''}`}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50"
@@ -345,12 +345,12 @@ function DigestCard({ digest, isLatest }: { digest: DigestRecord; isLatest: bool
               {periodLabel} Digest - {dateLabel}
             </span>
             {isLatest ? (
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+              <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
                 Latest
               </span>
             ) : null}
             {digest.isPreview ? (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              <span className="rounded-full bg-warning-100 px-2 py-0.5 text-[10px] font-semibold text-warning-700">
                 This week so far
               </span>
             ) : null}
@@ -358,11 +358,11 @@ function DigestCard({ digest, isLatest }: { digest: DigestRecord; isLatest: bool
         </div>
         <div className="flex shrink-0 items-center gap-4 text-xs text-gray-400">
           <span className="flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3 text-red-400" />
+            <CheckCircle2 className="h-3 w-3 text-critical" />
             {stats.actionCount || 0}
           </span>
           <span className="flex items-center gap-1">
-            <Eye className="h-3 w-3 text-blue-400" />
+            <Eye className="h-3 w-3 text-brand-400" />
             {stats.awarenessCount || 0}
           </span>
           <span className="flex items-center gap-1">

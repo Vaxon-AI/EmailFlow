@@ -311,7 +311,7 @@ export function ReassignProjectModal({
                                 isCurrentProject(project.id)
                                   ? 'cursor-default text-slate-400'
                                   : selectedProjectId === project.id
-                                    ? 'bg-blue-50 text-blue-700'
+                                    ? 'bg-brand-50 text-brand-700'
                                     : 'text-slate-700 hover:bg-slate-50'
                               }`}
                             >
@@ -321,7 +321,7 @@ export function ReassignProjectModal({
                                 <span className="text-[10px] text-slate-400">current</span>
                               )}
                               {selectedProjectId === project.id && !isCurrentProject(project.id) && (
-                                <Check className="h-3.5 w-3.5 text-blue-600" />
+                                <Check className="h-3.5 w-3.5 text-brand-600" />
                               )}
                             </button>
                           ))}
@@ -332,15 +332,15 @@ export function ReassignProjectModal({
 
                 <button
                   onClick={() => { setShowNewProject(true); setSelectedProjectId(null) }}
-                  className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
+                  className="flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Create new project
                 </button>
               </>
             ) : (
-              <div className="space-y-3 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
-                <p className="text-xs font-semibold text-blue-700">New Project</p>
+              <div className="space-y-3 rounded-lg border border-brand-100 bg-brand-50/40 p-4">
+                <p className="text-xs font-semibold text-brand-700">New Project</p>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Project name</Label>
                   <Input
@@ -366,7 +366,7 @@ export function ReassignProjectModal({
                     </select>
                     <button
                       onClick={() => setShowNewIdentity(true)}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                      className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700"
                     >
                       <Plus className="h-3 w-3" />
                       Create new identity instead
@@ -435,7 +435,7 @@ export function ReassignProjectModal({
                     type="checkbox"
                     checked={includeThread}
                     onChange={(e) => setIncludeThread(e.target.checked)}
-                    className="h-4 w-4 rounded accent-blue-600"
+                    className="h-4 w-4 rounded accent-brand-600"
                   />
                   <Mail className="h-4 w-4 shrink-0 text-slate-400" />
                   <span className="text-sm text-slate-700">
@@ -463,7 +463,7 @@ export function ReassignProjectModal({
                           return next
                         })
                       }}
-                      className="h-4 w-4 rounded accent-blue-600"
+                      className="h-4 w-4 rounded accent-brand-600"
                     />
                     <CheckSquare className="h-4 w-4 shrink-0 text-slate-400" />
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{task.title}</span>
@@ -473,7 +473,7 @@ export function ReassignProjectModal({
             )}
 
             {nothingSelected && (
-              <p className="text-xs text-amber-600">Select at least one item to reassign.</p>
+              <p className="text-xs text-warning">Select at least one item to reassign.</p>
             )}
           </div>
 

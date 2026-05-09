@@ -6,6 +6,35 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* ------------------------------------------------------------------ */
+  /* Mono Indigo palette                                                */
+  /* One brand hue (indigo) + neutrals do all the heavy lifting.        */
+  /* Semantic colours (critical/success/warning) only appear in states  */
+  /* where meaning genuinely differs — never as decoration.             */
+  /* ------------------------------------------------------------------ */
+  --color-brand-50: #EEF1FB;
+  --color-brand-100: #DDE3F6;
+  --color-brand-200: #C2CDEF;
+  --color-brand-300: #A2B1E5;
+  --color-brand-400: #6B83D8;
+  --color-brand-500: #3658E0;
+  --color-brand-600: #2A47C8;
+  --color-brand-700: #1E34A1;
+
+  --color-critical: #C4302B;
+  --color-critical-50: #FBE8E7;
+  --color-critical-100: #F5C9C7;
+  --color-critical-700: #8C201D;
+
+  --color-success: #1F7A4D;
+  --color-success-50: #E5F2EB;
+  --color-success-100: #C2DECE;
+
+  --color-warning: #A3640A;
+  --color-warning-50: #FAEFD3;
+  --color-warning-100: #F2DDA1;
+  --color-warning-700: #6F4307;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);

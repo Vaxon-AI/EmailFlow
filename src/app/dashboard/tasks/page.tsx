@@ -24,6 +24,12 @@ import { SegmentedControl } from '@/components/segmented-control'
 import { StatePanel } from '@/components/state-panel'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Check, X, Calendar, List, GanttChart, ChevronLeft, ChevronRight,
   Mail, Clock, ThumbsUp, Plus, FolderOpen, Trash2,
   ChevronDown, UserRound, Sparkles,
@@ -120,6 +126,14 @@ type TaskDraft = {
   splitReason: string | null
 }
 
+type QuotaStatus = {
+  pasteText?: {
+    used: number
+    limit: number | null
+    resetAt: string
+  }
+}
+
 const PRIORITY_LEVELS: Record<string, { urgency: number; impact: number; score: number }> = {
   critical: { urgency: 5, impact: 4, score: 20 },
   high: { urgency: 4, impact: 4, score: 16 },
@@ -186,14 +200,14 @@ function TasksContent() {
   const [sortBy, setSortBy] = useState('priority')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showPasteTextModal, setShowPasteTextModal] = useState(false)
   const [taskTitle, setTaskTitle] = useState('')
   const [taskSummary, setTaskSummary] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
   const [reassignTask, setReassignTask] = useState<TaskItem | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBatchReassign, setShowBatchReassign] = useState(false)
-  // Extract-from-text state
-  const [showExtract, setShowExtract] = useState(false)
+  // Paste Text AI extraction state
   const [extractText, setExtractText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [draftActionItems, setDraftActionItems] = useState<string[]>([])
@@ -215,6 +229,14 @@ function TasksContent() {
   const { user } = useAuth()
   const isPro = Boolean(user?.plan && user.plan !== 'free')
   const priorityFilterLabel = PRIORITY_OPTIONS.find((option) => option.value === priorityFilter)?.label ?? 'All priorities'
+
+  const { data: quotaRes } = useQuery<{ data: QuotaStatus }>({
+    queryKey: ['quota'],
+    queryFn: () => fetch('/api/settings/quota').then((r) => r.json()),
+    enabled: user?.plan === 'free',
+    staleTime: CACHE_TIME.list,
+  })
+  const pasteTextQuota = quotaRes?.data?.pasteText
 
   // "All" means all currently actionable tasks. Completed tasks stay in the
   // dedicated Completed tab.
@@ -243,7 +265,7 @@ function TasksContent() {
     queryKey: ['identities'],
     queryFn: () => fetch('/api/identities').then((r) => r.json()),
     staleTime: CACHE_TIME.list,
-    enabled: showCreateModal,
+    enabled: showCreateModal || showPasteTextModal,
   })
   const identities = useMemo<{ id: string; name: string }[]>(
     () => identitiesRes?.data ?? [],
@@ -305,7 +327,6 @@ function TasksContent() {
   const resetCreateModal = () => {
     setTaskTitle('')
     setTaskSummary('')
-    setShowExtract(false)
     setExtractText('')
     setExtracting(false)
     setDraftActionItems([])
@@ -329,6 +350,15 @@ function TasksContent() {
     if (!open) resetCreateModal()
   }
 
+  const handlePasteTextOpenChange = (open: boolean) => {
+    setShowPasteTextModal(open)
+    if (open) {
+      setDraftSource('copy_text')
+    } else {
+      resetCreateModal()
+    }
+  }
+
   const handleGenerateTask = async () => {
     if (!extractText.trim()) return
     setExtracting(true)
@@ -339,6 +369,10 @@ function TasksContent() {
         body: JSON.stringify({ text: extractText }),
       })
       if (!res.ok) {
+        if (res.status === 402) {
+          setShowUpgrade(true)
+          return
+        }
         showError('Failed to extract task')
         return
       }
@@ -351,27 +385,15 @@ function TasksContent() {
       }
 
       setDraftSource('copy_text')
-
-      if (tasks.length === 1) {
-        const t = tasks[0]
-        setTaskTitle(t.title || '')
-        setTaskSummary(t.summary || '')
-        setDraftActionItems(t.actionItems || [])
-        setDraftDeadline(t.explicitDeadline || t.inferredDeadline || '')
-        setDraftUrgency(t.urgency || 3)
-        setDraftImpact(t.impact || 3)
-        setDraftPriorityScore(t.priorityScore || 9)
-        setDraftCards([])
-      } else {
-        setDraftCards(tasks)
-        setTaskTitle('')
-        setTaskSummary('')
-        setDraftActionItems([])
-        setDraftDeadline('')
-        setDraftUrgency(3)
-        setDraftImpact(3)
-        setDraftPriorityScore(9)
-      }
+      setDraftCards(tasks)
+      setTaskTitle('')
+      setTaskSummary('')
+      setDraftActionItems([])
+      setDraftDeadline('')
+      setDraftUrgency(3)
+      setDraftImpact(3)
+      setDraftPriorityScore(9)
+      queryClient.invalidateQueries({ queryKey: ['quota'] })
     } catch {
       showError('Failed to extract task')
     } finally {
@@ -397,6 +419,7 @@ function TasksContent() {
     impact: number
     priorityScore: number
     emailIds?: string[]
+    source?: string
   }): Promise<CreateTaskResponse> => {
     const res = await fetch('/api/tasks', {
       method: 'POST',
@@ -410,7 +433,7 @@ function TasksContent() {
         urgency: payload.urgency,
         impact: payload.impact,
         priorityScore: payload.priorityScore,
-        source: draftSource,
+        source: payload.source ?? draftSource,
         projectId: selectedProjectId || undefined,
         emailIds: payload.emailIds && payload.emailIds.length > 0 ? payload.emailIds : undefined,
       }),
@@ -468,6 +491,7 @@ function TasksContent() {
             urgency: card.urgency,
             impact: card.impact,
             priorityScore: card.priorityScore,
+            source: 'copy_text',
           })
         )
       )
@@ -481,7 +505,7 @@ function TasksContent() {
 
       if (failedCards.length === 0) {
         toast.success(`${succeededCount} task${succeededCount === 1 ? '' : 's'} created`)
-        setShowCreateModal(false)
+        setShowPasteTextModal(false)
         resetCreateModal()
       } else if (succeededCount === 0) {
         showError('Failed to create tasks')
@@ -766,13 +790,13 @@ function TasksContent() {
                           prev.includes(e.id) ? prev.filter((id) => id !== e.id) : [...prev, e.id]
                         )
                       }}
-                      className={`flex w-full items-start gap-2 border-b border-border/50 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 ${linked ? 'bg-blue-50' : ''}`}
+                      className={`flex w-full items-start gap-2 border-b border-border/50 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 ${linked ? 'bg-brand-50' : ''}`}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium">{e.subject || '(no subject)'}</div>
                         <div className="truncate text-muted-foreground">{e.sender}</div>
                       </div>
-                      {linked && <Check className="size-3.5 shrink-0 text-blue-600" />}
+                      {linked && <Check className="size-3.5 shrink-0 text-brand-600" />}
                     </button>
                   )
                 })
@@ -822,17 +846,44 @@ function TasksContent() {
                 { value: 'calendar', label: 'Calendar', icon: <Calendar className="h-3.5 w-3.5" /> },
               ]}
             />
-            <Button onClick={() => setShowCreateModal(true)} className="gap-2" size="sm">
-              <Plus className="h-4 w-4" />
-              New Task
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <Plus className="h-4 w-4" />
+                Create Task
+                <ChevronDown className="h-3.5 w-3.5 opacity-80" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setDraftSource('manual')
+                    setShowCreateModal(true)
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Manual Task</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handlePasteTextOpenChange(true)}
+                  className="cursor-pointer"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span className="flex-1">Paste Text</span>
+                  {!isPro && pasteTextQuota?.limit ? (
+                    <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-violet-700">
+                      {pasteTextQuota.used}/{pasteTextQuota.limit}
+                    </span>
+                  ) : null}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />
 
       {dateFilter ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-2.5 text-sm">
-          <span className="text-blue-900">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-2.5 text-sm">
+          <span className="text-brand-700">
             Showing tasks from{' '}
             <strong>{dateFilter.from?.toLocaleDateString() || '—'}</strong>
             {dateFilter.to ? <> to <strong>{dateFilter.to.toLocaleDateString()}</strong></> : null}
@@ -840,7 +891,7 @@ function TasksContent() {
           <button
             type="button"
             onClick={clearDateFilter}
-            className="shrink-0 rounded-full px-3 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+            className="shrink-0 rounded-full px-3 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
           >
             Clear date
           </button>
@@ -887,10 +938,10 @@ function TasksContent() {
 
       {/* Batch action bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-2.5 shadow-sm">
-          <span className="text-sm font-medium text-blue-700">{selectedIds.size} selected</span>
+        <div className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/80 px-4 py-2.5 shadow-sm">
+          <span className="text-sm font-medium text-brand-700">{selectedIds.size} selected</span>
           {selectedIds.size < tasks.length && (
-            <button onClick={selectAll} className="text-xs text-blue-500 hover:text-blue-700 hover:underline">
+            <button onClick={selectAll} className="text-xs text-brand-500 hover:text-brand-700 hover:underline">
               Select all {tasks.length}
             </button>
           )}
@@ -907,7 +958,7 @@ function TasksContent() {
           <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => batchOp('delete')}>
             <Trash2 className="mr-1 h-3 w-3" /> Delete
           </Button>
-          <button onClick={clearSelection} className="ml-1 rounded p-1 text-blue-400 hover:bg-blue-100 hover:text-blue-600">
+          <button onClick={clearSelection} className="ml-1 rounded p-1 text-brand-400 hover:bg-brand-100 hover:text-brand-600">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -965,59 +1016,53 @@ function TasksContent() {
 
       <UpgradeModal open={showUpgrade} onOpenChange={setShowUpgrade} />
 
-      {/* Create Task Modal */}
-      <Dialog open={showCreateModal} onOpenChange={handleModalOpenChange}>
+      {/* Paste Text Modal */}
+      <Dialog open={showPasteTextModal} onOpenChange={handlePasteTextOpenChange}>
         <DialogContent className={draftCards.length > 0 ? 'sm:max-w-lg' : 'sm:max-w-md'}>
           <DialogHeader>
-            <DialogTitle>{draftCards.length > 0 ? `Review ${draftCards.length} suggested tasks` : 'Create New Task'}</DialogTitle>
+            <DialogTitle>{draftCards.length > 0 ? `Review ${draftCards.length} suggested tasks` : 'Paste Text'}</DialogTitle>
             <DialogDescription>
               {draftCards.length > 0
-                ? 'AI suggested separate tasks for independent outcomes. Edit or remove any below before creating.'
-                : 'Add a manual task when work starts outside the email pipeline.'}
+                ? 'AI suggested separate tasks from your pasted text. Edit or remove any before creating.'
+                : 'Paste notes, messages, or rough text and let AI extract actionable tasks.'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="mt-1 space-y-4">
-            {/* Extract from text section */}
-            <div className="rounded-lg border border-dashed border-border bg-muted/30">
-              <button
-                type="button"
-                onClick={() => setShowExtract((v) => !v)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Sparkles className="size-3.5" />
-                <span>Extract from text</span>
-                <ChevronDown className={`ml-auto size-3.5 transition-transform ${showExtract ? 'rotate-180' : ''}`} />
-              </button>
+            {!isPro && pasteTextQuota?.limit ? (
+              <div className="flex items-center justify-between rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs text-violet-700">
+                <span className="font-medium">Free Paste Text trial</span>
+                <span className="tabular-nums">{pasteTextQuota.used}/{pasteTextQuota.limit}</span>
+              </div>
+            ) : null}
 
-              {showExtract && (
-                <div className="border-t border-dashed border-border px-3 pb-3 pt-2 space-y-2">
-                  <Textarea
-                    value={extractText}
-                    onChange={(e) => setExtractText(e.target.value.slice(0, 1000))}
-                    placeholder="Paste meeting notes, chat messages, or any text..."
-                    rows={4}
-                    className="resize-none text-sm"
-                  />
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{extractText.length}/1000</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleGenerateTask}
-                      disabled={extracting || !extractText.trim()}
-                    >
-                      <Sparkles className="size-3.5 mr-1.5" />
-                      {extracting ? 'Generating...' : 'Generate Task'}
-                    </Button>
-                  </div>
-                </div>
-              )}
+            <div className="space-y-2">
+              <Label htmlFor="paste-text-input">Text to extract</Label>
+              <Textarea
+                id="paste-text-input"
+                value={extractText}
+                onChange={(e) => setExtractText(e.target.value.slice(0, 1000))}
+                placeholder="Paste meeting notes, chat messages, or any text..."
+                rows={5}
+                className="resize-none text-sm"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">{extractText.length}/1000</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleGenerateTask}
+                  disabled={extracting || !extractText.trim()}
+                >
+                  <Sparkles className="size-3.5 mr-1.5" />
+                  {extracting ? 'Generating...' : 'Generate Tasks'}
+                </Button>
+              </div>
             </div>
 
             {draftCards.length > 0 ? (
               <>
-                <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+                <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1">
                   {draftCards.map((card, idx) => (
                     <DraftCard
                       key={idx}
@@ -1030,143 +1075,7 @@ function TasksContent() {
 
                 {identityProjectPicker}
               </>
-            ) : (
-              <>
-                {!taskTitle.trim() && creatingTask ? (
-                  <InlineNotice variant="warning">A task title is required before you can create it.</InlineNotice>
-                ) : null}
-
-                <div className="space-y-2">
-                  <Label htmlFor="manual-task-title">Task Title</Label>
-                  <Input
-                    id="manual-task-title"
-                    value={taskTitle}
-                    onChange={(e) => setTaskTitle(e.target.value)}
-                    placeholder="Enter task title"
-                    className="h-10"
-                    autoFocus
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleCreateTask() }}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="manual-task-summary">Summary <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <Textarea
-                    id="manual-task-summary"
-                    value={taskSummary}
-                    onChange={(e) => setTaskSummary(e.target.value)}
-                    placeholder="Brief description"
-                    rows={3}
-                    className="resize-none"
-                  />
-                </div>
-
-                {identityProjectPicker}
-
-                {linkedEmailPicker}
-
-                <div className="space-y-2">
-                  <Label>Checklist <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  {draftActionItems.length > 0 && (
-                    <div className="space-y-1.5">
-                      {draftActionItems.map((item, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <Input
-                            value={item}
-                            onChange={(e) => {
-                              const next = [...draftActionItems]
-                              next[i] = e.target.value
-                              setDraftActionItems(next)
-                            }}
-                            className="h-8 text-sm"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setDraftActionItems(draftActionItems.filter((_, j) => j !== i))}
-                            className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            <X className="size-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setDraftActionItems([...draftActionItems, ''])}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Plus className="size-3.5" /> Add item
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Dates <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleSuggestDates}
-                      disabled={!taskTitle.trim() || suggestingDates}
-                      className="h-7 gap-1 text-xs"
-                    >
-                      <Sparkles className="size-3" />
-                      {suggestingDates ? 'Suggesting...' : 'Suggest dates'}
-                      {!isPro && (
-                        <Badge className="ml-1 h-4 bg-blue-100 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 hover:bg-blue-100">
-                          Pro
-                        </Badge>
-                      )}
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="draft-start-date" className="text-xs text-muted-foreground">Start date</Label>
-                      <Input
-                        id="draft-start-date"
-                        type="date"
-                        value={draftStartDate}
-                        onChange={(e) => setDraftStartDate(e.target.value)}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="draft-deadline" className="text-xs text-muted-foreground">Due date</Label>
-                      <Input
-                        id="draft-deadline"
-                        type="date"
-                        value={draftDeadline}
-                        onChange={(e) => setDraftDeadline(e.target.value)}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Priority</Label>
-                  <Select
-                    value={priorityBucketFromScore(draftPriorityScore)}
-                    onValueChange={(v) => {
-                      if (!v) return
-                      const p = PRIORITY_LEVELS[v]
-                      if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
-                    }}
-                  >
-                    <SelectTrigger className="h-8 w-full text-sm">
-                      <SelectValue>{PRIORITY_LABELS[priorityBucketFromScore(draftPriorityScore)]}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="critical">Critical</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
+            ) : null}
           </div>
 
           <DialogFooter className="mt-2">
@@ -1179,9 +1088,8 @@ function TasksContent() {
               onClick={handleCreateTask}
               disabled={
                 creatingTask ||
-                (draftCards.length > 0
-                  ? draftCards.some((c) => !c.title.trim())
-                  : !taskTitle.trim())
+                draftCards.length === 0 ||
+                draftCards.some((c) => !c.title.trim())
               }
               className="flex-1"
             >
@@ -1189,7 +1097,170 @@ function TasksContent() {
                 ? 'Creating...'
                 : draftCards.length > 0
                   ? `Create ${draftCards.length} Task${draftCards.length === 1 ? '' : 's'}`
-                  : 'Create Task'}
+                  : 'Create Tasks'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Task Modal */}
+      <Dialog open={showCreateModal} onOpenChange={handleModalOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Task</DialogTitle>
+            <DialogDescription>
+              Add a manual task when work starts outside the email pipeline.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-1 space-y-4">
+            {!taskTitle.trim() && creatingTask ? (
+              <InlineNotice variant="warning">A task title is required before you can create it.</InlineNotice>
+            ) : null}
+
+            <div className="space-y-2">
+              <Label htmlFor="manual-task-title">Task Title</Label>
+              <Input
+                id="manual-task-title"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                placeholder="Enter task title"
+                className="h-10"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleCreateTask() }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="manual-task-summary">Summary <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Textarea
+                id="manual-task-summary"
+                value={taskSummary}
+                onChange={(e) => setTaskSummary(e.target.value)}
+                placeholder="Brief description"
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+
+            {identityProjectPicker}
+
+            {linkedEmailPicker}
+
+            <div className="space-y-2">
+              <Label>Checklist <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              {draftActionItems.length > 0 && (
+                <div className="space-y-1.5">
+                  {draftActionItems.map((item, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        value={item}
+                        onChange={(e) => {
+                          const next = [...draftActionItems]
+                          next[i] = e.target.value
+                          setDraftActionItems(next)
+                        }}
+                        className="h-8 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setDraftActionItems(draftActionItems.filter((_, j) => j !== i))}
+                        className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setDraftActionItems([...draftActionItems, ''])}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Plus className="size-3.5" /> Add item
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Dates <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSuggestDates}
+                  disabled={!taskTitle.trim() || suggestingDates}
+                  className="h-7 gap-1 text-xs"
+                >
+                  <Sparkles className="size-3" />
+                  {suggestingDates ? 'Suggesting...' : 'Suggest dates'}
+                  {!isPro && (
+                    <Badge className="ml-1 h-4 bg-brand-100 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-700 hover:bg-brand-100">
+                      Pro
+                    </Badge>
+                  )}
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="draft-start-date" className="text-xs text-muted-foreground">Start date</Label>
+                  <Input
+                    id="draft-start-date"
+                    type="date"
+                    value={draftStartDate}
+                    onChange={(e) => setDraftStartDate(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="draft-deadline" className="text-xs text-muted-foreground">Due date</Label>
+                  <Input
+                    id="draft-deadline"
+                    type="date"
+                    value={draftDeadline}
+                    onChange={(e) => setDraftDeadline(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select
+                value={priorityBucketFromScore(draftPriorityScore)}
+                onValueChange={(v) => {
+                  if (!v) return
+                  const p = PRIORITY_LEVELS[v]
+                  if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
+                }}
+              >
+                <SelectTrigger className="h-8 w-full text-sm">
+                  <SelectValue>{PRIORITY_LABELS[priorityBucketFromScore(draftPriorityScore)]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-2">
+            <DialogClose
+              render={<Button className="flex-1" variant="outline" />}
+            >
+              Cancel
+            </DialogClose>
+            <Button
+              onClick={handleCreateTask}
+              disabled={creatingTask || !taskTitle.trim()}
+              className="flex-1"
+            >
+              {creatingTask ? 'Creating...' : 'Create Task'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1449,7 +1520,7 @@ function TaskListView({ tasks, updateTask, focusProjectId, onReassign, onDelete,
                 ref={(el) => { if (el) el.indeterminate = someIdentitySel && !allIdentitySel }}
                 onChange={() => onBulkToggle(identityTaskIds, !allIdentitySel)}
                 onClick={(e) => e.stopPropagation()}
-                className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600 transition-opacity ${allIdentitySel || someIdentitySel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${allIdentitySel || someIdentitySel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
               />
               <div
                 role="button"
@@ -1461,7 +1532,7 @@ function TaskListView({ tasks, updateTask, focusProjectId, onReassign, onDelete,
                     toggleIdentity(identity.id)
                   }
                 }}
-                className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 ${isIdentityCollapsed ? '-rotate-90' : ''}`} />
                 <UserRound className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -1492,7 +1563,7 @@ function TaskListView({ tasks, updateTask, focusProjectId, onReassign, onDelete,
                           ref={(el) => { if (el) el.indeterminate = someProjectSel && !allProjectSel }}
                           onChange={() => onBulkToggle(projectTaskIds, !allProjectSel)}
                           onClick={(e) => e.stopPropagation()}
-                          className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600 transition-opacity ${allProjectSel || someProjectSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${allProjectSel || someProjectSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                         />
                         <div
                           role="button"
@@ -1504,7 +1575,7 @@ function TaskListView({ tasks, updateTask, focusProjectId, onReassign, onDelete,
                               toggleProject(project.id)
                             }
                           }}
-                          className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                          className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                         >
                           <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform duration-150 ${isProjectCollapsed ? '-rotate-90' : ''}`} />
                           <FolderOpen className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -1537,7 +1608,7 @@ function TaskListView({ tasks, updateTask, focusProjectId, onReassign, onDelete,
               checked={allUngroupedSel}
               ref={(el) => { if (el) el.indeterminate = someUngroupedSel && !allUngroupedSel }}
               onChange={() => onBulkToggle(ungroupedIds, !allUngroupedSel)}
-              className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600 transition-opacity ${allUngroupedSel || someUngroupedSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+              className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${allUngroupedSel || someUngroupedSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             />
             <FolderOpen className="h-3.5 w-3.5 text-slate-400" />
             <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">Uncategorized</span>
@@ -1590,12 +1661,12 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
     <div
       className={`group flex items-center gap-3 rounded-xl border px-3 transition-all ${
         isSelected
-          ? 'border-blue-300 bg-blue-50/50 py-3.5'
+          ? 'border-brand-300 bg-brand-50/50 py-3.5'
           : isPending
-          ? 'border-purple-200 bg-purple-50/30 hover:border-purple-300 hover:shadow-md py-3.5'
+          ? 'border-brand-200 bg-brand-50/30 hover:border-brand-300 hover:shadow-md py-3.5'
           : isDone
           ? 'border-gray-100 bg-gray-50/50 py-2.5 opacity-60 hover:opacity-80'
-          : 'border-gray-200/80 bg-white hover:border-blue-200 hover:bg-blue-50/60 hover:shadow-sm py-3.5'
+          : 'border-gray-200/80 bg-white hover:border-brand-200 hover:bg-brand-50/60 hover:shadow-sm py-3.5'
       }`}
     >
       {/* Multi-select checkbox */}
@@ -1604,12 +1675,12 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
         checked={isSelected}
         onChange={(e) => { e.stopPropagation(); onToggleSelect(task.id) }}
         onClick={(e) => e.stopPropagation()}
-        className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-blue-600 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
       />
 
       {/* Priority indicator */}
       <div className={`h-9 w-1 shrink-0 rounded-full ${
-        band === 'critical' ? 'bg-red-500' : band === 'high' ? 'bg-orange-400' : band === 'medium' ? 'bg-yellow-400' : 'bg-gray-300'
+        band === 'critical' ? 'bg-critical-500' : band === 'high' ? 'bg-warning' : band === 'medium' ? 'bg-warning' : 'bg-gray-300'
       }`} />
 
       {/* Main content */}
@@ -1617,7 +1688,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
         <div className="flex items-center gap-2">
           <Link
             href={`/dashboard/tasks/${task.id}`}
-            className={`truncate text-sm font-semibold hover:text-blue-600 transition-colors ${isDone ? 'text-gray-400 line-through' : 'text-gray-900'}`}
+            className={`truncate text-sm font-semibold hover:text-brand-600 transition-colors ${isDone ? 'text-gray-400 line-through' : 'text-gray-900'}`}
           >
             {task.title}
           </Link>
@@ -1630,9 +1701,9 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
             </span>
           )}
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-            task.status === 'completed' ? 'bg-green-100 text-green-700' :
-            task.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
-            'bg-purple-100 text-purple-700'
+            task.status === 'completed' ? 'bg-success-100 text-success' :
+            task.status === 'confirmed' ? 'bg-brand-100 text-brand-700' :
+            'bg-brand-100 text-brand-700'
           }`}>
             {getTaskStatusLabel(task.status)}
           </span>
@@ -1643,7 +1714,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
             <span className="truncate text-gray-500">{matter.title}</span>
           ) : null}
           {scheduleLabel && (
-            <span className={`flex items-center gap-1 ${isOverdue ? 'text-red-500 font-medium' : ''}`}>
+            <span className={`flex items-center gap-1 ${isOverdue ? 'text-critical font-medium' : ''}`}>
               <Clock className="h-3 w-3" />
               {isOverdue ? 'Overdue: ' : ''}
               {scheduleLabel}
@@ -1664,21 +1735,21 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReassign(task) }}
           title="Change project"
-          className="hidden group-hover:flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+          className="hidden group-hover:flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 transition-colors"
         >
           <FolderOpen className="h-3.5 w-3.5" />
         </button>
         {isPending ? (
           <>
             <button
-              className="flex items-center justify-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors min-w-[4.5rem]"
+              className="flex items-center justify-center gap-1 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition-colors min-w-[4.5rem]"
               onClick={() => { updateTask.mutate({ id: task.id, data: { status: 'confirmed' } }); toast.success('Task moved to Active') }}
             >
               <ThumbsUp className="h-3.5 w-3.5" />
               Activate
             </button>
             <button
-              className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors"
+              className="flex items-center gap-1 rounded-md border border-critical-100 px-2.5 py-1.5 text-xs font-medium text-critical hover:bg-critical-50 transition-colors"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(task.id) }}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1688,7 +1759,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
         ) : task.status === 'confirmed' ? (
           <>
             <button
-              className="flex items-center justify-center gap-1 rounded-md bg-green-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition-colors min-w-[4.5rem]"
+              className="flex items-center justify-center gap-1 rounded-md bg-success px-2.5 py-1.5 text-xs font-medium text-white hover:bg-success transition-colors min-w-[4.5rem]"
               onClick={() => {
                 const prevStatus = task.status
                 updateTask.mutate({ id: task.id, data: { status: 'completed' } })
@@ -1701,7 +1772,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
               Done
             </button>
             <button
-              className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors"
+              className="flex items-center gap-1 rounded-md border border-critical-100 px-2.5 py-1.5 text-xs font-medium text-critical hover:bg-critical-50 transition-colors"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(task.id) }}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1810,7 +1881,7 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-            <PopoverTrigger className="rounded-lg px-3 py-1.5 text-lg font-semibold text-gray-900 transition-colors hover:bg-blue-50 hover:text-blue-800">
+            <PopoverTrigger className="rounded-lg px-3 py-1.5 text-lg font-semibold text-gray-900 transition-colors hover:bg-brand-50 hover:text-brand-700">
               {currentMonth.toLocaleDateString('en', { month: 'long', year: 'numeric' })}
             </PopoverTrigger>
             <PopoverContent align="center" className="w-auto border-0 bg-transparent p-0 shadow-none">
@@ -1845,14 +1916,14 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
                 key={idx}
                 className={`min-h-[100px] border-b border-r p-1 transition-colors ${
                   !cell.isCurrentMonth ? 'bg-gray-50/70' :
-                  isToday ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  isToday ? 'bg-brand-50' : 'hover:bg-gray-50'
                 }`}
                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
                 onDrop={handleDrop(cell.date)}
               >
                 <div className={`mb-1 text-right text-xs ${
                   !cell.isCurrentMonth ? 'text-gray-300' :
-                  isToday ? 'font-bold text-blue-700' : 'text-gray-400'
+                  isToday ? 'font-bold text-brand-700' : 'text-gray-400'
                 }`}>
                   {cell.day}
                 </div>
@@ -1860,10 +1931,10 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
                   {dayTasks.map((task) => {
                     const band = getPriorityBand(task.priorityScore || 0)
                     const isCompleted = task.status === 'completed'
-                    const bgColor = band === 'critical' ? 'bg-red-200 border-red-400 text-red-950'
-                      : band === 'high' ? 'bg-orange-200 border-orange-400 text-orange-950'
-                      : band === 'medium' ? 'bg-amber-200 border-amber-400 text-amber-950'
-                      : 'bg-slate-200 border-slate-400 text-slate-800'
+                    const bgColor = band === 'critical' ? 'bg-critical-100 border-critical text-critical-700'
+                      : band === 'high' ? 'bg-warning-100 border-warning text-warning-700'
+                      : band === 'medium' ? 'bg-brand-100 border-brand-400 text-brand-700'
+                      : 'bg-slate-100 border-slate-300 text-slate-700'
                     return (
                       <Link
                         key={task.id}

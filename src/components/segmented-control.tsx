@@ -35,8 +35,8 @@ export function SegmentedControl<T extends string>({
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               active
-                ? "bg-blue-700 text-white shadow-sm hover:bg-blue-800"
-                : "text-gray-500 hover:bg-blue-50 hover:text-blue-800"
+                ? "bg-brand-600 text-white shadow-sm hover:bg-brand-700"
+                : "text-gray-500 hover:bg-brand-50 hover:text-brand-700"
             )}
           >
             {option.icon}

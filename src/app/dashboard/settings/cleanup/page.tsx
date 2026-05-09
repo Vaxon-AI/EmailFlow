@@ -177,7 +177,7 @@ export default function CleanupPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
-              <FileText className="h-4 w-4 text-blue-700" />
+              <FileText className="h-4 w-4 text-brand-700" />
               What will happen next run
             </CardTitle>
             <Button
@@ -207,16 +207,16 @@ export default function CleanupPage() {
                   color="text-gray-700"
                 />
                 <StatTile
-                  icon={<FileText className="h-4 w-4 text-amber-500" />}
+                  icon={<FileText className="h-4 w-4 text-warning" />}
                   label="Body-only"
                   value={preview.willBeMetadataOnly}
-                  color="text-amber-700"
+                  color="text-warning-700"
                 />
                 <StatTile
-                  icon={<Trash2 className="h-4 w-4 text-red-400" />}
+                  icon={<Trash2 className="h-4 w-4 text-critical" />}
                   label="Will purge"
                   value={preview.willPurge}
-                  color="text-red-600"
+                  color="text-critical"
                 />
                 <StatTile
                   icon={<Paperclip className="h-4 w-4 text-purple-400" />}
@@ -238,7 +238,7 @@ export default function CleanupPage() {
 
               <div className="flex flex-wrap gap-2 text-xs text-gray-500">
                 <span className="flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                   {preview.protected} protected (skipped)
                 </span>
                 <span>·</span>
@@ -273,7 +273,7 @@ export default function CleanupPage() {
       <Card className="border-white/80 bg-white/95 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Archive className="h-4 w-4 text-blue-700" />
+            <Archive className="h-4 w-4 text-brand-700" />
             Cleanup history
           </CardTitle>
         </CardHeader>
@@ -296,14 +296,14 @@ export default function CleanupPage() {
                       <Badge
                         variant="outline"
                         className={log.triggeredBy === 'manual'
-                          ? 'border-blue-200 bg-blue-50 text-blue-700 text-[10px] py-0'
+                          ? 'border-brand-200 bg-brand-50 text-brand-700 text-[10px] py-0'
                           : 'border-gray-200 bg-gray-50 text-gray-500 text-[10px] py-0'
                         }
                       >
                         {log.triggeredBy}
                       </Badge>
                       {log.errorCount > 0 && (
-                        <Badge variant="outline" className="border-red-200 bg-red-50 text-red-600 text-[10px] py-0">
+                        <Badge variant="outline" className="border-critical-100 bg-critical-50 text-critical text-[10px] py-0">
                           {log.errorCount} error{log.errorCount > 1 ? 's' : ''}
                         </Badge>
                       )}

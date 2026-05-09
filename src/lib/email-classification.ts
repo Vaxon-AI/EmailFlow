@@ -12,29 +12,36 @@ export type EmailClassConfig = {
   icon: typeof Mail
 }
 
+// Four-state hierarchy under Mono Indigo:
+//   action    → solid warning amber (alerting but not red; warm hue draws the eye)
+//   awareness → brand tint          (relevant but calm, on-brand)
+//   ignore    → outlined neutral    (visible but de-emphasised)
+//   uncertain → outlined warning    (signals AI uncertainty without competing
+//                                    visually with action's solid amber)
+// Critical red stays reserved for destructive/blocking states only.
 export const EMAIL_CLASS_CONFIG: Record<EmailCategory, EmailClassConfig> = {
   action: {
     label: 'Needs Action',
-    color: 'bg-red-50 text-red-700 border-red-200',
-    bg: 'from-red-50/50 to-white',
+    color: 'bg-warning text-white border-warning',
+    bg: 'from-warning-50 to-white',
     icon: CheckSquare,
   },
   awareness: {
     label: 'FYI',
-    color: 'bg-blue-50 text-blue-700 border-blue-200',
-    bg: 'from-blue-50/50 to-white',
+    color: 'bg-brand-50 text-brand-700 border-brand-100',
+    bg: 'from-brand-50/40 to-white',
     icon: Eye,
   },
   ignore: {
     label: 'Ignored',
-    color: 'bg-gray-50 text-gray-500 border-gray-200',
-    bg: 'from-gray-50/50 to-white',
+    color: 'bg-white text-gray-500 border-gray-200',
+    bg: 'from-gray-50/40 to-white',
     icon: Trash2,
   },
   uncertain: {
     label: 'Uncertain',
-    color: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    bg: 'from-yellow-50/50 to-white',
+    color: 'bg-white text-warning-700 border-warning-100',
+    bg: 'from-warning-50/30 to-white',
     icon: AlertTriangle,
   },
 }
@@ -62,29 +69,34 @@ export function getEmailClassConfig(classification?: string | null): EmailClassC
 
 export type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
 
+// Bucket hierarchy mirrors the priority levels by luminance + warmth:
+//   needs_action → solid warning amber (warm, alerting)
+//   tracked      → brand tint          (calm, on-brand)
+//   fyi          → outlined neutral    (visible, no emphasis)
+//   ignored      → plain neutral       (almost no chip)
 export const EMAIL_BUCKET_CONFIG: Record<EmailBucket, EmailClassConfig> = {
   needs_action: {
     label: 'Needs Action',
-    color: 'bg-red-50 text-red-700 border-red-200',
-    bg: 'from-red-50/50 to-white',
+    color: 'bg-warning text-white border-warning',
+    bg: 'from-warning-50 to-white',
     icon: CheckSquare,
   },
   tracked: {
     label: 'Tracked',
-    color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    bg: 'from-emerald-50/50 to-white',
+    color: 'bg-brand-50 text-brand-700 border-brand-100',
+    bg: 'from-brand-50/40 to-white',
     icon: CheckCircle2,
   },
   fyi: {
     label: 'FYI',
-    color: 'bg-blue-50 text-blue-700 border-blue-200',
-    bg: 'from-blue-50/50 to-white',
+    color: 'bg-white text-gray-700 border-gray-200',
+    bg: 'from-gray-50/30 to-white',
     icon: Eye,
   },
   ignored: {
     label: 'Ignored',
-    color: 'bg-gray-50 text-gray-500 border-gray-200',
-    bg: 'from-gray-50/50 to-white',
+    color: 'bg-transparent text-gray-400 border-gray-200',
+    bg: 'from-gray-50/40 to-white',
     icon: Trash2,
   },
 }
@@ -93,10 +105,13 @@ export type EmailDisplayState = EmailBucket | 'uncertain'
 
 export const EMAIL_DISPLAY_CONFIG: Record<EmailDisplayState, EmailClassConfig> = {
   ...EMAIL_BUCKET_CONFIG,
+  // Uncertain shares warning amber with Needs Action but uses the lighter
+  // outlined treatment — signals "AI not sure" without screaming for the
+  // same level of attention as a confident action item.
   uncertain: {
     label: 'Uncertain',
-    color: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    bg: 'from-yellow-50/50 to-white',
+    color: 'bg-white text-warning-700 border-warning-100',
+    bg: 'from-warning-50/30 to-white',
     icon: AlertTriangle,
   },
 }

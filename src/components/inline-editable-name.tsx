@@ -48,7 +48,7 @@ export function InlineEditableName({ name, className, onSave }: Props) {
           if (e.key === 'Escape') { e.stopPropagation(); setValue(name); setEditing(false) }
         }}
         onClick={(e) => e.stopPropagation()}
-        className={`min-w-0 rounded bg-white px-1 py-0.5 outline-none ring-1 ring-blue-400 ${className ?? ''}`}
+        className={`min-w-0 rounded bg-white px-1 py-0.5 outline-none ring-1 ring-brand-500 ${className ?? ''}`}
         style={{ width: `${Math.max(value.length, 4)}ch` }}
       />
     )

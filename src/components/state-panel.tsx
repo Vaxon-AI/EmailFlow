@@ -17,8 +17,8 @@ type StatePanelProps = {
 
 const toneClasses: Record<NonNullable<StatePanelProps["variant"]>, string> = {
   default: "border-gray-200 bg-white text-gray-900",
-  danger: "border-red-200 bg-red-50/60 text-red-900",
-  success: "border-green-200 bg-green-50/60 text-green-900",
+  danger: "border-critical-100 bg-critical-50/60 text-red-900",
+  success: "border-success-100 bg-success-50/60 text-green-900",
 }
 
 export function StatePanel({
@@ -31,7 +31,7 @@ export function StatePanel({
   className,
 }: StatePanelProps) {
   const resolvedIcon = loading ? (
-    <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+    <Loader2 className="h-5 w-5 animate-spin text-brand-600" />
   ) : (
     icon
   )
@@ -39,7 +39,7 @@ export function StatePanel({
   return (
     <Card className={cn("animate-scale-in", toneClasses[variant], className)}>
       <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-        {resolvedIcon ? <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">{resolvedIcon}</div> : null}
+        {resolvedIcon ? <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-50">{resolvedIcon}</div> : null}
         <div className="space-y-1">
           <p className="text-sm font-semibold">{title}</p>
           {description ? <p className="max-w-md text-sm text-gray-500">{description}</p> : null}

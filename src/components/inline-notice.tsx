@@ -17,19 +17,19 @@ type InlineNoticeProps = {
 
 const variantStyles = {
   error: {
-    container: "border-red-200 bg-red-50 text-red-700",
+    container: "border-critical-100 bg-critical-50 text-critical-700",
     icon: <AlertCircle className="h-4 w-4 shrink-0" />,
   },
   success: {
-    container: "border-green-200 bg-green-50 text-green-700",
+    container: "border-success-100 bg-success-50 text-success",
     icon: <CheckCircle2 className="h-4 w-4 shrink-0" />,
   },
   info: {
-    container: "border-blue-200 bg-blue-50 text-blue-700",
+    container: "border-brand-200 bg-brand-50 text-brand-700",
     icon: <Info className="h-4 w-4 shrink-0" />,
   },
   warning: {
-    container: "border-yellow-200 bg-yellow-50 text-yellow-700",
+    container: "border-warning-100 bg-warning-50 text-warning-700",
     icon: <TriangleAlert className="h-4 w-4 shrink-0" />,
   },
 }

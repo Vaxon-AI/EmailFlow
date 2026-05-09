@@ -205,12 +205,12 @@ export function BatchReassignModal({ open, onOpenChange, ids, batchApiEndpoint =
                           type="button"
                           onClick={() => { setSelectedProjectId(p.id); setShowNewProject(false) }}
                           className={`flex w-full items-center gap-2 pl-8 pr-3 py-2 text-left text-sm hover:bg-slate-50 ${
-                            selectedProjectId === p.id ? 'bg-blue-50 text-blue-700' : 'text-slate-700'
+                            selectedProjectId === p.id ? 'bg-brand-50 text-brand-700' : 'text-slate-700'
                           }`}
                         >
                           <FolderOpen className="h-3.5 w-3.5 shrink-0" />
                           <span className="flex-1 truncate">{p.name}</span>
-                          {selectedProjectId === p.id && <Check className="h-3.5 w-3.5 shrink-0 text-blue-600" />}
+                          {selectedProjectId === p.id && <Check className="h-3.5 w-3.5 shrink-0 text-brand-600" />}
                         </button>
                       ))}
                   </div>
@@ -223,12 +223,12 @@ export function BatchReassignModal({ open, onOpenChange, ids, batchApiEndpoint =
             <button
               type="button"
               onClick={() => { setShowNewProject(true); setSelectedProjectId(null) }}
-              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
+              className="flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700"
             >
               <Plus className="h-3.5 w-3.5" /> New project
             </button>
           ) : (
-            <div className="space-y-2 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+            <div className="space-y-2 rounded-lg border border-brand-100 bg-brand-50/40 p-3">
               <div className="space-y-1">
                 <Label className="text-xs">Project name</Label>
                 <Input
@@ -256,7 +256,7 @@ export function BatchReassignModal({ open, onOpenChange, ids, batchApiEndpoint =
                     <button
                       type="button"
                       onClick={() => setShowNewIdentity(true)}
-                      className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                      className="text-xs text-brand-600 hover:text-brand-700 whitespace-nowrap"
                     >
                       + New
                     </button>

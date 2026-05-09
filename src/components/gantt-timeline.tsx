@@ -102,9 +102,9 @@ function getTaskEnd(task: TimelineTask): Date | null {
 }
 
 const BAND_COLORS: Record<string, { bar: string; border: string; text: string }> = {
-  critical: { bar: 'bg-red-400',    border: 'border-red-500',    text: 'text-white' },
-  high:     { bar: 'bg-orange-400', border: 'border-orange-500', text: 'text-white' },
-  medium:   { bar: 'bg-yellow-400', border: 'border-yellow-600', text: 'text-yellow-900' },
+  critical: { bar: 'bg-critical',    border: 'border-red-500',    text: 'text-white' },
+  high:     { bar: 'bg-warning', border: 'border-orange-500', text: 'text-white' },
+  medium:   { bar: 'bg-warning', border: 'border-yellow-600', text: 'text-yellow-900' },
   low:      { bar: 'bg-gray-300',   border: 'border-gray-400',   text: 'text-gray-700' },
 }
 
@@ -564,7 +564,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
             </Button>
           </div>
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-            <PopoverTrigger className="justify-self-center rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-900 transition-colors hover:bg-blue-50 hover:text-blue-800">
+            <PopoverTrigger className="justify-self-center rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-900 transition-colors hover:bg-brand-50 hover:text-brand-700">
               {rangeLabel}
             </PopoverTrigger>
             <PopoverContent align="center" className="w-[320px] rounded-2xl border border-gray-200 bg-white p-3 shadow-lg">
@@ -592,8 +592,8 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                           }}
                           className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
                             active
-                              ? 'border-blue-300 bg-blue-100 text-blue-900'
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800'
+                              ? 'border-brand-300 bg-brand-100 text-blue-900'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700'
                           }`}
                         >
                           <span className="font-medium">Week of {formatShort(weekStart)}</span>
@@ -644,7 +644,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                       key={day.toISOString()}
                       style={{ width: COL_WIDTH }}
                       className={`shrink-0 border-r text-center text-[10px] flex flex-col justify-end pb-1 ${
-                        isToday ? 'bg-blue-50 font-bold text-blue-700' : isWeekend ? 'bg-gray-50 text-gray-400' : 'text-gray-500'
+                        isToday ? 'bg-brand-50 font-bold text-brand-700' : isWeekend ? 'bg-gray-50 text-gray-400' : 'text-gray-500'
                       }`}
                     >
                       <div>{day.toLocaleDateString('en', { weekday: 'narrow' })}</div>
@@ -710,7 +710,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                                   style={{ width: COL_WIDTH }}
                                   className={`shrink-0 border-r ${
                                     day.toDateString() === today.toDateString()
-                                      ? 'bg-blue-50/80'
+                                      ? 'bg-brand-50/80'
                                       : day.getDay() === 0 || day.getDay() === 6
                                         ? 'bg-gray-50/40'
                                         : ''
@@ -760,9 +760,9 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                     isCompleted
                       ? 'bg-gray-50/70 opacity-70'
                       : dropTargetTaskId === task.id && draggedTaskId !== task.id
-                        ? 'bg-blue-50/80'
+                        ? 'bg-brand-50/80'
                       : isDragging
-                        ? 'bg-blue-50/50'
+                        ? 'bg-brand-50/50'
                         : 'hover:bg-gray-50/50'
                   }`}
                   style={{ height: ROW_HEIGHT }}
@@ -810,7 +810,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                         setDropTargetTaskId(null)
                       }}
                       className={`shrink-0 rounded-md p-1 text-gray-300 transition-colors ${
-                        isCompleted ? 'cursor-grab text-gray-300/80' : 'cursor-grab hover:bg-blue-50 hover:text-blue-500'
+                        isCompleted ? 'cursor-grab text-gray-300/80' : 'cursor-grab hover:bg-brand-50 hover:text-brand-500'
                       }`}
                       title="Drag to reorder tasks"
                     >
@@ -823,7 +823,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                         className={`block text-xs font-medium leading-tight line-clamp-2 ${
                           isCompleted
                             ? 'text-gray-500 line-through'
-                            : 'text-gray-800 hover:text-blue-600'
+                            : 'text-gray-800 hover:text-brand-600'
                         }`}
                         title={task.title}
                       >
@@ -850,14 +850,14 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                         key={day.toISOString()}
                         style={{ width: COL_WIDTH }}
                         className={`shrink-0 border-r ${
-                          day.toDateString() === today.toDateString() ? 'bg-blue-50' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-gray-50/50' : ''
+                          day.toDateString() === today.toDateString() ? 'bg-brand-50' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-gray-50/50' : ''
                         }`}
                       />
                     ))}
 
                     {/* Today line */}
                     {todayOffset >= 0 && todayOffset < gridWidth && (
-                      <div className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10" style={{ left: todayOffset + COL_WIDTH / 2 }} />
+                      <div className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-brand-500 z-10" style={{ left: todayOffset + COL_WIDTH / 2 }} />
                     )}
 
                     {/* Task bar */}
@@ -963,9 +963,9 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                         isCompleted
                           ? 'bg-gray-50/70 opacity-70'
                           : dropTargetTaskId === task.id && draggedTaskId !== task.id
-                            ? 'bg-blue-50/80'
+                            ? 'bg-brand-50/80'
                             : isDragging
-                              ? 'bg-blue-50/50'
+                              ? 'bg-brand-50/50'
                               : 'hover:bg-gray-50/50'
                       }`}
                       style={{ height: ROW_HEIGHT }}
@@ -1012,7 +1012,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                             setDropTargetTaskId(null)
                           }}
                           className={`shrink-0 rounded-md p-1 text-gray-300 transition-colors ${
-                            isCompleted ? 'cursor-grab text-gray-300/80' : 'cursor-grab hover:bg-blue-50 hover:text-blue-500'
+                            isCompleted ? 'cursor-grab text-gray-300/80' : 'cursor-grab hover:bg-brand-50 hover:text-brand-500'
                           }`}
                           title="Drag to reorder tasks"
                         >
@@ -1023,7 +1023,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                           <Link
                             href={`/dashboard/tasks/${task.id}`}
                             className={`block text-xs font-medium leading-tight line-clamp-2 ${
-                              isCompleted ? 'text-gray-500 line-through' : 'text-gray-800 hover:text-blue-600'
+                              isCompleted ? 'text-gray-500 line-through' : 'text-gray-800 hover:text-brand-600'
                             }`}
                             title={task.title}
                           >
@@ -1048,13 +1048,13 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                             key={day.toISOString()}
                             style={{ width: COL_WIDTH }}
                             className={`shrink-0 border-r ${
-                              day.toDateString() === today.toDateString() ? 'bg-blue-50' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-gray-50/50' : ''
+                              day.toDateString() === today.toDateString() ? 'bg-brand-50' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-gray-50/50' : ''
                             }`}
                           />
                         ))}
 
                         {todayOffset >= 0 && todayOffset < gridWidth && (
-                          <div className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10" style={{ left: todayOffset + COL_WIDTH / 2 }} />
+                          <div className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-brand-500 z-10" style={{ left: todayOffset + COL_WIDTH / 2 }} />
                         )}
 
                         {barStyle && origStart && origEnd && (
@@ -1127,9 +1127,9 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
         <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-400">
           <span>Drag bar to move - Drag edges to resize - Hover for details</span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-6 rounded bg-red-400" /> Critical
-            <span className="inline-block h-2.5 w-6 rounded bg-orange-400" /> High
-            <span className="inline-block h-2.5 w-6 rounded bg-yellow-400" /> Medium
+            <span className="inline-block h-2.5 w-6 rounded bg-critical" /> Critical
+            <span className="inline-block h-2.5 w-6 rounded bg-warning" /> High
+            <span className="inline-block h-2.5 w-6 rounded bg-warning" /> Medium
             <span className="inline-block h-2.5 w-6 rounded bg-gray-300" /> Low
           </span>
         </div>

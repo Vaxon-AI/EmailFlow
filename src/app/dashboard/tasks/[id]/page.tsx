@@ -194,8 +194,8 @@ function areAllChildrenCompleted(items: ChecklistItem[], itemId: string): boolea
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
   pending: { label: 'AI Suggestion', color: 'bg-purple-50 text-purple-700 border-purple-200', bg: 'from-purple-50/50 to-white', icon: AlertTriangle },
-  confirmed: { label: 'Active', color: 'bg-blue-50 text-blue-700 border-blue-200', bg: 'from-blue-50/50 to-white', icon: ThumbsUp },
-  completed: { label: 'Completed', color: 'bg-green-50 text-green-700 border-green-200', bg: 'from-green-50/50 to-white', icon: CheckCircle2 },
+  confirmed: { label: 'Active', color: 'bg-brand-50 text-brand-700 border-brand-200', bg: 'from-blue-50/50 to-white', icon: ThumbsUp },
+  completed: { label: 'Completed', color: 'bg-success-50 text-success border-success-100', bg: 'from-green-50/50 to-white', icon: CheckCircle2 },
   dismissed: { label: 'Dismissed', color: 'bg-gray-50 text-gray-500 border-gray-200', bg: 'from-gray-50/50 to-white', icon: X },
 }
 
@@ -630,7 +630,7 @@ export default function TaskDetailPage() {
 
         <button
           onClick={() => setShowReassign(true)}
-          className="group animate-fade-in-up stagger-2 flex w-full items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-2.5 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/50"
+          className="group animate-fade-in-up stagger-2 flex w-full items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-2.5 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/50"
           title="Click to change project"
         >
           <UserRound className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -644,7 +644,7 @@ export default function TaskDetailPage() {
               <span className="text-xs text-slate-500">{matter.title}</span>
             </>
           )}
-          <span className="ml-auto flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 shadow-sm group-hover:border-blue-300 group-hover:text-blue-600">
+          <span className="ml-auto flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 shadow-sm group-hover:border-brand-300 group-hover:text-brand-600">
             <Pencil className="h-3 w-3" />
             Change
           </span>
@@ -855,7 +855,7 @@ export default function TaskDetailPage() {
                         <span>{new Date(startDate).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
                         <span className="text-gray-400">→</span>
                         <span>{new Date(deadline).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
-                        {scheduleDuration && <span className="ml-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">{scheduleDuration}</span>}
+                        {scheduleDuration && <span className="ml-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700">{scheduleDuration}</span>}
                       </>
                     ) : deadline ? (
                       <span>Due {new Date(deadline).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
@@ -962,8 +962,8 @@ export default function TaskDetailPage() {
                       const Icon = cfg?.icon ?? AlertTriangle
                       const iconColor: Record<string, string> = {
                         pending: 'text-purple-500',
-                        confirmed: 'text-blue-500',
-                        completed: 'text-green-500',
+                        confirmed: 'text-brand-500',
+                        completed: 'text-success',
                         dismissed: 'text-gray-400',
                       }
                       return (
@@ -981,8 +981,8 @@ export default function TaskDetailPage() {
                         const Icon = opt.icon
                         const iconColor: Record<string, string> = {
                           pending: 'text-purple-500',
-                          confirmed: 'text-blue-500',
-                          completed: 'text-green-500',
+                          confirmed: 'text-brand-500',
+                          completed: 'text-success',
                         }
                         return (
                           <SelectItem key={value} value={value}>
@@ -1004,10 +1004,10 @@ export default function TaskDetailPage() {
         <div className="space-y-4">
           {/* AI Analysis */}
           {hasAiAnalysis && (
-            <Card className="animate-fade-in-up stagger-4 border-yellow-200 bg-gradient-to-br from-yellow-50/50 to-white shadow-sm">
+            <Card className="animate-fade-in-up stagger-4 border-warning-100 bg-gradient-to-br from-yellow-50/50 to-white shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <Sparkles className="h-4 w-4 text-yellow-600" />
+                  <Sparkles className="h-4 w-4 text-warning" />
                   AI Analysis
                 </CardTitle>
               </CardHeader>
@@ -1022,15 +1022,15 @@ export default function TaskDetailPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-sm">
-                    <ListChecks className="h-4 w-4 text-blue-500" />
+                    <ListChecks className="h-4 w-4 text-brand-500" />
                     Checklist
-                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                    <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700">
                       {checklistItems.filter(i => i.completed).length}/{checklistItems.length}
                     </span>
                   </CardTitle>
                   <button
                     onClick={() => addItem()}
-                    className="shrink-0 p-1 rounded-full hover:bg-blue-100 transition-colors text-blue-600 hover:text-blue-700"
+                    className="shrink-0 p-1 rounded-full hover:bg-brand-100 transition-colors text-brand-600 hover:text-brand-700"
                     title="Add item"
                   >
                     <Plus className="h-4 w-4" />
@@ -1042,7 +1042,7 @@ export default function TaskDetailPage() {
                   <button
                     type="button"
                     onClick={() => addItem()}
-                    className="flex w-full items-center gap-2 rounded-lg border border-dashed border-blue-200 bg-blue-50/40 px-3 py-3 text-left text-xs text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-50"
+                    className="flex w-full items-center gap-2 rounded-lg border border-dashed border-brand-200 bg-brand-50/40 px-3 py-3 text-left text-xs text-brand-700 transition-colors hover:border-brand-300 hover:bg-brand-50"
                   >
                     <Plus className="h-4 w-4 shrink-0" />
                     <span>Add the first checklist item</span>
@@ -1053,7 +1053,7 @@ export default function TaskDetailPage() {
                 {checklistItems.length > 1 && (
                   <div className="mb-3 h-1.5 rounded-full bg-gray-100 overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                      className="h-full rounded-full bg-brand-500 transition-all duration-300"
                       style={{ width: `${(checklistItems.filter(i => i.completed).length / checklistItems.length) * 100}%` }}
                     />
                   </div>
@@ -1131,9 +1131,9 @@ export default function TaskDetailPage() {
                           className="shrink-0 rounded p-1 hover:bg-gray-100 transition-colors"
                         >
                           {item.completed ? (
-                            <CheckSquare className="h-4 w-4 text-blue-500" />
+                            <CheckSquare className="h-4 w-4 text-brand-500" />
                           ) : (
-                            <Square className="h-4 w-4 text-gray-300 group-hover:text-blue-400 transition-colors" />
+                            <Square className="h-4 w-4 text-gray-300 group-hover:text-brand-400 transition-colors" />
                           )}
                         </button>
 
@@ -1161,7 +1161,7 @@ export default function TaskDetailPage() {
                                   }
                                 }
                               }}
-                              className="w-full text-sm bg-blue-50 border border-blue-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full text-sm bg-brand-50 border border-brand-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           ) : (
                             <span
@@ -1206,7 +1206,7 @@ export default function TaskDetailPage() {
                           {item.level < 2 && (
                             <button
                               onClick={() => addItem(item.id)}
-                              className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-400 hover:text-blue-600"
+                              className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-400 hover:text-brand-600"
                               title="Add subtask"
                             >
                               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1226,7 +1226,7 @@ export default function TaskDetailPage() {
                                 deleteItem(item.id)
                               }
                             }}
-                            className="p-1 hover:bg-red-50 rounded transition-colors text-gray-400 hover:text-red-500"
+                            className="p-1 hover:bg-critical-50 rounded transition-colors text-gray-400 hover:text-critical"
                             title={itemHasChildren ? 'Delete with subtasks' : 'Delete'}
                           >
                             <X className="h-4 w-4" />
@@ -1245,9 +1245,9 @@ export default function TaskDetailPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="flex items-center gap-2 text-sm">
-                    <Mail className="h-4 w-4 text-blue-600" />
+                    <Mail className="h-4 w-4 text-brand-600" />
                     Source Emails
-                    <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">{emailLinks.length}</span>
+                    <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700">{emailLinks.length}</span>
                   </CardTitle>
                   <Popover open={emailPickerOpen} onOpenChange={setEmailPickerOpen}>
                     <PopoverTrigger
@@ -1287,7 +1287,7 @@ export default function TaskDetailPage() {
                                   <div className="truncate font-medium">{email.subject || '(no subject)'}</div>
                                   <div className="truncate text-muted-foreground">{email.sender}</div>
                                 </div>
-                                {isLinking && <Check className="size-3.5 shrink-0 text-blue-600" />}
+                                {isLinking && <Check className="size-3.5 shrink-0 text-brand-600" />}
                               </button>
                             )
                           })
@@ -1310,24 +1310,24 @@ export default function TaskDetailPage() {
                   return (
                     <div
                       key={link.id}
-                      className="flex items-center gap-3 rounded-lg border p-3 transition-all hover:bg-blue-50/50 hover:border-blue-200 group"
+                      className="flex items-center gap-3 rounded-lg border p-3 transition-all hover:bg-brand-50/50 hover:border-brand-200 group"
                     >
                       <Link
                         href={`/dashboard/emails/${link.email.id}`}
                         className="flex items-center gap-3 flex-1 min-w-0"
                       >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-bold">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white text-xs font-bold">
                           {senderInitial}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                          <p className="truncate text-sm font-medium text-gray-900 group-hover:text-brand-600 transition-colors">
                             {link.email.subject}
                           </p>
                           <p className="truncate text-xs text-gray-500">
                             {senderName} — {new Date(link.email.receivedAt).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
                           </p>
                         </div>
-                        <ExternalLink className="h-4 w-4 text-gray-300 group-hover:text-blue-400 shrink-0 transition-colors" />
+                        <ExternalLink className="h-4 w-4 text-gray-300 group-hover:text-brand-400 shrink-0 transition-colors" />
                       </Link>
                       <button
                         onClick={() => {
@@ -1336,7 +1336,7 @@ export default function TaskDetailPage() {
                           }
                         }}
                         disabled={isUnlinking}
-                        className="shrink-0 p-1 rounded hover:bg-red-50 transition-colors text-gray-300 hover:text-red-500 disabled:opacity-50"
+                        className="shrink-0 p-1 rounded hover:bg-critical-50 transition-colors text-gray-300 hover:text-critical disabled:opacity-50"
                         title="Remove email"
                       >
                         <X className="h-4 w-4" />

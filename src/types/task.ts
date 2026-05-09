@@ -21,12 +21,19 @@ export function getPriorityBand(score: number): PriorityBand {
   return 'low'
 }
 
+// Priority hierarchy under Mono Indigo:
+//   Critical = solid critical-red    (truly destructive / blocking — only saturated red on the page)
+//   High     = solid warning amber   (alerting but not panic; warm hue distinguishes from brand)
+//   Medium   = brand tint            (visible, on-brand, low alarm)
+//   Low      = plain neutral         (gray text only, almost no chip)
+// Three coloured chips + one neutral gives the eye a clear ordering by
+// luminance and warmth, without rainbow chaos.
 export function getPriorityColor(band: PriorityBand): string {
   switch (band) {
-    case 'critical': return 'text-red-600 bg-red-50 border-red-200'
-    case 'high': return 'text-orange-600 bg-orange-50 border-orange-200'
-    case 'medium': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-    case 'low': return 'text-gray-500 bg-gray-50 border-gray-200'
+    case 'critical': return 'text-white bg-critical border-critical'
+    case 'high': return 'text-warning-700 bg-warning-50 border-warning-100'
+    case 'medium': return 'text-brand-700 bg-brand-50 border-brand-100'
+    case 'low': return 'text-gray-400 bg-transparent border-gray-200'
   }
 }
 

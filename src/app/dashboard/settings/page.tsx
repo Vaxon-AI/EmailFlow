@@ -283,15 +283,15 @@ export default function SettingsPage() {
                   <p className="text-2xl font-semibold text-gray-900">{user?.name || 'Your account'}</p>
                   <p className="text-sm text-gray-500">{user?.email}</p>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-800">
+                    <Badge variant="outline" className="border-brand-200 bg-brand-50 text-brand-700">
                       Workspace account
                     </Badge>
                     {providerReauthRequired ? (
-                      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                      <Badge variant="outline" className="border-warning-100 bg-warning-50 text-warning-700">
                         Reconnect required
                       </Badge>
                     ) : gmailConnected ? (
-                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Gmail connected</Badge>
+                      <Badge className="bg-success-100 text-success hover:bg-success-100">Gmail connected</Badge>
                     ) : (
                       <Badge variant="outline">Email not connected</Badge>
                     )}
@@ -317,7 +317,7 @@ export default function SettingsPage() {
             <Card className="border-white/80 bg-white/95 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <BarChart2 className="h-4 w-4 text-blue-700" />
+                  <BarChart2 className="h-4 w-4 text-brand-700" />
                   Plan &amp; Usage
                 </CardTitle>
               </CardHeader>
@@ -325,7 +325,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {user?.plan === 'pro' ? (
-                      <Badge className="gap-1.5 bg-blue-600 text-white hover:bg-blue-600">
+                      <Badge className="gap-1.5 bg-brand-600 text-white hover:bg-brand-600">
                         <Zap className="h-3 w-3" />
                         Pro
                       </Badge>
@@ -339,7 +339,7 @@ export default function SettingsPage() {
                   {user?.plan !== 'pro' && (
                     <button
                       onClick={() => setUpgradeOpen(true)}
-                      className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+                      className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-700"
                     >
                       <Zap className="h-3.5 w-3.5" />
                       Upgrade to Pro
@@ -362,16 +362,16 @@ export default function SettingsPage() {
                           className={cn(
                             'h-full rounded-full transition-all',
                             quota.classify.used / quota.classify.limit >= 0.9
-                              ? 'bg-red-500'
+                              ? 'bg-critical-500'
                               : quota.classify.used / quota.classify.limit >= 0.7
-                                ? 'bg-amber-500'
-                                : 'bg-blue-500'
+                                ? 'bg-warning-500'
+                                : 'bg-brand-500'
                           )}
                           style={{ width: `${Math.min(100, (quota.classify.used / quota.classify.limit) * 100)}%` }}
                         />
                       </div>
                       {quota.classify.used >= quota.classify.limit && (
-                        <p className="text-xs text-red-600">Limit reached. Upgrade to Pro for unlimited classification.</p>
+                        <p className="text-xs text-critical">Limit reached. Upgrade to Pro for unlimited classification.</p>
                       )}
                     </div>
 
@@ -388,18 +388,46 @@ export default function SettingsPage() {
                           className={cn(
                             'h-full rounded-full transition-all',
                             quota.extract.used / quota.extract.limit >= 1
-                              ? 'bg-red-500'
+                              ? 'bg-critical-500'
                               : quota.extract.used / quota.extract.limit >= 0.67
-                                ? 'bg-amber-500'
-                                : 'bg-blue-500'
+                                ? 'bg-warning-500'
+                                : 'bg-brand-500'
                           )}
                           style={{ width: `${Math.min(100, (quota.extract.used / quota.extract.limit) * 100)}%` }}
                         />
                       </div>
                       {quota.extract.used >= quota.extract.limit && (
-                        <p className="text-xs text-red-600">Limit reached. Upgrade to Pro for unlimited extractions.</p>
+                        <p className="text-xs text-critical">Limit reached. Upgrade to Pro for unlimited extractions.</p>
                       )}
                     </div>
+
+                    {/* Paste Text quota */}
+                    {quota.pasteText && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">Paste Text</span>
+                          <span className="text-sm tabular-nums text-gray-500">
+                            {quota.pasteText.used} / {quota.pasteText.limit}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            className={cn(
+                              'h-full rounded-full transition-all',
+                              quota.pasteText.used / quota.pasteText.limit >= 1
+                                ? 'bg-critical-500'
+                                : quota.pasteText.used / quota.pasteText.limit >= 0.67
+                                  ? 'bg-warning-500'
+                                  : 'bg-violet-500'
+                            )}
+                            style={{ width: `${Math.min(100, (quota.pasteText.used / quota.pasteText.limit) * 100)}%` }}
+                          />
+                        </div>
+                        {quota.pasteText.used >= quota.pasteText.limit && (
+                          <p className="text-xs text-critical">Limit reached. Upgrade to Pro for unlimited Paste Text extraction.</p>
+                        )}
+                      </div>
+                    )}
 
                     <p className="text-xs text-gray-400">
                       Resets on {new Date(quota.classify.resetAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -408,13 +436,13 @@ export default function SettingsPage() {
                 )}
 
                 {user?.plan === 'pro' && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600">
+                  <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600">
                       <Zap className="h-4 w-4 text-white" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-blue-800">Pro plan active</p>
-                      <p className="text-xs text-blue-600">All features unlocked with no usage limits.</p>
+                      <p className="text-sm font-semibold text-brand-700">Pro plan active</p>
+                      <p className="text-xs text-brand-600">All features unlocked with no usage limits.</p>
                     </div>
                   </div>
                 )}
@@ -425,7 +453,7 @@ export default function SettingsPage() {
             <Card className="border-white/80 bg-white/95 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Globe className="h-4 w-4 text-blue-700" />
+                  <Globe className="h-4 w-4 text-brand-700" />
                   Timezone
                 </CardTitle>
               </CardHeader>
@@ -465,7 +493,7 @@ export default function SettingsPage() {
                           <input
                             type="text"
                             autoFocus
-                            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 placeholder-gray-400 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 placeholder-gray-400 focus:border-brand-300 focus:outline-none focus:ring-1 focus:ring-brand-200"
                             placeholder="Search timezone, city, or UTC offset..."
                             value={timezoneSearch}
                             onChange={(e) => setTimezoneSearch(e.target.value)}
@@ -481,20 +509,20 @@ export default function SettingsPage() {
                         {deviceTimezone && (!timezoneSearch || getTimezoneSearchText(deviceTimezone).includes(timezoneSearch.toLowerCase())) ? (
                           <button
                             onClick={() => timezoneMutation.mutate(deviceTimezone)}
-                            className="mb-3 flex w-full items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2 text-left transition hover:bg-blue-100/70"
+                            className="mb-3 flex w-full items-center gap-3 rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-2 text-left transition hover:bg-brand-100/70"
                           >
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-700">
                               <Globe className="h-4 w-4" />
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-blue-900">
                                 {getTimezonePrimaryLabel(deviceTimezone)}
                               </p>
-                              <p className="text-xs text-blue-700/80">
+                              <p className="text-xs text-brand-700/80">
                                 Detected from this device - {formatTimezoneCode(deviceTimezone)}
                               </p>
                             </div>
-                            {effectiveTimezone === deviceTimezone ? <Check className="h-4 w-4 text-blue-700" /> : null}
+                            {effectiveTimezone === deviceTimezone ? <Check className="h-4 w-4 text-brand-700" /> : null}
                           </button>
                         ) : null}
                         <div className="space-y-1">
@@ -520,7 +548,7 @@ export default function SettingsPage() {
                                   {formatTimezoneCode(timezone)}
                                 </p>
                               </div>
-                              {effectiveTimezone === timezone ? <Check className="h-4 w-4 text-blue-700" /> : null}
+                              {effectiveTimezone === timezone ? <Check className="h-4 w-4 text-brand-700" /> : null}
                             </button>
                           ))}
                           {timezoneSearch && timezoneResults.length === 0 ? (
@@ -541,7 +569,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => timezoneMutation.mutate(deviceTimezone)}
-                      className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-medium text-blue-700 transition hover:bg-blue-100"
+                      className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 font-medium text-brand-700 transition hover:bg-brand-100"
                     >
                       Use detected timezone
                     </button>
@@ -574,7 +602,7 @@ export default function SettingsPage() {
             <Card className="border-white/80 bg-white/95 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Shield className="h-4 w-4 text-blue-700" />
+                  <Shield className="h-4 w-4 text-brand-700" />
                   Privacy and Data Handling
                 </CardTitle>
               </CardHeader>
@@ -722,21 +750,21 @@ function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string | null }
     <Card className="border-white/80 bg-white/95 shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Clock3 className="h-4 w-4 text-blue-700" />
+          <Clock3 className="h-4 w-4 text-brand-700" />
           Email Sync Window
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+        <div className="rounded-2xl border border-brand-100 bg-brand-50/70 p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-blue-900">{syncSummary.label}</p>
-              <p className="mt-1 text-sm text-blue-800/80">{syncSummary.helper}</p>
+              <p className="mt-1 text-sm text-brand-700/80">{syncSummary.helper}</p>
             </div>
             {syncSummary.exactPreset ? (
-              <Badge className="bg-white text-blue-800 hover:bg-white">Preset active</Badge>
+              <Badge className="bg-white text-brand-700 hover:bg-white">Preset active</Badge>
             ) : (
-              <Badge variant="outline" className="border-blue-200 bg-white/80 text-blue-800">
+              <Badge variant="outline" className="border-brand-200 bg-white/80 text-brand-700">
                 Custom date in use
               </Badge>
             )}
@@ -759,7 +787,7 @@ function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string | null }
               }
             }}
           >
-            <PopoverTrigger className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600 transition-all hover:border-blue-200 hover:bg-blue-50/70 hover:text-blue-700">
+            <PopoverTrigger className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600 transition-all hover:border-brand-200 hover:bg-brand-50/70 hover:text-brand-700">
               <CalendarIcon className="h-3.5 w-3.5" />
               Pick date
             </PopoverTrigger>
@@ -777,13 +805,13 @@ function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string | null }
                 captionLayout="dropdown"
                 disabled={(date) => date > new Date(todayMs) || date < new Date(todayMs - 365 * 86400000)}
               />
-              <div className="border-t border-gray-100 bg-blue-50/40 px-4 py-3">
+              <div className="border-t border-gray-100 bg-brand-50/40 px-4 py-3">
                 <p className="text-xs font-medium text-blue-900">
                   {pendingDate
                     ? `Selected start date: ${pendingDate.toLocaleDateString()}`
                     : 'Pick a start date to preview the next sync window.'}
                 </p>
-                <p className="mt-1 text-xs text-blue-800/80">
+                <p className="mt-1 text-xs text-brand-700/80">
                   {pendingDays
                     ? `This is about the last ${pendingDays} day${pendingDays === 1 ? '' : 's'} of email.`
                     : 'You can choose any date from the last 12 months.'}
@@ -887,7 +915,7 @@ function ReviewModeCard({ manualReviewMode }: { manualReviewMode: boolean }) {
     <Card className="border-white/80 bg-white/95 shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Mail className="h-4 w-4 text-blue-700" />
+          <Mail className="h-4 w-4 text-brand-700" />
           Email Review Mode
         </CardTitle>
       </CardHeader>
@@ -946,7 +974,7 @@ function PasswordCard() {
     <Card className="border-white/80 bg-white/95 shadow-sm">
       <CardHeader >
         <CardTitle className="flex items-center gap-2 text-base">
-          <KeyRound className="h-4 w-4 text-blue-700" />
+          <KeyRound className="h-4 w-4 text-brand-700" />
           Change Password
         </CardTitle>
       </CardHeader>
@@ -1053,7 +1081,7 @@ function DeviceSessionsCard({
     <Card className="border-white/80 bg-white/95 shadow-sm">
       <CardHeader >
         <CardTitle className="flex items-center gap-2 text-base">
-          <MonitorSmartphone className="h-4 w-4 text-blue-700" />
+          <MonitorSmartphone className="h-4 w-4 text-brand-700" />
           Device Sessions
         </CardTitle>
       </CardHeader>
@@ -1099,7 +1127,7 @@ function DeviceSessionsCard({
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-gray-900">{session.deviceName || 'Unknown device'}</p>
                       {session.isCurrent ? (
-                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Current device</Badge>
+                        <Badge className="bg-brand-100 text-brand-700 hover:bg-brand-100">Current device</Badge>
                       ) : null}
                     </div>
                     <p className="text-sm text-gray-600">{secondary}</p>
@@ -1114,7 +1142,7 @@ function DeviceSessionsCard({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-2 self-start border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
+                    className="gap-2 self-start border-critical-100 text-critical-700 hover:bg-critical-50 hover:text-critical-700"
                     onClick={() => revokeSessionMutation.mutate(session)}
                     disabled={revokeSessionMutation.isPending}
                   >
@@ -1176,7 +1204,7 @@ function StepUpDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-blue-700" />
+            <Shield className="h-4 w-4 text-brand-700" />
             Verify your identity
           </DialogTitle>
         </DialogHeader>
@@ -1262,7 +1290,7 @@ function TwoFactorCard({ totpEnabled, onDisabled }: { totpEnabled: boolean; onDi
       <Card className="border-white/80 bg-white/95 shadow-sm">
         <CardHeader >
           <CardTitle className="flex items-center gap-2 text-base">
-            <Shield className="h-4 w-4 text-blue-700" />
+            <Shield className="h-4 w-4 text-brand-700" />
             Two-Factor Authentication
           </CardTitle>
         </CardHeader>
@@ -1273,7 +1301,7 @@ function TwoFactorCard({ totpEnabled, onDisabled }: { totpEnabled: boolean; onDi
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold text-gray-900">Authenticator app (TOTP)</p>
                 {totpEnabled ? (
-                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Enabled</Badge>
+                  <Badge className="bg-success-100 text-success hover:bg-success-100">Enabled</Badge>
                 ) : (
                   <Badge variant="outline">Disabled</Badge>
                 )}
@@ -1290,7 +1318,7 @@ function TwoFactorCard({ totpEnabled, onDisabled }: { totpEnabled: boolean; onDi
                 size="sm"
                 onClick={handleRequestDisable}
                 disabled={loading}
-                className="gap-2 self-end border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700 sm:self-auto"
+                className="gap-2 self-end border-critical-100 text-critical-700 hover:bg-critical-50 hover:text-critical-700 sm:self-auto"
               >
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldOff className="h-3.5 w-3.5" />}
                 Disable 2FA
@@ -1360,16 +1388,16 @@ function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
 
   return (
     <>
-      <Card className="border-red-200/60 bg-white/95 shadow-sm">
+      <Card className="border-critical-100/60 bg-white/95 shadow-sm">
         <CardHeader >
-          <CardTitle className="flex items-center gap-2 text-base text-red-700">
+          <CardTitle className="flex items-center gap-2 text-base text-critical-700">
             <AlertTriangle className="h-4 w-4" />
             Danger Zone
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {error && <InlineNotice variant="error">{error}</InlineNotice>}
-          <div className="flex flex-col gap-4 rounded-2xl border border-red-200/60 bg-red-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 rounded-2xl border border-critical-100/60 bg-critical-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex-1 space-y-1">
               <p className="text-sm font-semibold text-gray-900">Delete this account</p>
               <p className="text-sm text-gray-500">
@@ -1381,7 +1409,7 @@ function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
               size="sm"
               onClick={() => setConfirmOpen(true)}
               disabled={loading}
-              className="gap-2 self-end border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700 sm:self-auto"
+              className="gap-2 self-end border-critical-100 text-critical-700 hover:bg-critical-50 hover:text-critical-700 sm:self-auto"
             >
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               Delete account
@@ -1394,7 +1422,7 @@ function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-700">
+            <DialogTitle className="flex items-center gap-2 text-critical-700">
               <AlertTriangle className="h-4 w-4" />
               Delete your account?
             </DialogTitle>
@@ -1461,7 +1489,7 @@ function LinkAccountCard({
     <Card className="border-white/80 bg-white/95 shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <KeyRound className="h-4 w-4 text-blue-700" />
+          <KeyRound className="h-4 w-4 text-brand-700" />
           Link Account
         </CardTitle>
       </CardHeader>
@@ -1473,7 +1501,7 @@ function LinkAccountCard({
                 <p className="text-sm font-semibold text-gray-900">Google</p>
                 <Badge
                   variant={bound ? 'default' : 'outline'}
-                  className={bound ? 'bg-green-100 text-green-700 hover:bg-green-100' : ''}
+                  className={bound ? 'bg-success-100 text-success hover:bg-success-100' : ''}
                 >
                   {bound ? 'Bound' : 'Not bound'}
                 </Badge>
@@ -1482,9 +1510,9 @@ function LinkAccountCard({
                     variant={providerReauthRequired || gmailConnected ? 'default' : 'outline'}
                     className={
                       providerReauthRequired
-                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-100'
+                        ? 'bg-warning-100 text-warning-700 hover:bg-warning-100'
                         : gmailConnected
-                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-100'
+                          ? 'bg-brand-100 text-brand-700 hover:bg-brand-100'
                           : ''
                     }
                   >
@@ -1532,7 +1560,7 @@ function LinkAccountCard({
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2 self-start border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
+                className="gap-2 self-start border-critical-100 text-critical-700 hover:bg-critical-50 hover:text-critical-700"
                 onClick={() => disconnect.mutate()}
                 disabled={disconnect.isPending}
               >

@@ -48,9 +48,9 @@ const RULE_TYPE_LABELS: Record<ProtectionRule['ruleType'], string> = {
 }
 
 const RULE_TYPE_COLORS: Record<ProtectionRule['ruleType'], string> = {
-  CONTACT: 'bg-blue-50 text-blue-700 border-blue-200',
+  CONTACT: 'bg-brand-50 text-brand-700 border-brand-200',
   DOMAIN: 'bg-purple-50 text-purple-700 border-purple-200',
-  LABEL: 'bg-amber-50 text-amber-700 border-amber-200',
+  LABEL: 'bg-warning-50 text-warning-700 border-warning-100',
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +187,7 @@ export function RetentionPolicyCard() {
     <Card className="border-white/80 bg-white/95 shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Archive className="h-4 w-4 text-blue-700" />
+          <Archive className="h-4 w-4 text-brand-700" />
           Email Retention
         </CardTitle>
       </CardHeader>
@@ -305,7 +305,7 @@ export function RetentionPolicyCard() {
         {/* ---- Whitelist / protection rules ---- */}
         <div className="space-y-3 border-t border-gray-200/60 pt-5">
           <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-green-600" />
+            <Shield className="h-4 w-4 text-success" />
             <p className="text-sm font-medium text-gray-900">Protection whitelist</p>
           </div>
           <p className="text-xs text-gray-500">
@@ -337,7 +337,7 @@ export function RetentionPolicyCard() {
                   <button
                     onClick={() => removeRuleMutation.mutate(rule.id)}
                     disabled={removeRuleMutation.isPending}
-                    className="ml-0.5 rounded-full p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                    className="ml-0.5 rounded-full p-0.5 text-gray-400 hover:bg-critical-50 hover:text-critical disabled:opacity-50"
                     aria-label="Remove rule"
                   >
                     <Trash2 className="h-3 w-3" />

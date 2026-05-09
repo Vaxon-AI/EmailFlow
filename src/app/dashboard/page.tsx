@@ -470,8 +470,8 @@ function DashboardContent() {
               const ratio = used / limit
               if (ratio < 0.7) return null
               const tone = ratio >= 0.9
-                ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
-                : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                ? 'border-critical-100 bg-critical-50 text-critical-700 hover:bg-critical-100'
+                : 'border-warning-100 bg-warning-50 text-warning-700 hover:bg-warning-100'
               return (
                 <button
                   type="button"
@@ -492,14 +492,15 @@ function DashboardContent() {
               <Skeleton className="h-9 w-28 rounded-lg" />
             ) : providerReauthRequired ? (
               <Link href="/dashboard/settings">
-                <Button size="sm" variant="outline" className="border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100">
+                <Button size="sm" variant="outline" className="border-critical-100 bg-critical-50 text-critical-700 hover:bg-critical-100">
                   Reconnect Gmail
                 </Button>
               </Link>
             ) : s?.sync?.gmailConnected ? (
-              <Badge className="h-9 rounded-lg bg-green-100 px-4 text-sm font-medium text-green-700 hover:bg-green-100">
+              <span className="flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
                 Connected
-              </Badge>
+              </span>
             ) : (
               <a href="/api/auth/google">
                 <Button size="sm">Connect Gmail</Button>
@@ -540,25 +541,25 @@ function DashboardContent() {
 
       {attentionEmailCount > 0 && (
         <Link href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} className="animate-fade-in-up stagger-2 block">
-          <div className="flex items-center gap-3 rounded-2xl border border-red-200/80 bg-[linear-gradient(135deg,rgba(254,242,242,1)_0%,rgba(255,247,237,1)_100%)] px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex items-center gap-3 rounded-2xl border border-warning-100 bg-warning-50/60 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
             <div className="relative shrink-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100">
-                <AlertTriangle className="h-4.5 w-4.5 text-red-600" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-warning-100">
+                <AlertTriangle className="h-4.5 w-4.5 text-warning" />
               </div>
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning text-[9px] font-bold text-white">
                 {attentionEmailCount}
               </span>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-red-800">
+              <p className="text-sm font-semibold text-warning-700">
                 {attentionEmailCount} email{attentionEmailCount > 1 ? 's' : ''} need your review
               </p>
-              <p className="truncate text-xs text-red-600">
+              <p className="truncate text-xs text-warning">
                 {attentionEmails[0]?.subject}
                 {attentionEmailCount > 1 ? ` and ${attentionEmailCount - 1} more...` : ''}
               </p>
             </div>
-            <span className="shrink-0 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700">
+            <span className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-warning-700">
               View
             </span>
           </div>
@@ -567,25 +568,25 @@ function DashboardContent() {
 
       {pendingTaskCount > 0 && (
         <Link href={dashboardLink('/dashboard/tasks', { status: 'pending' })} className="animate-fade-in-up stagger-2 block">
-          <div className="flex items-center gap-3 rounded-2xl border border-orange-200/80 bg-[linear-gradient(135deg,rgba(255,247,237,1)_0%,rgba(255,251,235,1)_100%)] px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
             <div className="relative shrink-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100">
-                <CheckSquare className="h-4.5 w-4.5 text-orange-600" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100">
+                <CheckSquare className="h-4.5 w-4.5 text-brand-700" />
               </div>
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[9px] font-bold text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 text-[9px] font-bold text-white">
                 {pendingTaskCount}
               </span>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-orange-800">
+              <p className="text-sm font-semibold text-brand-700">
                 {pendingTaskCount} AI-suggested task{pendingTaskCount > 1 ? 's' : ''} pending
               </p>
-              <p className="truncate text-xs text-orange-600">
+              <p className="truncate text-xs text-brand-600">
                 {pendingTasks[0]?.title}
                 {pendingTaskCount > 1 ? ` and ${pendingTaskCount - 1} more...` : ''}
               </p>
             </div>
-            <span className="shrink-0 rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-700">
+            <span className="shrink-0 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-700">
               View
             </span>
           </div>
@@ -593,7 +594,7 @@ function DashboardContent() {
       )}
 
       {providerReauthRequired ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="rounded-2xl border border-critical-100 bg-critical-50 px-4 py-3 text-sm text-critical-700">
           Your Gmail connection has expired. Reconnect it in Settings before the next sync.
         </div>
       ) : null}
@@ -611,21 +612,21 @@ function DashboardContent() {
             <StatCard
               title="Emails Processed"
               value={emailData.total}
-              icon={<Mail className="h-4 w-4 text-blue-600" />}
+              icon={<Mail className="h-4 w-4 text-brand-600" />}
               detail={`${emailData.needsReview} need action, ${emailData.uncertain} uncertain`}
               href={dashboardLink('/dashboard/emails')}
             />
             <StatCard
               title="Open Tasks"
               value={confirmedTaskCount + pendingTaskCount}
-              icon={<CheckSquare className="h-4 w-4 text-green-600" />}
+              icon={<CheckSquare className="h-4 w-4 text-brand-600" />}
               detail={`${completedTasks} completed ${periodLabel.toLowerCase()}, ${allTimeOpenTasks} open total`}
               href={dashboardLink('/dashboard/tasks')}
             />
             <StatCard
               title={dueTitle}
               value={upcomingCount}
-              icon={<Target className="h-4 w-4 text-orange-500" />}
+              icon={<Target className="h-4 w-4 text-warning" />}
               detail={dueDetail}
             />
             <StatCard
@@ -650,7 +651,7 @@ function DashboardContent() {
             <Card className="border-gray-200/80 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <PieChart className="h-4 w-4 text-green-600" />
+                  <PieChart className="h-4 w-4 text-brand-600" />
                   Task Overview
                 </CardTitle>
               </CardHeader>
@@ -659,12 +660,12 @@ function DashboardContent() {
                   <DonutChart
                     value={completionRate}
                     size={100}
-                    color={completionRate >= 70 ? '#22c55e' : completionRate >= 40 ? '#f59e0b' : '#ef4444'}
+                    color={completionRate >= 70 ? '#1F7A4D' : completionRate >= 40 ? '#A3640A' : '#C4302B'}
                   />
                   <div className="space-y-1.5 text-sm">
-                    <LegendDot color="bg-green-500" label={`Completed: ${completedTasks}`} />
-                    <LegendDot color="bg-blue-500" label={`Active: ${confirmedTaskCount}`} />
-                    <LegendDot color="bg-purple-500" label={`AI Suggestions: ${pendingTaskCount}`} />
+                    <LegendDot color="bg-success" label={`Completed: ${completedTasks}`} />
+                    <LegendDot color="bg-brand-600" label={`Active: ${confirmedTaskCount}`} />
+                    <LegendDot color="bg-gray-400" label={`AI Suggestions: ${pendingTaskCount}`} />
                   </div>
                 </div>
               </CardContent>
@@ -673,21 +674,21 @@ function DashboardContent() {
             <Card className="border-gray-200/80 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <BarChart3 className="h-4 w-4 text-blue-600" />
+                  <BarChart3 className="h-4 w-4 text-brand-600" />
                   Email Classification
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
-                  <BarRow label="Needs Action" value={emailData.needsReview} max={emailData.total} color="bg-red-400" href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} />
-                  <BarRow label="Tracked" value={emailData.tracked} max={emailData.total} color="bg-green-400" href={dashboardLink('/dashboard/emails', { tab: 'tracked' })} />
-                  <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-blue-400" href={dashboardLink('/dashboard/emails', { tab: 'fyi' })} />
+                  <BarRow label="Needs Action" value={emailData.needsReview} max={emailData.total} color="bg-warning" href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} />
+                  <BarRow label="Tracked" value={emailData.tracked} max={emailData.total} color="bg-brand-500" href={dashboardLink('/dashboard/emails', { tab: 'tracked' })} />
+                  <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-brand-200" href={dashboardLink('/dashboard/emails', { tab: 'fyi' })} />
                   <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" href={dashboardLink('/dashboard/emails', { tab: 'ignored' })} />
                 </div>
                 {(emailData.unclassified ?? 0) > 0 && (
                   <Link
                     href={dashboardLink('/dashboard/emails', { tab: 'unclassified' })}
-                    className="mt-2.5 block rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] text-amber-800 transition-colors hover:bg-amber-50"
+                    className="mt-2.5 block rounded-md border border-warning-100 bg-warning-50/60 px-2 py-1.5 text-[11px] text-warning-700 transition-colors hover:bg-warning-50"
                   >
                     +{emailData.unclassified} unclassified (uncertain or quota-skipped)
                   </Link>
@@ -698,20 +699,20 @@ function DashboardContent() {
             <Card className="border-gray-200/80 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <TrendingUp className="h-4 w-4 text-orange-500" />
+                  <TrendingUp className="h-4 w-4 text-warning" />
                   Priority Distribution
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
-                  <BarRow label="Critical" value={priorityCounts.critical} max={totalTasks || 1} color="bg-red-500" href="/dashboard/tasks?priority=critical" />
-                  <BarRow label="High" value={priorityCounts.high} max={totalTasks || 1} color="bg-orange-400" href="/dashboard/tasks?priority=high" />
-                  <BarRow label="Medium" value={priorityCounts.medium} max={totalTasks || 1} color="bg-yellow-400" href="/dashboard/tasks?priority=medium" />
+                  <BarRow label="Critical" value={priorityCounts.critical} max={totalTasks || 1} color="bg-critical" href="/dashboard/tasks?priority=critical" />
+                  <BarRow label="High" value={priorityCounts.high} max={totalTasks || 1} color="bg-warning" href="/dashboard/tasks?priority=high" />
+                  <BarRow label="Medium" value={priorityCounts.medium} max={totalTasks || 1} color="bg-brand-400" href="/dashboard/tasks?priority=medium" />
                   <BarRow label="Low" value={priorityCounts.low} max={totalTasks || 1} color="bg-gray-300" href="/dashboard/tasks?priority=low" />
                 </div>
-                <div className="mt-3 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2">
-                  <Target className="h-3.5 w-3.5 text-blue-600" />
-                  <span className="text-xs text-blue-700">
+                <div className="mt-3 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2">
+                  <Target className="h-3.5 w-3.5 text-brand-600" />
+                  <span className="text-xs text-brand-700">
                     AI task acceptance: <strong>{aiAcceptance.rate === null ? 'Not enough decisions yet' : `${aiAcceptance.rate}%`}</strong>
                   </span>
                 </div>
@@ -738,7 +739,7 @@ function DashboardContent() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Top Priority Tasks</CardTitle>
-            <Link href="/dashboard/tasks" className="text-sm text-blue-600 hover:underline">View all</Link>
+            <Link href="/dashboard/tasks" className="text-sm text-brand-600 hover:underline">View all</Link>
           </div>
         </CardHeader>
         <CardContent>
@@ -814,9 +815,9 @@ function DashboardContent() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-900">
+          <div className="rounded-xl border border-warning-100 bg-warning-50/70 px-4 py-3 text-xs text-warning-700">
             <p className="font-semibold">Free plan limit</p>
-            <p className="mt-0.5 text-amber-800">
+            <p className="mt-0.5 text-warning">
               EmailFlow classifies up to <strong>100 emails per month</strong> on the free plan. If your inbox is busy,
               pick a smaller window so you don&apos;t hit the cap on day one.
             </p>
@@ -911,7 +912,7 @@ function DashboardContent() {
               <Popover open={customCalendarOpen} onOpenChange={setCustomCalendarOpen}>
                 <PopoverTrigger
                   disabled={syncSetupLoading !== null}
-                  className="flex w-full items-center justify-between rounded-xl border border-dashed border-gray-300 bg-white p-4 text-left text-sm font-semibold text-gray-900 transition-colors hover:border-blue-300 hover:bg-blue-50/40 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center justify-between rounded-xl border border-dashed border-gray-300 bg-white p-4 text-left text-sm font-semibold text-gray-900 transition-colors hover:border-brand-300 hover:bg-brand-50/40 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span className="flex items-center gap-2">
                     <CalendarIcon className="h-4 w-4 text-gray-500" />
@@ -1078,7 +1079,7 @@ function TimeViewToggle({ value, onChange }: { value: DashboardView; onChange: (
           onClick={() => onChange(view.id)}
           className={`rounded-md px-3 text-xs font-semibold transition-colors ${
             value === view.id
-              ? 'bg-white text-blue-700 shadow-sm'
+              ? 'bg-white text-brand-700 shadow-sm'
               : 'text-slate-500 hover:bg-white/70 hover:text-slate-800'
           }`}
         >
@@ -1110,7 +1111,7 @@ function CompletionMomentumCard({
     <Card className="overflow-hidden border-gray-200/80 bg-white shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
-          <TrendingUp className="h-4 w-4 text-green-600" />
+          <TrendingUp className="h-4 w-4 text-success" />
           Completion Momentum
         </CardTitle>
       </CardHeader>
@@ -1175,10 +1176,10 @@ function TodayMomentumSummary({
   actionEmails: number
 }) {
   return (
-    <div className="grid min-h-52 gap-3 rounded-xl border border-green-100 bg-white/80 p-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-      <div className="flex flex-col justify-between rounded-xl bg-green-50 px-4 py-3">
-        <span className="text-xs font-medium text-green-700">Completed today</span>
-        <span className="mt-5 text-3xl font-bold text-green-700">{completed}</span>
+    <div className="grid min-h-52 gap-3 rounded-xl border border-gray-200 bg-white/80 p-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+      <div className="flex flex-col justify-between rounded-xl bg-success-50 px-4 py-3">
+        <span className="text-xs font-medium text-success">Completed today</span>
+        <span className="mt-5 text-3xl font-bold text-success">{completed}</span>
       </div>
       <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
         <span className="text-xs font-medium text-slate-500">Tasks created</span>
@@ -1219,12 +1220,12 @@ function MomentumChart({
   const yGrid = [0, 0.5, 1]
 
   return (
-    <div className="rounded-xl border border-green-100 bg-white/80 p-3">
+    <div className="rounded-xl border border-gray-200 bg-white/80 p-3">
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Completed tasks ${getMomentumPeriodLabel(view)}`} className="h-52 w-full">
         <defs>
           <linearGradient id="momentum-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#22c55e" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="#1F7A4D" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#1F7A4D" stopOpacity="0.02" />
           </linearGradient>
         </defs>
         {yGrid.map((ratio) => {
@@ -1234,10 +1235,10 @@ function MomentumChart({
           )
         })}
         {areaPath ? <path d={areaPath} fill="url(#momentum-fill)" /> : null}
-        {linePath ? <path d={linePath} fill="none" stroke="#16a34a" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" /> : null}
+        {linePath ? <path d={linePath} fill="none" stroke="#1F7A4D" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" /> : null}
         {points.map((point) => (
           <g key={point.date} className="group outline-none" tabIndex={0}>
-            <circle cx={point.x} cy={point.y} r="4" fill="#16a34a" stroke="white" strokeWidth="2" />
+            <circle cx={point.x} cy={point.y} r="4" fill="#1F7A4D" stroke="white" strokeWidth="2" />
             <circle cx={point.x} cy={point.y} r="12" fill="transparent" />
             <g className="pointer-events-none opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100">
               <rect x={Math.min(width - 150, Math.max(8, point.x - 68))} y={Math.max(8, point.y - 58)} width="136" height="44" rx="8" fill="#0f172a" />
@@ -1304,7 +1305,7 @@ function BarRow({ label, value, max, color, href }: { label: string; value: numb
   if (!href) return content
 
   return (
-    <Link href={href} className="block rounded-md transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+    <Link href={href} className="block rounded-md transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
       {content}
     </Link>
   )
@@ -1348,7 +1349,7 @@ function ContextMultiFilter({
     <Popover>
       <PopoverTrigger
         disabled={disabled}
-        className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-white px-2.5 text-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-56"
+        className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-white px-2.5 text-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-56"
       >
         <span className="flex min-w-0 items-center gap-2">
           {icon}
@@ -1363,7 +1364,7 @@ function ContextMultiFilter({
           className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-slate-50"
         >
           <span className="font-medium text-slate-900">{allLabel}</span>
-          {selectedIds.length === 0 ? <Check className="h-4 w-4 text-blue-600" /> : null}
+          {selectedIds.length === 0 ? <Check className="h-4 w-4 text-brand-600" /> : null}
         </button>
         <div className="max-h-64 overflow-y-auto">
           {options.length === 0 ? (
@@ -1377,7 +1378,7 @@ function ContextMultiFilter({
                 className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-slate-50"
               >
                 <span className="truncate text-slate-700">{option.name}</span>
-                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selectedSet.has(option.id) ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white'}`}>
+                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selectedSet.has(option.id) ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white'}`}>
                   {selectedSet.has(option.id) ? <Check className="h-3 w-3" /> : null}
                 </span>
               </button>
@@ -1437,12 +1438,12 @@ function SyncWindowOption({
   // Visual hierarchy: exceeds > recommended > dim > default. Exceeds always wins
   // because it's a hard warning the user needs to see regardless of emphasis.
   const containerClass = exceeds
-    ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400 hover:bg-amber-50 p-4'
+    ? 'border-warning-100 bg-warning-50/50 hover:border-warning-100 hover:bg-warning-50 p-4'
     : recommended
-      ? 'border-blue-300 bg-blue-50/40 hover:border-blue-400 hover:bg-blue-50/70 p-4 shadow-sm'
+      ? 'border-brand-300 bg-brand-50/40 hover:border-brand-400 hover:bg-brand-50/70 p-4 shadow-sm'
       : dim
         ? 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50/60 p-3'
-        : 'border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/60 p-4'
+        : 'border-gray-200 bg-white hover:border-brand-200 hover:bg-brand-50/60 p-4'
 
   const titleClass = dim && !exceeds
     ? 'flex items-center gap-2 text-[13px] font-medium text-gray-700'
@@ -1459,26 +1460,26 @@ function SyncWindowOption({
           <p className={titleClass}>
             {title}
             {recommended && !exceeds ? (
-              <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+              <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                 Recommended
               </span>
             ) : null}
-            {exceeds ? <AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> : null}
+            {exceeds ? <AlertTriangle className="h-3.5 w-3.5 text-warning" /> : null}
           </p>
           <p className="truncate text-xs text-gray-500">{detail}</p>
           {exceeds ? (
-            <p className="mt-0.5 text-[11px] text-amber-700">
+            <p className="mt-0.5 text-[11px] text-warning-700">
               Exceeds free plan limit (100/month) — upgrade or pick a smaller window.
             </p>
           ) : null}
         </div>
         <div className="ml-3 flex shrink-0 items-center gap-2">
           {variant === 'custom' && !busy ? (
-            <Check className="h-4 w-4 text-blue-600" />
+            <Check className="h-4 w-4 text-brand-600" />
           ) : busy ? (
-            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+            <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
           ) : (
-            <div className={`h-4 w-4 rounded-full border-2 ${recommended && !exceeds ? 'border-blue-300' : 'border-gray-200'}`} />
+            <div className={`h-4 w-4 rounded-full border-2 ${recommended && !exceeds ? 'border-brand-300' : 'border-gray-200'}`} />
           )}
         </div>
       </button>
@@ -1496,7 +1497,7 @@ function SyncWindowOption({
 
 function StatCard({ title, value, icon, detail, href }: { title: string; value: string | number; icon: React.ReactNode; detail: string; href?: string }) {
   const card = (
-    <Card className={`border-gray-200/80 shadow-sm transition-all duration-200 ${href ? 'hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md' : ''}`}>
+    <Card className={`border-gray-200/80 shadow-sm transition-all duration-200 ${href ? 'hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md' : ''}`}>
       <CardContent className="pt-4 pb-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-gray-500">{title}</p>
@@ -1511,7 +1512,7 @@ function StatCard({ title, value, icon, detail, href }: { title: string; value: 
   if (!href) return card
 
   return (
-    <Link href={href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+    <Link href={href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
       {card}
     </Link>
   )
@@ -1563,26 +1564,26 @@ function getMomentumPeriodLabel(view: DashboardView) {
 function getFeedbackStatusClass(tone: DashboardFeedback['tone']) {
   if (tone === 'success') {
     return {
-      wrapper: 'border-green-200 bg-green-50',
-      title: 'text-green-800',
-      message: 'text-green-700',
-      badge: 'bg-white/80 text-green-700',
+      wrapper: 'border-success-100 bg-success-50',
+      title: 'text-success',
+      message: 'text-success',
+      badge: 'bg-white/80 text-success',
     }
   }
   if (tone === 'info') {
     return {
-      wrapper: 'border-blue-200 bg-blue-50',
-      title: 'text-blue-800',
-      message: 'text-blue-700',
-      badge: 'bg-white/80 text-blue-700',
+      wrapper: 'border-brand-100 bg-brand-50',
+      title: 'text-brand-700',
+      message: 'text-brand-700',
+      badge: 'bg-white/80 text-brand-700',
     }
   }
   if (tone === 'warning') {
     return {
-      wrapper: 'border-amber-200 bg-amber-50',
-      title: 'text-amber-800',
-      message: 'text-amber-700',
-      badge: 'bg-white/80 text-amber-700',
+      wrapper: 'border-warning-100 bg-warning-50',
+      title: 'text-warning-700',
+      message: 'text-warning',
+      badge: 'bg-white/80 text-warning',
     }
   }
   return {

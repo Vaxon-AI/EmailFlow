@@ -62,11 +62,11 @@ export function Sidebar({
       >
         <div className="border-b border-gray-200/80 px-5 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 shadow-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 shadow-sm">
               <Zap className="h-4 w-4 text-white" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-600">EmailFlow</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">EmailFlow</p>
               <span className="block truncate text-lg font-bold text-gray-900">AI Workspace</span>
             </div>
           </div>
@@ -86,7 +86,7 @@ export function Sidebar({
                 className={cn(
                   'group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-100'
+                    ? 'bg-brand-50 text-brand-700 shadow-sm ring-1 ring-brand-100'
                     : 'text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm active:scale-[0.99]'
                 )}
               >
@@ -94,8 +94,8 @@ export function Sidebar({
                   className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
                     isActive
-                      ? 'bg-white text-blue-600'
-                      : 'bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600'
+                      ? 'bg-white text-brand-600'
+                      : 'bg-gray-100 text-gray-500 group-hover:bg-brand-50 group-hover:text-brand-600'
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -108,13 +108,13 @@ export function Sidebar({
 
         <div className="border-t border-gray-200/80 px-4 py-4">
           {user?.plan === 'pro' ? (
-            <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2.5">
-              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600">
+            <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2.5">
+              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-600">
                 <Zap className="h-3.5 w-3.5 text-white" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-blue-700">Pro plan</p>
-                <p className="text-[10px] text-blue-500">Unlimited access</p>
+                <p className="text-xs font-semibold text-brand-700">Pro plan</p>
+                <p className="text-[10px] text-brand-500">Unlimited access</p>
               </div>
             </div>
           ) : (
@@ -132,10 +132,10 @@ export function Sidebar({
                       className={cn(
                         'h-full rounded-full transition-all',
                         quota.classify.used / quota.classify.limit >= 0.9
-                          ? 'bg-red-400'
+                          ? 'bg-critical'
                           : quota.classify.used / quota.classify.limit >= 0.7
-                            ? 'bg-amber-400'
-                            : 'bg-blue-400'
+                            ? 'bg-warning'
+                            : 'bg-brand-500'
                       )}
                       style={{ width: `${Math.min(100, (quota.classify.used / quota.classify.limit) * 100)}%` }}
                     />
@@ -144,12 +144,12 @@ export function Sidebar({
               )}
               <button
                 onClick={() => setUpgradeOpen(true)}
-                className="flex w-full items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-left transition-colors hover:bg-blue-100"
+                className="flex w-full items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-left transition-colors hover:bg-brand-100"
               >
-                <Zap className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                <Zap className="h-3.5 w-3.5 shrink-0 text-brand-600" />
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-blue-700">Upgrade to Pro</p>
-                  <p className="truncate text-[10px] text-blue-500">Remove all limits</p>
+                  <p className="text-xs font-semibold text-brand-700">Upgrade to Pro</p>
+                  <p className="truncate text-[10px] text-brand-500">Remove all limits</p>
                 </div>
               </button>
             </div>
