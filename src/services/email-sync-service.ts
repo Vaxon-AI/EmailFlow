@@ -2,64 +2,10 @@ import { AppError } from '@/lib/app-errors'
 import * as Sentry from '@sentry/nextjs'
 import { gmailProvider } from '@/integrations'
 import { processEmail } from '@/workflows'
-import type { PipelineReviewCandidate } from '@/workflows'
 import * as emailRepo from '@/repositories/email-repo'
 import * as userRepo from '@/repositories/user-repo'
 import * as failedRepo from '@/repositories/failed-email-sync-repo'
 import { getClassifyRemaining, incrementClassifyUsed } from '@/lib/quota'
-
-export interface BatchClassificationReviewPayload {
-  syncRunId: string
-  newProjects: Array<{
-    id: string
-    name: string
-    confidence: number
-    linkedIdentityName?: string
-    reason?: string
-  }>
-  newIdentities: Array<{
-    id: string
-    name: string
-    confidence: number
-    reason?: string
-  }>
-  items: PipelineReviewCandidate[]
-}
-
-function buildBatchReviewPayload(items: PipelineReviewCandidate[]): BatchClassificationReviewPayload | null {
-  if (items.length === 0) return null
-
-  const newProjects = new Map<string, { id: string; name: string; confidence: number; linkedIdentityName?: string; reason?: string }>()
-  const newIdentities = new Map<string, { id: string; name: string; confidence: number; reason?: string }>()
-
-  for (const item of items) {
-    if (item.project?.isNew) {
-      newProjects.set(item.project.id, {
-        id: item.project.id,
-        name: item.project.name,
-        confidence: item.project.confidence,
-        linkedIdentityName: item.identity?.name,
-        reason: item.project.reason,
-      })
-    }
-
-    if (item.identity?.isNew) {
-      newIdentities.set(item.identity.id, {
-        id: item.identity.id,
-        name: item.identity.name,
-        confidence: item.identity.confidence,
-        reason: item.identity.reason,
-      })
-    }
-  }
-
-  return {
-    syncRunId: `sync-${Date.now()}`,
-    newProjects: [...newProjects.values()],
-    newIdentities: [...newIdentities.values()],
-    items,
-  }
-}
 
 // ============================================================
 // Email Sync Service — two-phase architecture
@@ -254,7 +200,6 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
   // 1) Run email processing pipeline on each newly stored email
   if (storedEmails.length > 0) {
     const tAI = Date.now()
-    const reviewItems: PipelineReviewCandidate[] = []
 
     const remaining = await getClassifyRemaining(userId)
     const emailsToProcess = remaining === Infinity
@@ -292,18 +237,9 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
         if (!result.skippedByRule) {
           await incrementClassifyUsed(userId)
         }
-
-        if (result?.reviewCandidate) {
-          reviewItems.push(result.reviewCandidate)
-        }
       } catch (err) {
         console.error(`[sync] phase2 failed to process email ${email.id}:`, err)
       }
-    }
-
-    const reviewPayload = buildBatchReviewPayload(reviewItems)
-    if (reviewPayload) {
-      console.log(`[sync] phase2 review items: ${reviewItems.length} (stored for future use)`)
     }
 
     console.log(`[sync] phase2 aiPipeline: ${Date.now() - tAI}ms, processed=${storedEmails.length}`)

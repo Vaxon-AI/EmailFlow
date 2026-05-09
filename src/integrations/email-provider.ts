@@ -9,7 +9,7 @@ export interface EmailMessage {
   threadId: string | null
   subject: string
   sender: string
-  recipients: string[]
+  recipients: readonly string[]
   bodyPreview: string
   bodyFull: string
   receivedAt: Date
@@ -19,7 +19,7 @@ export interface EmailMessage {
    * Provider-specific labels (e.g. Gmail's INBOX, IMPORTANT, etc.)
    * Each provider maps their native labels to this array.
    */
-  labels: string[]
+  labels: readonly string[]
 
   /**
    * Normalized categories that ALL providers map to.
@@ -31,7 +31,7 @@ export interface EmailMessage {
    * - "social": social media notifications
    * - "updates": automated notifications (shipping, receipts, alerts)
    */
-  providerCategories: NormalizedCategory[]
+  providerCategories: readonly NormalizedCategory[]
 }
 
 export type NormalizedCategory = 'spam' | 'promotions' | 'social' | 'updates'

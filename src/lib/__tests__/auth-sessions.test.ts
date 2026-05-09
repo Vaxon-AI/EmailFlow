@@ -141,7 +141,7 @@ describe('requireSessionToken', () => {
 
   it('throws SESSION_REVOKED for a session with revokedAt set', async () => {
     mockSession.findFirst.mockResolvedValue(makeFullSession({ revokedAt: past }))
-    mockSession.update.mockResolvedValue({})
+    mockSession.update.mockResolvedValue({} as never)
     await expect(requireSessionToken(RAW_TOKEN)).rejects.toMatchObject({ code: 'SESSION_REVOKED' })
   })
 
@@ -152,13 +152,13 @@ describe('requireSessionToken', () => {
 
   it('throws SESSION_EXPIRED when expiresAt is in the past', async () => {
     mockSession.findFirst.mockResolvedValue(makeFullSession({ expiresAt: past }))
-    mockSession.update.mockResolvedValue({})
+    mockSession.update.mockResolvedValue({} as never)
     await expect(requireSessionToken(RAW_TOKEN)).rejects.toMatchObject({ code: 'SESSION_EXPIRED' })
   })
 
   it('throws SESSION_INACTIVE_EXPIRED when lastActiveAt is beyond the inactivity timeout', async () => {
     mockSession.findFirst.mockResolvedValue(makeFullSession({ lastActiveAt: staleActiveAt }))
-    mockSession.update.mockResolvedValue({})
+    mockSession.update.mockResolvedValue({} as never)
     await expect(requireSessionToken(RAW_TOKEN)).rejects.toMatchObject({ code: 'SESSION_INACTIVE_EXPIRED' })
   })
 
@@ -176,7 +176,7 @@ describe('requireSessionToken', () => {
     const oldActiveAt = new Date(now.getTime() - 10 * 60 * 1000) // 10 min ago
     mockSession.findFirst.mockResolvedValue(makeFullSession({ lastActiveAt: oldActiveAt }))
     const updatedAt = new Date()
-    mockSession.update.mockResolvedValue({ lastActiveAt: updatedAt, updatedAt })
+    mockSession.update.mockResolvedValue({ lastActiveAt: updatedAt, updatedAt } as never)
     const ctx = await requireSessionToken(RAW_TOKEN)
     expect(mockSession.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'session-1' } })
@@ -202,7 +202,7 @@ describe('rotateSessionToken', () => {
       status: 'active',
       expiresAt: past,
       revokedAt: null,
-    })
+    } as never)
     expect(await rotateSessionToken(OLD_RAW_TOKEN)).toBeNull()
   })
 
@@ -212,7 +212,7 @@ describe('rotateSessionToken', () => {
       status: 'active',
       expiresAt: future,
       revokedAt: past,
-    })
+    } as never)
     expect(await rotateSessionToken(OLD_RAW_TOKEN)).toBeNull()
   })
 
@@ -222,8 +222,8 @@ describe('rotateSessionToken', () => {
       status: 'active',
       expiresAt: future,
       revokedAt: null,
-    })
-    mockSession.update.mockResolvedValue({})
+    } as never)
+    mockSession.update.mockResolvedValue({} as never)
     const result = await rotateSessionToken(OLD_RAW_TOKEN)
     expect(result).not.toBeNull()
     expect(result).toHaveProperty('newRawToken')
@@ -237,8 +237,8 @@ describe('rotateSessionToken', () => {
       status: 'active',
       expiresAt: future,
       revokedAt: null,
-    })
-    mockSession.update.mockResolvedValue({})
+    } as never)
+    mockSession.update.mockResolvedValue({} as never)
     await rotateSessionToken(OLD_RAW_TOKEN)
     expect(mockSession.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -254,7 +254,7 @@ describe('rotateSessionToken', () => {
       status: 'active',
       expiresAt: future,
       revokedAt: null,
-    })
+    } as never)
     mockSession.update.mockRejectedValue(new Error('P2025'))
     expect(await rotateSessionToken(OLD_RAW_TOKEN)).toBeNull()
   })
@@ -352,7 +352,7 @@ describe('listActiveSessions', () => {
       { id: 'session-1', deviceName: 'Desktop · macOS', deviceType: 'desktop', browser: 'Chrome', os: 'macOS', ipAddress: '127.0.0.1', userAgent: 'Mozilla', isNewDevice: false, lastActiveAt: recentActiveAt, expiresAt: future, createdAt: now },
     ]
     mockSession.updateMany.mockResolvedValue({ count: 0 })
-    mockSession.findMany.mockResolvedValue(activeSessions)
+    mockSession.findMany.mockResolvedValue(activeSessions as never)
     const result = await listActiveSessions('user-1')
     expect(mockSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'expired' } })

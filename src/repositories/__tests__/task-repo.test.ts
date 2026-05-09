@@ -60,6 +60,7 @@ function makeCreateTaskData(overrides = {}) {
       explicitDeadline: '2026-06-01',
       inferredDeadline: null,
       deadlineConfidence: 0.9,
+      splitReason: null,
     },
     priority: {
       urgency: 8,

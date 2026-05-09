@@ -37,8 +37,8 @@ describe('GET /api/emails/pending-review', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.success).toBe(true)
-    expect(body.emails).toHaveLength(2)
-    expect(body.count).toBe(2)
+    expect(body.data.emails).toHaveLength(2)
+    expect(body.data.count).toBe(2)
   })
 
   it('returns empty list when no emails are pending review', async () => {
@@ -48,7 +48,7 @@ describe('GET /api/emails/pending-review', () => {
 
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.emails).toEqual([])
-    expect(body.count).toBe(0)
+    expect(body.data.emails).toEqual([])
+    expect(body.data.count).toBe(0)
   })
 })

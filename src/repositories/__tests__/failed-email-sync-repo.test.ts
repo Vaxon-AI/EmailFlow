@@ -47,9 +47,9 @@ function withRetryCount(n: number) {
 
 function captureUpdateData() {
   const calls: Record<string, unknown>[] = []
-  mockRepo.update.mockImplementation((args: any) => {
+  ;(mockRepo.update as ReturnType<typeof vi.fn>).mockImplementation((args: any) => {
     calls.push(args.data)
-    return Promise.resolve({} as any)
+    return Promise.resolve({} as never)
   })
   return calls
 }
@@ -183,9 +183,9 @@ describe('full lifecycle: pending → retrying (×N) → permanent_failed', () =
   it(`produces ${MAX_RETRY_COUNT - 1} "retrying" transitions then 1 "permanent_failed"`, async () => {
     const statuses: string[] = []
 
-    mockRepo.update.mockImplementation((args: any) => {
+    ;(mockRepo.update as ReturnType<typeof vi.fn>).mockImplementation((args: any) => {
       statuses.push(args.data.status)
-      return Promise.resolve({} as any)
+      return Promise.resolve({} as never)
     })
 
     for (let attempt = 0; attempt < MAX_RETRY_COUNT; attempt++) {

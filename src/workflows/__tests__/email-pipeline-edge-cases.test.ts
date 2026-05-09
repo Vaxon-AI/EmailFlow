@@ -121,8 +121,8 @@ function makeEmail(overrides: Record<string, unknown> = {}) {
 
 const MOCK_THREAD_MEMORY: ThreadMemory = {
   id: 'tmem-1', userId: 'user-1', threadId: 'thread-1',
-  title: 'Contract Review', topic: 'Legal', summary: 'Contract needs review',
-  status: 'active', nextAction: 'Review contract', matterId: null,
+  title: 'Contract Review', topic: 'other', summary: 'Contract needs review',
+  status: 'open', nextAction: 'Review contract', matterId: null,
   linkedTaskId: null, lastEmailId: 'email-1', lastMessageAt: NOW,
   emailCount: 1, lastClassification: 'action', participants: ['boss@acme.com'],
   needsFullAnalysis: false, confidence: 0.9, createdAt: NOW, updatedAt: NOW,
@@ -130,8 +130,8 @@ const MOCK_THREAD_MEMORY: ThreadMemory = {
 
 const MOCK_MATTER: MatterMemory = {
   id: 'matter-1', userId: 'user-1', projectContextId: null,
-  title: 'Contract Review', topic: 'Legal', summary: 'Contract review matter',
-  status: 'active', nextAction: null, linkedPrimaryTaskId: null,
+  title: 'Contract Review', topic: 'other', summary: 'Contract review matter',
+  status: 'open', nextAction: null, linkedPrimaryTaskId: null,
   lastEmailId: null, lastMessageAt: null, threadCount: 1, emailCount: 1,
   lastClassification: null, participants: [], keywords: [],
   createdAt: NOW, updatedAt: NOW, projectContext: null,
@@ -173,9 +173,11 @@ beforeEach(() => {
   })
   vi.mocked(ai.matchMatter).mockResolvedValue({ matterId: null, confidence: 0, reasoning: 'No match found' })
   vi.mocked(ai.extractTask).mockResolvedValue({
-    title: 'Review contract', summary: 'Review the attached contract',
-    actionItems: ['Review contract'], explicitDeadline: null,
-    inferredDeadline: null, deadlineConfidence: 0,
+    tasks: [{
+      title: 'Review contract', summary: 'Review the attached contract',
+      actionItems: ['Review contract'], explicitDeadline: null,
+      inferredDeadline: null, deadlineConfidence: 0, splitReason: null,
+    }],
   })
   vi.mocked(ai.scorePriority).mockResolvedValue({
     urgency: 70, impact: 60, combinedScore: 65, reasoning: 'Time-sensitive work task',
@@ -433,8 +435,10 @@ describe('processEmail — null or empty subject', () => {
 describe('processEmail — extractTask returns partial fields', () => {
   it('does not throw when extractTask returns an empty title', async () => {
     vi.mocked(ai.extractTask).mockResolvedValue({
-      title: '', summary: '', actionItems: [],
-      explicitDeadline: null, inferredDeadline: null, deadlineConfidence: null as any,
+      tasks: [{
+        title: '', summary: '', actionItems: [],
+        explicitDeadline: null, inferredDeadline: null, deadlineConfidence: null as any, splitReason: null,
+      }],
     })
 
     await expect(processEmail('user-1', makeEmail())).resolves.toBeDefined()
@@ -442,8 +446,10 @@ describe('processEmail — extractTask returns partial fields', () => {
 
   it('returns a defined result (not undefined) when extractTask returns empty fields', async () => {
     vi.mocked(ai.extractTask).mockResolvedValue({
-      title: '', summary: '', actionItems: [],
-      explicitDeadline: null, inferredDeadline: null, deadlineConfidence: null as any,
+      tasks: [{
+        title: '', summary: '', actionItems: [],
+        explicitDeadline: null, inferredDeadline: null, deadlineConfidence: null as any, splitReason: null,
+      }],
     })
 
     const result = await processEmail('user-1', makeEmail())

@@ -57,7 +57,7 @@ type BatchStatus = {
 // Action / Tracked / FYI cover the everyday mail; Ignored is the catch-all
 // for AI-classified ignore + user-dismissed soft-deletes. Unclassified only
 // appears when there are quota-skipped emails awaiting manual classification.
-type Tab = 'needs_review' | 'tracked' | 'fyi' | 'ignored' | 'unclassified'
+type Tab = 'needs_action' | 'tracked' | 'fyi' | 'ignored' | 'unclassified'
 type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
 
 type LinkedTask = {
@@ -104,7 +104,7 @@ const fyiPriority: Record<string, number> = {
   ignore: 1,
 }
 
-const VALID_TABS = new Set<Tab>(['needs_review', 'tracked', 'fyi', 'ignored', 'unclassified'])
+const VALID_TABS = new Set<Tab>(['needs_action', 'tracked', 'fyi', 'ignored', 'unclassified'])
 
 function isNeedsActionPageEmail(email: EmailItem) {
   // Action-only now. Uncertain moved to the Needs Review tab so this tab
@@ -144,7 +144,7 @@ function isUnclassifiedEmail(email: EmailItem) {
 }
 
 function matchesEmailTab(email: EmailItem, tab: Tab) {
-  if (tab === 'needs_review') return isNeedsActionPageEmail(email)
+  if (tab === 'needs_action') return isNeedsActionPageEmail(email)
   if (tab === 'tracked') return isTrackedEmail(email)
   if (tab === 'fyi') return isFyiEmail(email)
   if (tab === 'unclassified') return isUnclassifiedEmail(email)
@@ -214,14 +214,15 @@ function filterEmails({
 
 function parseEmailTab(value: string | null, legacyClassification: string | null): Tab {
   if (value && VALID_TABS.has(value as Tab)) return value as Tab
+  if (value === 'needs_review') return 'needs_action'
   // Legacy URL compat: an old "?tab=all&classification=ignore" link from the
   // dashboard or a bookmark resolves to the new Ignored tab. Other classifications
   // are absorbed into their tab equivalents.
   if (value === 'all' && legacyClassification === 'ignore') return 'ignored'
-  if (legacyClassification === 'action' || legacyClassification === 'uncertain') return 'needs_review'
+  if (legacyClassification === 'action' || legacyClassification === 'uncertain') return 'needs_action'
   if (legacyClassification === 'awareness') return 'fyi'
   if (legacyClassification === 'ignore') return 'ignored'
-  return 'needs_review'
+  return 'needs_action'
 }
 
 export default function EmailsPage() {
@@ -316,7 +317,7 @@ function EmailsContent() {
     queryFn: async () => {
       const r = await fetch('/api/emails/pending-review')
       const d = await r.json()
-      return d.count as number
+      return d.data?.count as number
     },
     enabled: manualReviewMode,
     staleTime: CACHE_TIME.list,
@@ -561,7 +562,7 @@ function EmailsContent() {
     // to act on most urgently (AI couldn't categorize them) and they don't
     // surface anywhere else in the inbox.
     ...(unclassifiedCount > 0 ? [{ key: 'unclassified' as Tab, label: 'Unclassified', count: unclassifiedCount }] : []),
-    { key: 'needs_review', label: 'Needs Action', count: needsActionCount },
+    { key: 'needs_action', label: 'Needs Action', count: needsActionCount },
     { key: 'tracked', label: 'Tracked', count: trackedCount },
     { key: 'fyi', label: 'FYI', count: infoCount },
     { key: 'ignored', label: 'Ignored', count: ignoredCount },
@@ -850,7 +851,7 @@ function EmailsContent() {
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
           <span>
             <span className="font-medium">{pendingCount} email{pendingCount === 1 ? '' : 's'}</span>
-            {' '}being classified — visible now in All Mail, tags appear once AI finishes.
+            {' '}being classified — visible once AI finishes, tags appear shortly.
           </span>
         </div>
       )}
@@ -864,10 +865,10 @@ function EmailsContent() {
           <button
             onClick={() => {
               ackCurrentReviewBatch()
-              if (tab !== 'needs_review') {
-                setTab('needs_review')
+              if (tab !== 'needs_action') {
+                setTab('needs_action')
                 setPage(1)
-                updateEmailUrlFilter({ tab: 'needs_review' })
+                updateEmailUrlFilter({ tab: 'needs_action' })
               }
             }}
             className="flex flex-1 items-center gap-3 text-left transition-colors hover:opacity-80"

@@ -202,7 +202,6 @@ describe('syncEmailsPhase1 — normal flow', () => {
     await syncEmailsPhase1('user-1')
 
     expect(userRepo.updateLastSync).toHaveBeenCalledOnce()
-    expect(result => result).toBeTruthy()
   })
 
   it('returns totalFetched = 0 and syncedCount = 0 when no emails', async () => {

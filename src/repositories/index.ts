@@ -1,7 +1,0 @@
-export * as emailRepo from './email-repo'
-export * as taskRepo from './task-repo'
-export * as digestRepo from './digest-repo'
-export * as userRepo from './user-repo'
-export * as statsRepo from './stats-repo'
-export * as retentionRepo from './retention-repo'
-export * as attachmentRepo from './attachment-repo'

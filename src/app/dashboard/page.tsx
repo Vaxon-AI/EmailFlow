@@ -539,7 +539,7 @@ function DashboardContent() {
       </div>
 
       {attentionEmailCount > 0 && (
-        <Link href={dashboardLink('/dashboard/emails', { tab: 'needs_review' })} className="animate-fade-in-up stagger-2 block">
+        <Link href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} className="animate-fade-in-up stagger-2 block">
           <div className="flex items-center gap-3 rounded-2xl border border-red-200/80 bg-[linear-gradient(135deg,rgba(254,242,242,1)_0%,rgba(255,247,237,1)_100%)] px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
             <div className="relative shrink-0">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100">
@@ -679,7 +679,7 @@ function DashboardContent() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
-                  <BarRow label="Needs Action" value={emailData.needsReview} max={emailData.total} color="bg-red-400" href={dashboardLink('/dashboard/emails', { tab: 'needs_review' })} />
+                  <BarRow label="Needs Action" value={emailData.needsReview} max={emailData.total} color="bg-red-400" href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} />
                   <BarRow label="Tracked" value={emailData.tracked} max={emailData.total} color="bg-green-400" href={dashboardLink('/dashboard/emails', { tab: 'tracked' })} />
                   <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-blue-400" href={dashboardLink('/dashboard/emails', { tab: 'fyi' })} />
                   <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" href={dashboardLink('/dashboard/emails', { tab: 'ignored' })} />

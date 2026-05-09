@@ -27,7 +27,7 @@ describe('GET /api/emails', () => {
   })
 
   it('returns empty list when user is not authenticated', async () => {
-    mockGetAuthUser.mockResolvedValue(null)
+    mockGetAuthUser.mockResolvedValue(null as never)
 
     const res = await GET(new NextRequest('http://localhost/api/emails'))
 

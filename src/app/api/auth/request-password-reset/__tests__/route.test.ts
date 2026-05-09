@@ -55,7 +55,7 @@ function postRequest(body?: object): Request {
 describe('POST /api/auth/request-password-reset', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetAuthUser.mockResolvedValue(null)
+    mockGetAuthUser.mockResolvedValue(null as never)
     mockPasswordResetToken.findFirst.mockResolvedValue(null)
     mockPasswordResetToken.updateMany.mockResolvedValue({ count: 0 } as never)
     mockPasswordResetToken.create.mockResolvedValue({} as never)

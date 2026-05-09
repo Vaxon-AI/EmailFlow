@@ -131,7 +131,7 @@ describe('POST /api/tasks/from-text', () => {
     await POST(postRequest({ text: longText }))
 
     const callArg = mockExtractTask.mock.calls[0][0]
-    expect(callArg.body.length).toBe(1000)
-    expect(callArg.bodyPreview.length).toBe(1000)
+    expect(callArg.body?.length).toBe(1000)
+    expect(callArg.bodyPreview?.length).toBe(1000)
   })
 })

@@ -113,8 +113,8 @@ function makeEmail(overrides: Record<string, unknown> = {}) {
 
 const MOCK_THREAD_MEMORY: ThreadMemory = {
   id: 'tmem-1', userId: 'user-1', threadId: 'thread-1',
-  title: 'Contract Review', topic: 'Legal', summary: 'Contract needs review',
-  status: 'active', nextAction: 'Review contract', matterId: null,
+  title: 'Contract Review', topic: 'other', summary: 'Contract needs review',
+  status: 'open', nextAction: 'Review contract', matterId: null,
   linkedTaskId: null, lastEmailId: 'email-1', lastMessageAt: NOW,
   emailCount: 1, lastClassification: 'action', participants: ['boss@acme.com'],
   needsFullAnalysis: false, confidence: 0.9, createdAt: NOW, updatedAt: NOW,
@@ -122,8 +122,8 @@ const MOCK_THREAD_MEMORY: ThreadMemory = {
 
 const MOCK_MATTER: MatterMemory = {
   id: 'matter-1', userId: 'user-1', projectContextId: null,
-  title: 'Contract Review', topic: 'Legal', summary: 'Contract review matter',
-  status: 'active', nextAction: null, linkedPrimaryTaskId: null,
+  title: 'Contract Review', topic: 'other', summary: 'Contract review matter',
+  status: 'open', nextAction: null, linkedPrimaryTaskId: null,
   lastEmailId: null, lastMessageAt: null, threadCount: 1, emailCount: 1,
   lastClassification: null, participants: [], keywords: [],
   createdAt: NOW, updatedAt: NOW, projectContext: null,
@@ -162,14 +162,16 @@ beforeEach(() => {
     reasoning: 'Clear action required', isWorkRelated: true,
   })
   vi.mocked(ai.updateThreadMemory).mockResolvedValue({
-    title: 'Contract Review', topic: 'Legal', summary: 'Review needed',
-    status: 'active', nextAction: 'Review contract', needsFullAnalysis: false,
+    title: 'Contract Review', topic: 'other', summary: 'Review needed',
+    status: 'open', nextAction: 'Review contract', needsFullAnalysis: false,
   })
-  vi.mocked(ai.matchMatter).mockResolvedValue({ matterId: null, confidence: 0 })
+  vi.mocked(ai.matchMatter).mockResolvedValue({ matterId: null, confidence: 0, reasoning: 'No match found' })
   vi.mocked(ai.extractTask).mockResolvedValue({
-    title: 'Review contract', summary: 'Review the attached contract',
-    actionItems: ['Review contract'], explicitDeadline: null,
-    inferredDeadline: null, deadlineConfidence: null,
+    tasks: [{
+      title: 'Review contract', summary: 'Review the attached contract',
+      actionItems: ['Review contract'], explicitDeadline: null,
+      inferredDeadline: null, deadlineConfidence: 0, splitReason: null,
+    }],
   })
   vi.mocked(ai.scorePriority).mockResolvedValue({
     urgency: 70, impact: 60, combinedScore: 65, reasoning: 'Time-sensitive work task',

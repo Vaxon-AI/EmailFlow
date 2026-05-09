@@ -216,9 +216,9 @@ function TasksContent() {
   const isPro = Boolean(user?.plan && user.plan !== 'free')
   const priorityFilterLabel = PRIORITY_OPTIONS.find((option) => option.value === priorityFilter)?.label ?? 'All priorities'
 
-  // Fetch all tasks (no server-side status filter — we filter client-side for "all")
+  // Fetch all tasks when the UI says "All"; specific tabs use server filters.
   const apiStatus = statusFilter === 'all' ? '' : statusFilter
-  const apiScope = statusFilter === 'all' ? 'open' : ''
+  const apiScope = ''
   const apiPriority = priorityFilter === 'all' ? '' : priorityFilter
   const { data: res, isLoading } = useQuery({
     queryKey: ['tasks', apiScope || apiStatus, sortBy, apiPriority],
