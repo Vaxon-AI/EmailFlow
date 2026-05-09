@@ -577,7 +577,7 @@ function EmailsContent() {
       />
 
       {unclassifiedCount > 0 && tab !== 'unclassified' && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-warning-100 bg-warning-50/70 px-4 py-3 text-sm">
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-warning-200 bg-warning-100/60 px-4 py-3 text-sm">
           <div className="min-w-0">
             <p className="font-medium text-warning-700">
               {unclassifiedCount} unclassified email{unclassifiedCount === 1 ? '' : 's'}
@@ -588,8 +588,7 @@ function EmailsContent() {
           </div>
           <Button
             size="sm"
-            variant="outline"
-            className="shrink-0 border-warning-100 bg-white text-warning-700 hover:bg-warning-50"
+            className="shrink-0 bg-warning text-white hover:bg-warning-700"
             onClick={() => {
               setTab('unclassified')
               setPage(1)
@@ -781,8 +780,8 @@ function EmailsContent() {
                 }
                 className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                   manualReviewMode
-                    ? 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
-                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    ? 'border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100'
+                    : 'border-brand-200 bg-white text-brand-600 hover:border-brand-300 hover:bg-brand-50'
                 }`}
               >
                 {reviewModeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
@@ -817,13 +816,13 @@ function EmailsContent() {
         }
         if (batchStatus.actionEmailCount > 0) {
           return (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-warning-100 bg-warning-50 px-4 py-3 shadow-sm">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-warning-200 bg-warning-100/60 px-4 py-3 shadow-sm">
               <button
                 onClick={() => setShowBatchModal(true)}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-100">
-                  <Zap className="h-4 w-4 text-warning" />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning text-white">
+                  <Zap className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-warning-700">
@@ -861,7 +860,7 @@ function EmailsContent() {
           Change Project). The dedicated review modal was removed; the tab is
           now the single source of truth. */}
       {!isLoading && manualReviewMode && pendingReviewCount > 0 && !reviewBannerDismissed && (
-        <div className="flex w-full items-center gap-3 rounded-xl border border-warning-100 bg-warning-50 px-4 py-3 shadow-sm">
+        <div className="flex w-full items-center gap-3 rounded-xl border border-warning-200 bg-warning-100/60 px-4 py-3 shadow-sm">
           <button
             onClick={() => {
               ackCurrentReviewBatch()
@@ -873,8 +872,8 @@ function EmailsContent() {
             }}
             className="flex flex-1 items-center gap-3 text-left transition-colors hover:opacity-80"
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-100">
-              <Eye className="h-4 w-4 text-warning" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning text-white">
+              <Eye className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-warning-700">
@@ -991,7 +990,7 @@ function EmailsContent() {
               Auto mode will process emails currently waiting for manual review and create tasks for action emails without asking you first. Future action emails will also be handled automatically.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl border border-warning-100 bg-warning-50 px-3 py-2 text-sm text-warning-700">
+          <div className="rounded-xl border border-warning-200 bg-warning-100/60 px-3 py-2 text-sm text-warning-700">
             This may create tasks from pending review emails in the background.
           </div>
           <div className="flex justify-end gap-2">
@@ -1123,7 +1122,7 @@ function SyncBatchModal({
                       Task created
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-md border border-warning-100 bg-warning-50 px-2 py-0.5 text-[10px] font-medium text-warning-700">
+                    <span className="inline-flex items-center rounded-md border border-warning-200 bg-warning-100/60 px-2 py-0.5 text-[10px] font-medium text-warning-700">
                       No task yet
                     </span>
                   )}
@@ -1388,13 +1387,20 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
 }) {
   const matter = email.matter ?? null
   const linkedTasks = email.taskLinks?.map((link) => link.task).filter((t): t is LinkedTask => t != null) || []
-  const needsAttention = isNeedsActionPageEmail(email)
+  // Left accent bar mirrors the bucket: red for action emails the user must
+  // triage, amber for uncertain emails AI couldn't classify. Tracked / FYI /
+  // ignored stay quiet (no bar) so the eye is drawn to the rows that matter.
+  const attentionBar = isNeedsActionPageEmail(email)
+    ? 'border-l-2 border-l-critical'
+    : isUncertainEmail(email)
+      ? 'border-l-2 border-l-warning'
+      : ''
 
   return (
     <div className={`group flex items-center gap-3 rounded-xl border px-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:shadow-sm ${
       isSelected
         ? 'border-brand-300 bg-brand-50/50'
-        : `border-gray-200/80 bg-white hover:border-brand-200 hover:bg-brand-50/60 ${needsAttention ? 'border-l-2 border-l-warning' : ''}`
+        : `border-gray-200/80 bg-white hover:border-brand-200 hover:bg-brand-50/60 ${attentionBar}`
     } ${compact ? 'py-2 opacity-75' : 'py-3'}`}>
       {onToggleSelect && (
         <input
@@ -1472,7 +1478,7 @@ function RetentionBadge({ status }: { status?: string | null }) {
   if (!status || status === 'ACTIVE') return null
   const cfg = {
     ARCHIVED:      { label: 'Archived',  className: 'border-gray-200 bg-gray-50 text-gray-500' },
-    METADATA_ONLY: { label: 'Body only', className: 'border-warning-100 bg-warning-50 text-warning-700' },
+    METADATA_ONLY: { label: 'Body only', className: 'border-warning-200 bg-warning-100/60 text-warning-700' },
     PURGED:        { label: 'Purged',    className: 'border-critical-100 bg-critical-50 text-critical' },
   }[status] ?? null
   if (!cfg) return null
@@ -1501,9 +1507,13 @@ function ClassBadge({
       </Badge>
     )
   }
-  // Use display state so a row in the Tracked tab (actioned=true) shows
-  // the "Tracked" badge instead of leaking the underlying classification.
+  // Only the two "attention" buckets earn a chip — Needs Action (red) and
+  // Uncertain (amber). Tracked / FYI / Ignored rows stay clean: title aligns
+  // straight after the checkbox with no phantom spacer column.
   const state = getEmailDisplayState({ classification, actioned })
+  if (state !== 'needs_action' && state !== 'uncertain') {
+    return null
+  }
   const cfg = EMAIL_DISPLAY_CONFIG[state]
   const Icon = cfg.icon
   return (

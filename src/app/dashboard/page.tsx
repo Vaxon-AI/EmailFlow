@@ -471,7 +471,7 @@ function DashboardContent() {
               if (ratio < 0.7) return null
               const tone = ratio >= 0.9
                 ? 'border-critical-100 bg-critical-50 text-critical-700 hover:bg-critical-100'
-                : 'border-warning-100 bg-warning-50 text-warning-700 hover:bg-warning-100'
+                : 'border-warning-200 bg-warning-100/60 text-warning-700 hover:bg-warning-100'
               return (
                 <button
                   type="button"
@@ -493,17 +493,17 @@ function DashboardContent() {
             ) : providerReauthRequired ? (
               <Link href="/dashboard/settings">
                 <Button size="sm" variant="outline" className="border-critical-100 bg-critical-50 text-critical-700 hover:bg-critical-100">
-                  Reconnect Gmail
+                  Reconnect Email
                 </Button>
               </Link>
             ) : s?.sync?.gmailConnected ? (
               <span className="flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-                Connected
+                Email Connected
               </span>
             ) : (
               <a href="/api/auth/google">
-                <Button size="sm">Connect Gmail</Button>
+                <Button size="sm">Connect Email</Button>
               </a>
             )}
           </>
@@ -541,12 +541,12 @@ function DashboardContent() {
 
       {attentionEmailCount > 0 && (
         <Link href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} className="animate-fade-in-up stagger-2 block">
-          <div className="flex items-center gap-3 rounded-2xl border border-warning-100 bg-warning-50/60 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex items-center gap-3 rounded-2xl border border-warning-200 bg-warning-100/60 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
             <div className="relative shrink-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-warning-100">
-                <AlertTriangle className="h-4.5 w-4.5 text-warning" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-warning text-white">
+                <AlertTriangle className="h-4.5 w-4.5" />
               </div>
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning text-[9px] font-bold text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning-700 text-[9px] font-bold text-white">
                 {attentionEmailCount}
               </span>
             </div>
@@ -559,7 +559,7 @@ function DashboardContent() {
                 {attentionEmailCount > 1 ? ` and ${attentionEmailCount - 1} more...` : ''}
               </p>
             </div>
-            <span className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-warning-700">
+            <span className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-warning-200">
               View
             </span>
           </div>
@@ -568,25 +568,29 @@ function DashboardContent() {
 
       {pendingTaskCount > 0 && (
         <Link href={dashboardLink('/dashboard/tasks', { status: 'pending' })} className="animate-fade-in-up stagger-2 block">
-          <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          {/* Banner colour pairs with "X emails need your review" above —
+              both are alert banners, both warning-amber. AI Suggestions's
+              purple identity lives in compact spots (donut legend, status
+              tag), not a full-width attention banner. */}
+          <div className="flex items-center gap-3 rounded-2xl border border-warning-200 bg-warning-100/60 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
             <div className="relative shrink-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100">
-                <CheckSquare className="h-4.5 w-4.5 text-brand-700" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-warning text-white">
+                <CheckSquare className="h-4.5 w-4.5" />
               </div>
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-600 text-[9px] font-bold text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning-700 text-[9px] font-bold text-white">
                 {pendingTaskCount}
               </span>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-brand-700">
+              <p className="text-sm font-semibold text-warning-700">
                 {pendingTaskCount} AI-suggested task{pendingTaskCount > 1 ? 's' : ''} pending
               </p>
-              <p className="truncate text-xs text-brand-600">
+              <p className="truncate text-xs text-warning">
                 {pendingTasks[0]?.title}
                 {pendingTaskCount > 1 ? ` and ${pendingTaskCount - 1} more...` : ''}
               </p>
             </div>
-            <span className="shrink-0 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-700">
+            <span className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-warning-200">
               View
             </span>
           </div>
@@ -595,7 +599,7 @@ function DashboardContent() {
 
       {providerReauthRequired ? (
         <div className="rounded-2xl border border-critical-100 bg-critical-50 px-4 py-3 text-sm text-critical-700">
-          Your Gmail connection has expired. Reconnect it in Settings before the next sync.
+          Your email connection has expired. Reconnect it in Settings before the next sync.
         </div>
       ) : null}
 
@@ -633,7 +637,7 @@ function DashboardContent() {
               title="Last Synced"
               value={s?.sync?.lastSyncAt ? timeAgo(s.sync.lastSyncAt) : 'Never'}
               icon={<Clock className="h-4 w-4 text-gray-500" />}
-              detail={s?.sync?.gmailConnected ? 'Gmail connected' : 'Not connected'}
+              detail={s?.sync?.gmailConnected ? 'Email connected' : 'Not connected'}
             />
           </>
         )}
@@ -665,7 +669,7 @@ function DashboardContent() {
                   <div className="space-y-1.5 text-sm">
                     <LegendDot color="bg-success" label={`Completed: ${completedTasks}`} />
                     <LegendDot color="bg-brand-600" label={`Active: ${confirmedTaskCount}`} />
-                    <LegendDot color="bg-gray-400" label={`AI Suggestions: ${pendingTaskCount}`} />
+                    <LegendDot color="bg-ai" label={`AI Suggestions: ${pendingTaskCount}`} />
                   </div>
                 </div>
               </CardContent>
@@ -680,15 +684,18 @@ function DashboardContent() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
-                  <BarRow label="Needs Action" value={emailData.needsReview} max={emailData.total} color="bg-warning" href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} />
-                  <BarRow label="Tracked" value={emailData.tracked} max={emailData.total} color="bg-brand-500" href={dashboardLink('/dashboard/emails', { tab: 'tracked' })} />
-                  <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-brand-200" href={dashboardLink('/dashboard/emails', { tab: 'fyi' })} />
-                  <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-300" href={dashboardLink('/dashboard/emails', { tab: 'ignored' })} />
+                  {/* Bars use saturated mid-tone colours (500/700) so they
+                      don't look washed-out next to each other. Needs Action
+                      bar matches the email chip's solid red. */}
+                  <BarRow label="Needs Action" value={emailData.needsReview} max={emailData.total} color="bg-critical" href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} />
+                  <BarRow label="Tracked" value={emailData.tracked} max={emailData.total} color="bg-brand-700" href={dashboardLink('/dashboard/emails', { tab: 'tracked' })} />
+                  <BarRow label="FYI" value={emailData.awareness} max={emailData.total} color="bg-brand-400" href={dashboardLink('/dashboard/emails', { tab: 'fyi' })} />
+                  <BarRow label="Ignored" value={emailData.ignore} max={emailData.total} color="bg-gray-500" href={dashboardLink('/dashboard/emails', { tab: 'ignored' })} />
                 </div>
                 {(emailData.unclassified ?? 0) > 0 && (
                   <Link
                     href={dashboardLink('/dashboard/emails', { tab: 'unclassified' })}
-                    className="mt-2.5 block rounded-md border border-warning-100 bg-warning-50/60 px-2 py-1.5 text-[11px] text-warning-700 transition-colors hover:bg-warning-50"
+                    className="mt-2.5 block rounded-md border border-warning-200 bg-warning-100/60 px-2 py-1.5 text-[11px] text-warning-700 transition-colors hover:bg-warning-100/60"
                   >
                     +{emailData.unclassified} unclassified (uncertain or quota-skipped)
                   </Link>
@@ -705,10 +712,13 @@ function DashboardContent() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
+                  {/* Bright saturated trio — red / orange / yellow at base
+                      saturation so the three priorities read as visually
+                      distinct hues, not three brown 700-tier shades. */}
                   <BarRow label="Critical" value={priorityCounts.critical} max={totalTasks || 1} color="bg-critical" href="/dashboard/tasks?priority=critical" />
-                  <BarRow label="High" value={priorityCounts.high} max={totalTasks || 1} color="bg-warning" href="/dashboard/tasks?priority=high" />
-                  <BarRow label="Medium" value={priorityCounts.medium} max={totalTasks || 1} color="bg-brand-400" href="/dashboard/tasks?priority=medium" />
-                  <BarRow label="Low" value={priorityCounts.low} max={totalTasks || 1} color="bg-gray-300" href="/dashboard/tasks?priority=low" />
+                  <BarRow label="High" value={priorityCounts.high} max={totalTasks || 1} color="bg-orange" href="/dashboard/tasks?priority=high" />
+                  <BarRow label="Medium" value={priorityCounts.medium} max={totalTasks || 1} color="bg-yellow" href="/dashboard/tasks?priority=medium" />
+                  <BarRow label="Low" value={priorityCounts.low} max={totalTasks || 1} color="bg-gray-400" href="/dashboard/tasks?priority=low" />
                 </div>
                 <div className="mt-3 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2">
                   <Target className="h-3.5 w-3.5 text-brand-600" />
@@ -815,7 +825,7 @@ function DashboardContent() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-xl border border-warning-100 bg-warning-50/70 px-4 py-3 text-xs text-warning-700">
+          <div className="rounded-xl border border-warning-200 bg-warning-100/60 px-4 py-3 text-xs text-warning-700">
             <p className="font-semibold">Free plan limit</p>
             <p className="mt-0.5 text-warning">
               EmailFlow classifies up to <strong>100 emails per month</strong> on the free plan. If your inbox is busy,
@@ -1111,7 +1121,7 @@ function CompletionMomentumCard({
     <Card className="overflow-hidden border-gray-200/80 bg-white shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
-          <TrendingUp className="h-4 w-4 text-success" />
+          <TrendingUp className="h-4 w-4 text-brand-600" />
           Completion Momentum
         </CardTitle>
       </CardHeader>
@@ -1177,9 +1187,9 @@ function TodayMomentumSummary({
 }) {
   return (
     <div className="grid min-h-52 gap-3 rounded-xl border border-gray-200 bg-white/80 p-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-      <div className="flex flex-col justify-between rounded-xl bg-success-50 px-4 py-3">
-        <span className="text-xs font-medium text-success">Completed today</span>
-        <span className="mt-5 text-3xl font-bold text-success">{completed}</span>
+      <div className="flex flex-col justify-between rounded-xl bg-brand-50 px-4 py-3">
+        <span className="text-xs font-medium text-brand-700">Completed today</span>
+        <span className="mt-5 text-3xl font-bold text-brand-700">{completed}</span>
       </div>
       <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
         <span className="text-xs font-medium text-slate-500">Tasks created</span>
@@ -1224,8 +1234,8 @@ function MomentumChart({
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Completed tasks ${getMomentumPeriodLabel(view)}`} className="h-52 w-full">
         <defs>
           <linearGradient id="momentum-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#1F7A4D" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#1F7A4D" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="#2A47C8" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#2A47C8" stopOpacity="0.02" />
           </linearGradient>
         </defs>
         {yGrid.map((ratio) => {
@@ -1235,10 +1245,10 @@ function MomentumChart({
           )
         })}
         {areaPath ? <path d={areaPath} fill="url(#momentum-fill)" /> : null}
-        {linePath ? <path d={linePath} fill="none" stroke="#1F7A4D" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" /> : null}
+        {linePath ? <path d={linePath} fill="none" stroke="#2A47C8" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" /> : null}
         {points.map((point) => (
           <g key={point.date} className="group outline-none" tabIndex={0}>
-            <circle cx={point.x} cy={point.y} r="4" fill="#1F7A4D" stroke="white" strokeWidth="2" />
+            <circle cx={point.x} cy={point.y} r="4" fill="#2A47C8" stroke="white" strokeWidth="2" />
             <circle cx={point.x} cy={point.y} r="12" fill="transparent" />
             <g className="pointer-events-none opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100">
               <rect x={Math.min(width - 150, Math.max(8, point.x - 68))} y={Math.max(8, point.y - 58)} width="136" height="44" rx="8" fill="#0f172a" />
@@ -1438,7 +1448,7 @@ function SyncWindowOption({
   // Visual hierarchy: exceeds > recommended > dim > default. Exceeds always wins
   // because it's a hard warning the user needs to see regardless of emphasis.
   const containerClass = exceeds
-    ? 'border-warning-100 bg-warning-50/50 hover:border-warning-100 hover:bg-warning-50 p-4'
+    ? 'border-warning-100 bg-warning-50/50 hover:border-warning-100 hover:bg-warning-100/60 p-4'
     : recommended
       ? 'border-brand-300 bg-brand-50/40 hover:border-brand-400 hover:bg-brand-50/70 p-4 shadow-sm'
       : dim
@@ -1580,7 +1590,7 @@ function getFeedbackStatusClass(tone: DashboardFeedback['tone']) {
   }
   if (tone === 'warning') {
     return {
-      wrapper: 'border-warning-100 bg-warning-50',
+      wrapper: 'border-warning-200 bg-warning-100/60',
       title: 'text-warning-700',
       message: 'text-warning',
       badge: 'bg-white/80 text-warning',

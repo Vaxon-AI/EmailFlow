@@ -63,7 +63,7 @@ function VerifyTotpContent() {
       description="Enter the 6-digit code from your authenticator app."
       footer={
         <p className="text-center text-sm text-gray-500">
-          <Link href="/auth/signin" className="text-blue-600 hover:underline">
+          <Link href="/auth/signin" className="text-brand-600 hover:underline">
             Back to sign in
           </Link>
         </p>

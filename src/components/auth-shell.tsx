@@ -26,7 +26,7 @@ export function AuthShell({
     <div className="flex min-h-screen">
       <div className="relative hidden flex-col border-r bg-gray-50 p-12 lg:flex lg:w-[420px] xl:w-[480px]">
         <Link href="/landing" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600">
             <Zap className="h-4 w-4 text-white" />
           </div>
           <span className="text-base font-bold text-gray-900">EmailFlow AI</span>
@@ -45,7 +45,7 @@ export function AuthShell({
           <ul className="mt-8 space-y-4">
             {brandItems.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-center gap-3 text-sm text-gray-600">
-                <Icon className="h-4 w-4 shrink-0 text-blue-600" />
+                <Icon className="h-4 w-4 shrink-0 text-brand-600" />
                 {text}
               </li>
             ))}
@@ -58,7 +58,7 @@ export function AuthShell({
       <div className="flex flex-1 flex-col items-center justify-center bg-white px-6 py-12">
         <div className="mb-8 lg:hidden">
           <Link href="/landing" className="inline-flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600">
               <Zap className="h-4 w-4 text-white" />
             </div>
             <span className="text-base font-bold text-gray-900">EmailFlow AI</span>

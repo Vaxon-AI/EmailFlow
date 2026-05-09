@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
       }
       footer={
         <p className="text-center text-sm text-gray-500">
-          <Link href="/auth/signin" className="text-blue-600 hover:underline">
+          <Link href="/auth/signin" className="text-brand-600 hover:underline">
             Back to sign in
           </Link>
         </p>
@@ -57,8 +57,8 @@ export default function ForgotPasswordPage() {
       {sent ? (
         <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm text-center">
           <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle2 className="h-6 w-6 text-green-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success-100">
+              <CheckCircle2 className="h-6 w-6 text-success" />
             </div>
           </div>
           <p className="text-sm text-gray-500">
@@ -66,7 +66,7 @@ export default function ForgotPasswordPage() {
             <button
               type="button"
               onClick={() => { setSent(false); setEmail('') }}
-              className="text-blue-600 hover:underline"
+              className="text-brand-600 hover:underline"
             >
               Try a different email
             </button>

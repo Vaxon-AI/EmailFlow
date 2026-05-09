@@ -82,7 +82,7 @@ export function SignInContent() {
       footer={
         <p className="text-center text-sm text-gray-500">
           Don&apos;t have an account?{' '}
-          <Link href="/auth/signup" className="font-medium text-blue-600 hover:underline">
+          <Link href="/auth/signup" className="font-medium text-brand-600 hover:underline">
             Create one
           </Link>
         </p>
@@ -138,7 +138,7 @@ export function SignInContent() {
         <div>
           <div className="mb-1 flex items-center justify-between">
             <label className="text-sm font-medium text-gray-700">Password</label>
-            <Link href="/auth/forgot-password" className="text-xs text-blue-600 hover:underline">
+            <Link href="/auth/forgot-password" className="text-xs text-brand-600 hover:underline">
               Forgot password?
             </Link>
           </div>
@@ -167,7 +167,7 @@ export function SignInContent() {
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-blue-500"
           />
           <span className="text-sm text-gray-600">Remember me for 30 days</span>
         </label>

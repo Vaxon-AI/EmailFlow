@@ -584,7 +584,7 @@ export default function EmailDetailPage() {
 
           {/* Retention restore banner — only shown for METADATA_ONLY emails */}
           {email.retentionStatus === 'METADATA_ONLY' && (
-            <div className="flex items-start gap-3 rounded-xl border border-warning-100 bg-warning-50/80 px-4 py-3 text-sm">
+            <div className="flex items-start gap-3 rounded-xl border border-warning-200 bg-warning-100/70 px-4 py-3 text-sm">
               <Shield className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div className="flex-1 space-y-1">
                 <p className="font-medium text-warning-700">Email body has been removed</p>
@@ -689,7 +689,7 @@ export default function EmailDetailPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-warning-100 bg-warning-50/60 px-4 py-4">
+                  <div className="rounded-xl border border-dashed border-warning-200 bg-warning-100/60 px-4 py-4">
                     <p className="text-sm font-medium text-amber-950">No reply draft yet</p>
                     <p className="mt-1 text-xs leading-5 text-warning-700/80">
                       Generate a draft when you want a starting point, then edit it before using it.
@@ -698,7 +698,7 @@ export default function EmailDetailPage() {
                       size="sm"
                       onClick={() => generateReply()}
                       disabled={generatingReply || !canGenerateReply}
-                      className="mt-3 h-8 gap-1.5 bg-warning text-white hover:bg-warning-700"
+                      className="mt-3 h-8 gap-1.5 bg-warning text-warning-700 hover:bg-warning-200"
                     >
                       {generatingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                       Generate reply
@@ -783,13 +783,13 @@ export default function EmailDetailPage() {
                   </div>
                 )}
                 {extractionTimedOut && (
-                  <div className="flex items-center gap-2 rounded-xl border border-warning-100 bg-warning-50/80 px-4 py-3 text-sm text-warning-700">
+                  <div className="flex items-center gap-2 rounded-xl border border-warning-200 bg-warning-100/70 px-4 py-3 text-sm text-warning-700">
                     <TriangleAlert className="h-4 w-4 shrink-0" />
                     <span>Task extraction is taking longer than expected — try refreshing the page.</span>
                   </div>
                 )}
                 {email.classification === 'uncertain' && taskLinks.length === 0 && !pollingForTask && !extractionTimedOut && (
-                  <div className="flex items-start gap-2 rounded-xl border border-warning-100 bg-warning-50/80 px-4 py-3 text-sm text-warning-700">
+                  <div className="flex items-start gap-2 rounded-xl border border-warning-200 bg-warning-100/70 px-4 py-3 text-sm text-warning-700">
                     <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>
                       <p className="font-medium">AI is uncertain about this email.</p>
@@ -816,7 +816,10 @@ export default function EmailDetailPage() {
                         className="flex items-center gap-3 flex-1 min-w-0"
                       >
                         <div className={`h-8 w-1 shrink-0 rounded-full ${
-                          band === 'critical' ? 'bg-critical-500' : band === 'high' ? 'bg-warning' : band === 'medium' ? 'bg-warning' : 'bg-gray-300'
+                          band === 'critical' ? 'bg-critical' :
+                          band === 'high'     ? 'bg-orange' :
+                          band === 'medium'   ? 'bg-yellow' :
+                                                'bg-gray-300'
                         }`} />
                         <div className="min-w-0 flex-1">
                           <p className={`truncate text-sm font-medium transition-colors ${isDone ? 'text-gray-400 line-through' : 'text-gray-900 group-hover:text-brand-600'}`}>

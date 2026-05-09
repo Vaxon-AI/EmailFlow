@@ -184,7 +184,7 @@ export default function SignUpPage() {
 
                 <section>
                   <h2 className="mb-2 font-semibold text-gray-900">10. Contact</h2>
-                  <p>Questions about these terms? Contact us at <a href="mailto:legal@vaxon.ai" className="text-blue-600 hover:underline">legal@vaxon.ai</a></p>
+                  <p>Questions about these terms? Contact us at <a href="mailto:legal@vaxon.ai" className="text-brand-600 hover:underline">legal@vaxon.ai</a></p>
                 </section>
               </div>
             ) : (
@@ -263,12 +263,12 @@ export default function SignUpPage() {
 
                 <section>
                   <h2 className="mb-2 font-semibold text-gray-900">6. Security</h2>
-                  <p>We use encrypted connections, hashed passwords, and scoped OAuth tokens. If you discover a security vulnerability, please report it to <a href="mailto:security@vaxon.ai" className="text-blue-600 hover:underline">security@vaxon.ai</a>.</p>
+                  <p>We use encrypted connections, hashed passwords, and scoped OAuth tokens. If you discover a security vulnerability, please report it to <a href="mailto:security@vaxon.ai" className="text-brand-600 hover:underline">security@vaxon.ai</a>.</p>
                 </section>
 
                 <section>
                   <h2 className="mb-2 font-semibold text-gray-900">7. Contact</h2>
-                  <p>For privacy-related questions: <a href="mailto:privacy@vaxon.ai" className="text-blue-600 hover:underline">privacy@vaxon.ai</a></p>
+                  <p>For privacy-related questions: <a href="mailto:privacy@vaxon.ai" className="text-brand-600 hover:underline">privacy@vaxon.ai</a></p>
                 </section>
               </div>
             )}
@@ -288,15 +288,15 @@ export default function SignUpPage() {
         footer={
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}
-            <Link href="/auth/signin" className="font-medium text-blue-600 hover:underline">
+            <Link href="/auth/signin" className="font-medium text-brand-600 hover:underline">
               Sign in
             </Link>
           </p>
         }
       >
         <div className="mb-4 flex items-center gap-1.5">
-          <div className="h-1 w-8 rounded-full bg-blue-600" />
-          <div className={`h-1 w-8 rounded-full transition-colors ${step === 2 ? 'bg-blue-600' : 'bg-gray-200'}`} />
+          <div className="h-1 w-8 rounded-full bg-brand-600" />
+          <div className={`h-1 w-8 rounded-full transition-colors ${step === 2 ? 'bg-brand-600' : 'bg-gray-200'}`} />
         </div>
 
         {step === 1 && (
@@ -408,7 +408,7 @@ export default function SignUpPage() {
                 </button>
               </div>
               {passwordsDoNotMatch && (
-                <p className="mt-1 text-xs text-red-600">Passwords do not match</p>
+                <p className="mt-1 text-xs text-critical">Passwords do not match</p>
               )}
             </div>
 
@@ -417,13 +417,13 @@ export default function SignUpPage() {
                 type="checkbox"
                 checked={agreedToTerms}
                 onChange={(e) => setAgreedToTerms(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-blue-500"
               />
               <span className="text-xs leading-relaxed text-gray-500">
                 I agree to the{' '}
-                <button type="button" onClick={() => setLegalModal('terms')} className="text-blue-600 hover:underline">Terms of Service</button>
+                <button type="button" onClick={() => setLegalModal('terms')} className="text-brand-600 hover:underline">Terms of Service</button>
                 {' '}and{' '}
-                <button type="button" onClick={() => setLegalModal('privacy')} className="text-blue-600 hover:underline">Privacy Policy</button>
+                <button type="button" onClick={() => setLegalModal('privacy')} className="text-brand-600 hover:underline">Privacy Policy</button>
               </span>
             </label>
 

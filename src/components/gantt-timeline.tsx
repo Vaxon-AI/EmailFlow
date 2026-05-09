@@ -102,10 +102,10 @@ function getTaskEnd(task: TimelineTask): Date | null {
 }
 
 const BAND_COLORS: Record<string, { bar: string; border: string; text: string }> = {
-  critical: { bar: 'bg-critical',    border: 'border-red-500',    text: 'text-white' },
-  high:     { bar: 'bg-warning', border: 'border-orange-500', text: 'text-white' },
-  medium:   { bar: 'bg-warning', border: 'border-yellow-600', text: 'text-yellow-900' },
-  low:      { bar: 'bg-gray-300',   border: 'border-gray-400',   text: 'text-gray-700' },
+  critical: { bar: 'bg-critical-50', border: 'border-critical-100', text: 'text-critical-700' },
+  high:     { bar: 'bg-orange-50',   border: 'border-orange-100',   text: 'text-orange-700' },
+  medium:   { bar: 'bg-yellow-50',   border: 'border-yellow-100',   text: 'text-yellow-700' },
+  low:      { bar: 'bg-slate-100',   border: 'border-slate-200',    text: 'text-slate-600' },
 }
 
 interface Props {
@@ -1128,9 +1128,9 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
           <span>Drag bar to move - Drag edges to resize - Hover for details</span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-6 rounded bg-critical" /> Critical
-            <span className="inline-block h-2.5 w-6 rounded bg-warning" /> High
-            <span className="inline-block h-2.5 w-6 rounded bg-warning" /> Medium
-            <span className="inline-block h-2.5 w-6 rounded bg-gray-300" /> Low
+            <span className="inline-block h-2.5 w-6 rounded bg-orange" /> High
+            <span className="inline-block h-2.5 w-6 rounded bg-yellow" /> Medium
+            <span className="inline-block h-2.5 w-6 rounded bg-gray-400" /> Low
           </span>
         </div>
       </CardContent>

@@ -21,19 +21,51 @@
   --color-brand-600: #2A47C8;
   --color-brand-700: #1E34A1;
 
-  --color-critical: #C4302B;
-  --color-critical-50: #FBE8E7;
-  --color-critical-100: #F5C9C7;
-  --color-critical-700: #8C201D;
+  /* critical — 沉稳红（HSL ≈ 0° 60% 48%）。从 red-600 #DC2626 略微
+     desaturate，保持深度但减点饱和度，整体不那么"扎眼" */
+  --color-critical: #C53030;
+  --color-critical-50: #FEE2E2;
+  --color-critical-100: #FECACA;
+  --color-critical-200: #FCA5A5;
+  --color-critical-700: #991B1B;
 
   --color-success: #1F7A4D;
   --color-success-50: #E5F2EB;
   --color-success-100: #C2DECE;
 
-  --color-warning: #A3640A;
-  --color-warning-50: #FAEFD3;
-  --color-warning-100: #F2DDA1;
-  --color-warning-700: #6F4307;
+  /* warning — 暖琥珀（Tailwind amber-600 系）。"警示感"靠饱和度 + 暖度而不是
+     高亮度，banner / chip / 进度条整套用温暖琥珀而不是亮柠檬。
+     200 档故意拉成 amber-400 金色给 Uncertain solid chip 用 */
+  --color-warning: #D97706;
+  --color-warning-50: #FEF3C7;
+  --color-warning-100: #FDE68A;
+  --color-warning-200: #FBBF24;
+  --color-warning-700: #92400E;
+
+  /* orange — 鲜橙 (Tailwind orange-400 #FB923C). 之前 #F97316 (orange-500)
+     仍然偏 red-orange，往上提一档 lightness 让"orange"perceivedly 更纯橙 */
+  --color-orange: #FB923C;
+  --color-orange-50: #FFEDD5;
+  --color-orange-100: #FED7AA;
+  --color-orange-200: #FDBA74;
+  --color-orange-700: #C2410C;
+
+  /* yellow — 鲜黄 (Tailwind yellow-500). 跟 warning(amber) 区分开：
+     warning 是温暖琥珀给 banner 用，yellow 是真黄给 priority Medium 用 */
+  --color-yellow: #EAB308;
+  --color-yellow-50: #FEFCE8;
+  --color-yellow-100: #FEF9C3;
+  --color-yellow-200: #FEF08A;
+  --color-yellow-700: #A16207;
+
+  /* ai — 紫色 accent 专给"AI Suggestions"语义用，跟 brand 蓝拉开
+     避免 Active 跟 AI Suggestions 撞色。
+     ai-100 用 violet-200 (#DDD6FE) 而非 violet-100 (#EDE9FE)——
+     跟 brand-100 同 lightness，AI Suggestions tag 跟 Active tag 视觉重量一致 */
+  --color-ai: #7C3AED;
+  --color-ai-50: #F5F3FF;
+  --color-ai-100: #DDD6FE;
+  --color-ai-700: #5B21B6;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

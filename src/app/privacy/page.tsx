@@ -7,12 +7,12 @@ export default function PrivacyPage() {
       {/* Nav */}
       <nav className="flex items-center justify-between border-b px-6 py-4">
         <Link href="/landing" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600">
             <Zap className="h-4 w-4 text-white" />
           </div>
           <span className="text-base font-bold text-gray-900">EmailFlow AI</span>
         </Link>
-        <Link href="/auth/signup" className="text-sm text-blue-600 hover:underline">
+        <Link href="/auth/signup" className="text-sm text-brand-600 hover:underline">
           Back to sign up
         </Link>
       </nav>
@@ -94,7 +94,7 @@ export default function PrivacyPage() {
                   We connect to your Gmail account with read-only access. We do not store
                   your Google password. You can revoke access at any time from your{' '}
                   <a href="https://myaccount.google.com/permissions" target="_blank"
-                    rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    rel="noopener noreferrer" className="text-brand-600 hover:underline">
                     Google account settings
                   </a>.
                 </p>
@@ -133,7 +133,7 @@ export default function PrivacyPage() {
             </ul>
             <p className="mt-3">
               To exercise any of these rights, contact us at{' '}
-              <a href="mailto:privacy@vaxon.ai" className="text-blue-600 hover:underline">
+              <a href="mailto:privacy@vaxon.ai" className="text-brand-600 hover:underline">
                 privacy@vaxon.ai
               </a>. We will respond within 30 days.
             </p>
@@ -145,7 +145,7 @@ export default function PrivacyPage() {
               We take reasonable measures to protect your data, including encrypted connections
               (HTTPS), hashed passwords, and scoped OAuth tokens. However, no system is completely
               secure. If you discover a security vulnerability, please report it to{' '}
-              <a href="mailto:security@vaxon.ai" className="text-blue-600 hover:underline">
+              <a href="mailto:security@vaxon.ai" className="text-brand-600 hover:underline">
                 security@vaxon.ai
               </a>.
             </p>
@@ -172,7 +172,7 @@ export default function PrivacyPage() {
             <h2 className="text-base font-semibold text-gray-900 mb-3">9. Contact</h2>
             <p>
               For any privacy-related questions or requests, contact us at{' '}
-              <a href="mailto:privacy@vaxon.ai" className="text-blue-600 hover:underline">
+              <a href="mailto:privacy@vaxon.ai" className="text-brand-600 hover:underline">
                 privacy@vaxon.ai
               </a>
               <br />
@@ -184,7 +184,7 @@ export default function PrivacyPage() {
 
         <div className="mt-12 border-t pt-6 flex items-center justify-between text-xs text-gray-400">
           <span>&copy; {new Date().getFullYear()} Vaxon. All rights reserved.</span>
-          <Link href="/terms" className="text-blue-600 hover:underline">Terms of Service</Link>
+          <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>
         </div>
       </div>
     </div>

@@ -125,13 +125,13 @@ export default function TotpSetupPage() {
         <button
           onClick={handleGenerate}
           disabled={loading}
-          className="mb-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          className="mb-4 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {loading ? 'Generating...' : 'Generate QR Code'}
         </button>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className="mb-4 rounded-lg bg-critical-50 px-4 py-3 text-sm text-critical">
             {error}
           </div>
         )}
@@ -163,14 +163,14 @@ export default function TotpSetupPage() {
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 placeholder="123456"
-                className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-lg border px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
             </div>
 
             <button
               onClick={handleVerify}
               disabled={verifying || !token || !secret}
-              className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              className="w-full rounded-lg bg-success px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
             >
               {verifying ? 'Verifying...' : 'Verify Code'}
             </button>

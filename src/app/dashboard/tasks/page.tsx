@@ -1678,10 +1678,18 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
         className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
       />
 
-      {/* Priority indicator */}
-      <div className={`h-9 w-1 shrink-0 rounded-full ${
-        band === 'critical' ? 'bg-critical-500' : band === 'high' ? 'bg-warning' : band === 'medium' ? 'bg-warning' : 'bg-gray-300'
-      }`} />
+      {/* Priority indicator — Low has no bar (still keep a spacer so all rows
+          align). Red / orange / yellow trio uses dedicated tokens so the three
+          hues genuinely separate. */}
+      {band === 'low' ? (
+        <div className="w-1 shrink-0" />
+      ) : (
+        <div className={`h-9 w-1 shrink-0 rounded-full ${
+          band === 'critical' ? 'bg-critical' :
+          band === 'high'     ? 'bg-orange' :
+                                'bg-yellow'   /* medium */
+        }`} />
+      )}
 
       {/* Main content */}
       <div className="min-w-0 flex-1">
@@ -1695,15 +1703,13 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
           <Badge variant="outline" className={`shrink-0 text-[10px] ${getPriorityColor(band)}`}>
             {getPriorityLabel(band)}
           </Badge>
-          {task.source === 'copy_text' && (
-            <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-600">
-              Copy Text
-            </span>
-          )}
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
             task.status === 'completed' ? 'bg-success-100 text-success' :
             task.status === 'confirmed' ? 'bg-brand-100 text-brand-700' :
-            'bg-brand-100 text-brand-700'
+            // pending = "AI Suggestions" — uses ai-100 (not 50) so the chip's
+            // lightness matches Active's brand-100 chip side-by-side. Same
+            // weight, distinct hue.
+            'bg-ai-100 text-ai-700'
           }`}>
             {getTaskStatusLabel(task.status)}
           </span>
@@ -1931,10 +1937,10 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
                   {dayTasks.map((task) => {
                     const band = getPriorityBand(task.priorityScore || 0)
                     const isCompleted = task.status === 'completed'
-                    const bgColor = band === 'critical' ? 'bg-critical-100 border-critical text-critical-700'
-                      : band === 'high' ? 'bg-warning-100 border-warning text-warning-700'
-                      : band === 'medium' ? 'bg-brand-100 border-brand-400 text-brand-700'
-                      : 'bg-slate-100 border-slate-300 text-slate-700'
+                    const bgColor = band === 'critical' ? 'bg-critical-50 border-critical-100 text-critical-700'
+                      : band === 'high' ? 'bg-orange-50 border-orange-100 text-orange-700'
+                      : band === 'medium' ? 'bg-yellow-50 border-yellow-100 text-yellow-700'
+                      : 'bg-slate-100 border-slate-200 text-slate-600'
                     return (
                       <Link
                         key={task.id}

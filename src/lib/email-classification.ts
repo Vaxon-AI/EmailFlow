@@ -12,18 +12,22 @@ export type EmailClassConfig = {
   icon: typeof Mail
 }
 
-// Four-state hierarchy under Mono Indigo:
-//   action    → solid warning amber (alerting but not red; warm hue draws the eye)
-//   awareness → brand tint          (relevant but calm, on-brand)
-//   ignore    → outlined neutral    (visible but de-emphasised)
-//   uncertain → outlined warning    (signals AI uncertainty without competing
-//                                    visually with action's solid amber)
-// Critical red stays reserved for destructive/blocking states only.
+// Email classification chips run denser than task priority chips (every row
+// in the inbox has one), so they earn solid fills instead of tints — the
+// list needs strong scannable tags. Two solid attention states use distinct
+// hues so the user can tell "AI says act" from "AI wasn't sure" at a glance:
+//   action    → solid critical red    (the strongest "deal with this")
+//   uncertain → solid warning amber   (AI couldn't decide, you must)
+//   awareness → brand tint            (informational, calm)
+//   ignore    → outlined neutral      (de-emphasised, almost invisible)
 export const EMAIL_CLASS_CONFIG: Record<EmailCategory, EmailClassConfig> = {
   action: {
     label: 'Needs Action',
-    color: 'bg-warning text-white border-warning',
-    bg: 'from-warning-50 to-white',
+    // bg-critical (red-600 #DC2626) — same hue as the identity/project
+    // attention tip on the same page (which uses text-critical = red-600).
+    // Solid bg + white text reads strong without being as deep as -700.
+    color: 'bg-critical text-white border-critical',
+    bg: 'from-critical-50 to-white',
     icon: CheckSquare,
   },
   awareness: {
@@ -40,8 +44,11 @@ export const EMAIL_CLASS_CONFIG: Record<EmailCategory, EmailClassConfig> = {
   },
   uncertain: {
     label: 'Uncertain',
-    color: 'bg-white text-warning-700 border-warning-100',
-    bg: 'from-warning-50/30 to-white',
+    // Solid amber bg + white text — pairs visually with Needs Action's
+    // solid red + white text (both attention chips share the "saturated bg
+    // + white" pattern, distinct in hue).
+    color: 'bg-warning text-white border-warning',
+    bg: 'from-warning-50 to-white',
     icon: AlertTriangle,
   },
 }
@@ -69,16 +76,14 @@ export function getEmailClassConfig(classification?: string | null): EmailClassC
 
 export type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
 
-// Bucket hierarchy mirrors the priority levels by luminance + warmth:
-//   needs_action → solid warning amber (warm, alerting)
-//   tracked      → brand tint          (calm, on-brand)
-//   fyi          → outlined neutral    (visible, no emphasis)
-//   ignored      → plain neutral       (almost no chip)
+// Bucket hierarchy — Needs Action is the only solid chip, deliberately
+// painted critical red so it pops out of the list. Tracked / FYI step down
+// in saturation; Ignored is almost invisible.
 export const EMAIL_BUCKET_CONFIG: Record<EmailBucket, EmailClassConfig> = {
   needs_action: {
     label: 'Needs Action',
-    color: 'bg-warning text-white border-warning',
-    bg: 'from-warning-50 to-white',
+    color: 'bg-critical text-white border-critical',
+    bg: 'from-critical-50 to-white',
     icon: CheckSquare,
   },
   tracked: {
@@ -105,13 +110,13 @@ export type EmailDisplayState = EmailBucket | 'uncertain'
 
 export const EMAIL_DISPLAY_CONFIG: Record<EmailDisplayState, EmailClassConfig> = {
   ...EMAIL_BUCKET_CONFIG,
-  // Uncertain shares warning amber with Needs Action but uses the lighter
-  // outlined treatment — signals "AI not sure" without screaming for the
-  // same level of attention as a confident action item.
   uncertain: {
     label: 'Uncertain',
-    color: 'bg-white text-warning-700 border-warning-100',
-    bg: 'from-warning-50/30 to-white',
+    // Solid amber bg + white text — pairs visually with Needs Action's
+    // solid red + white text (both attention chips share the "saturated bg
+    // + white" pattern, distinct in hue).
+    color: 'bg-warning text-white border-warning',
+    bg: 'from-warning-50 to-white',
     icon: AlertTriangle,
   },
 }

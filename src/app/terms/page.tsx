@@ -7,12 +7,12 @@ export default function TermsPage() {
       {/* Nav */}
       <nav className="flex items-center justify-between border-b px-6 py-4">
         <Link href="/landing" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600">
             <Zap className="h-4 w-4 text-white" />
           </div>
           <span className="text-base font-bold text-gray-900">EmailFlow AI</span>
         </Link>
-        <Link href="/auth/signup" className="text-sm text-blue-600 hover:underline">
+        <Link href="/auth/signup" className="text-sm text-brand-600 hover:underline">
           Back to sign up
         </Link>
       </nav>
@@ -128,7 +128,7 @@ export default function TermsPage() {
             <h2 className="text-base font-semibold text-gray-900 mb-3">10. Contact</h2>
             <p>
               Questions about these Terms? Contact us at{' '}
-              <a href="mailto:legal@vaxon.ai" className="text-blue-600 hover:underline">
+              <a href="mailto:legal@vaxon.ai" className="text-brand-600 hover:underline">
                 legal@vaxon.ai
               </a>
             </p>
@@ -138,7 +138,7 @@ export default function TermsPage() {
 
         <div className="mt-12 border-t pt-6 flex items-center justify-between text-xs text-gray-400">
           <span>&copy; {new Date().getFullYear()} Vaxon. All rights reserved.</span>
-          <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>
+          <Link href="/privacy" className="text-brand-600 hover:underline">Privacy Policy</Link>
         </div>
       </div>
     </div>
