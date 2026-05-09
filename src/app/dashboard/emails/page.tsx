@@ -557,11 +557,14 @@ function EmailsContent() {
   const pendingCount = emails.filter((e) => e.processingStatus === 'pending').length
 
   const tabs: { key: Tab; label: string; count: number }[] = [
+    // Unclassified leads when present — these are the emails the user needs
+    // to act on most urgently (AI couldn't categorize them) and they don't
+    // surface anywhere else in the inbox.
+    ...(unclassifiedCount > 0 ? [{ key: 'unclassified' as Tab, label: 'Unclassified', count: unclassifiedCount }] : []),
     { key: 'needs_review', label: 'Needs Action', count: needsActionCount },
     { key: 'tracked', label: 'Tracked', count: trackedCount },
     { key: 'fyi', label: 'FYI', count: infoCount },
     { key: 'ignored', label: 'Ignored', count: ignoredCount },
-    ...(unclassifiedCount > 0 ? [{ key: 'unclassified' as Tab, label: 'Needs Review', count: unclassifiedCount }] : []),
   ]
 
   return (
@@ -576,7 +579,7 @@ function EmailsContent() {
         <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm">
           <div className="min-w-0">
             <p className="font-medium text-amber-900">
-              {unclassifiedCount} email{unclassifiedCount === 1 ? '' : 's'} need{unclassifiedCount === 1 ? 's' : ''} your review
+              {unclassifiedCount} unclassified email{unclassifiedCount === 1 ? '' : 's'}
             </p>
             <p className="mt-0.5 text-xs text-amber-800">
               AI was either unsure or hit your free plan limit. Open any of them to classify manually, or upgrade to Pro.

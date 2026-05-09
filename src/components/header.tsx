@@ -198,10 +198,10 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
               type="button"
               onClick={() => router.push('/dashboard/emails?tab=unclassified')}
               className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
-              title="Emails AI couldn't categorize on its own — open to review manually"
+              title="Emails AI couldn't categorize on its own — open to classify manually"
             >
               <AlertTriangle className="h-3.5 w-3.5" />
-              <span>{unclassifiedCount} to review</span>
+              <span>{unclassifiedCount} unclassified</span>
             </button>
           )}
           <button
