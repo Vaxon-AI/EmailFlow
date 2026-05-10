@@ -8,6 +8,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     email: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
@@ -31,6 +32,8 @@ import {
   countAwaitingReview,
   setEmailBucket,
   bulkSetEmailBucket,
+  findEmailsPaginated,
+  bulkMarkActioned,
 } from '../email-repo'
 
 // ---------------------------------------------------------------------------
@@ -334,6 +337,34 @@ describe('setEmailBucket', () => {
   })
 })
 
+describe('findEmailsPaginated', () => {
+  it('selects linked task status and completedAt for email display state', async () => {
+    mockPrismaEmail.findMany.mockResolvedValue([
+      {
+        id: 'email-1',
+        threadId: null,
+        taskLinks: [
+          { id: 'link-1', task: { id: 'task-1', title: 'Done', status: 'completed', completedAt: new Date('2026-05-01T00:00:00Z') } },
+        ],
+      },
+    ] as never)
+    mockPrismaEmail.count.mockResolvedValue(1 as never)
+
+    await findEmailsPaginated('user-1', { page: 1, limit: 20 })
+
+    expect(mockPrismaEmail.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        taskLinks: {
+          select: {
+            id: true,
+            task: { select: { id: true, title: true, status: true, completedAt: true } },
+          },
+        },
+      }),
+    }))
+  })
+})
+
 describe('bulkSetEmailBucket', () => {
   it('maps selected emails to a bucket scoped to userId', async () => {
     mockPrismaEmail.updateMany.mockResolvedValue({ count: 2 } as never)
@@ -351,6 +382,27 @@ describe('bulkSetEmailBucket', () => {
         processingStatus: 'done',
       }),
     })
+  })
+})
+
+describe('bulkMarkActioned', () => {
+  it('marks only the current user owned emails as actioned', async () => {
+    mockPrismaEmail.updateMany.mockResolvedValue({ count: 2 } as never)
+
+    const result = await bulkMarkActioned('user-1', ['email-1', 'email-2'])
+
+    expect(result.count).toBe(2)
+    expect(mockPrismaEmail.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['email-1', 'email-2'] }, userId: 'user-1' },
+      data: { actioned: true },
+    })
+  })
+
+  it('does not call the database for an empty email list', async () => {
+    const result = await bulkMarkActioned('user-1', [])
+
+    expect(result.count).toBe(0)
+    expect(mockPrismaEmail.updateMany).not.toHaveBeenCalled()
   })
 })
 

@@ -638,6 +638,7 @@ async function linkEmailToTask(taskId: string, emailId: string, relationship = '
   } catch {
     // unique constraint or stale link; already linked is fine for pipeline idempotency
   }
+  await emailRepo.markActioned(emailId)
 }
 
 // ── Sender memory update ──────────────────────────────────────

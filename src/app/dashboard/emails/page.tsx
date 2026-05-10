@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   CheckSquare, Paperclip, Mail,
-  Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap, Eye, EyeOff, Tag,
+  Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap, Eye, EyeOff, Tag, CheckCircle2,
 } from 'lucide-react'
 import { Suspense, useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
@@ -32,6 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { EMAIL_DISPLAY_CONFIG, getEmailDisplayState } from '@/lib/email-classification'
+import { getEmailLinkedTaskState } from '@/lib/email-linked-task-status'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { BatchReassignModal } from '@/components/batch-reassign-modal'
 import { InlineEditableName } from '@/components/inline-editable-name'
@@ -77,6 +78,8 @@ const EMAIL_BUCKET_LABELS: Record<EmailBucket, string> = {
 type LinkedTask = {
   id: string
   title: string
+  status?: string | null
+  completedAt?: string | null
 }
 
 type EmailTaskLink = {
@@ -1447,6 +1450,8 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
 }) {
   const matter = email.matter ?? null
   const linkedTasks = email.taskLinks?.map((link) => link.task).filter((t): t is LinkedTask => t != null) || []
+  const linkedTaskState = isTrackedEmail(email) ? getEmailLinkedTaskState(email.taskLinks) : null
+  const isCompletedTrackedEmail = linkedTaskState === 'completed'
   // Left accent bar mirrors the bucket: red for action emails the user must
   // triage, amber for uncertain emails AI couldn't classify. Tracked / FYI /
   // ignored stay quiet (no bar) so the eye is drawn to the rows that matter.
@@ -1460,7 +1465,9 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
     <div className={`group flex items-center gap-3 rounded-xl border px-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:shadow-sm ${
       isSelected
         ? 'border-brand-300 bg-brand-50/50'
-        : `border-gray-200/80 bg-white hover:border-brand-200 hover:bg-brand-50/60 ${attentionBar}`
+        : isCompletedTrackedEmail
+          ? 'border-slate-100 bg-slate-50/55 hover:border-slate-200 hover:bg-slate-50/80'
+          : `border-gray-200/80 bg-white hover:border-brand-200 hover:bg-brand-50/60 ${attentionBar}`
     } ${compact ? 'py-2 opacity-75' : 'py-3'}`}>
       {onToggleSelect && (
         <input
@@ -1482,21 +1489,22 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className={`truncate font-medium text-gray-900 ${compact ? 'text-xs' : 'text-sm'}`}>{email.subject}</p>
+            <p className={`truncate font-medium ${isCompletedTrackedEmail ? 'text-slate-500' : 'text-gray-900'} ${compact ? 'text-xs' : 'text-sm'}`}>{email.subject}</p>
             {email.hasAttachments && <Paperclip className="h-3 w-3 flex-shrink-0 text-gray-400" />}
+            {isCompletedTrackedEmail && <CompleteBadge />}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="truncate text-xs text-gray-500">{email.sender?.split('<')[0]?.trim()}</p>
+            <p className={`truncate text-xs ${isCompletedTrackedEmail ? 'text-slate-400' : 'text-gray-500'}`}>{email.sender?.split('<')[0]?.trim()}</p>
             {email.accountEmail && <AccountBadge account={email.accountEmail} />}
             {matter ? (
               <>
                 <span className="text-[10px] text-gray-300">&middot;</span>
-                <span className="truncate text-[11px] text-gray-400">{matter.title}</span>
+                <span className={`truncate text-[11px] ${isCompletedTrackedEmail ? 'text-slate-300' : 'text-gray-400'}`}>{matter.title}</span>
               </>
             ) : null}
           </div>
         </div>
-        <span className="flex-shrink-0 text-xs text-gray-400">{formatDate(email.receivedAt)}</span>
+        <span className={`flex-shrink-0 text-xs ${isCompletedTrackedEmail ? 'text-slate-300' : 'text-gray-400'}`}>{formatDate(email.receivedAt)}</span>
       </Link>
 
       {/* Retention status badge */}
@@ -1510,10 +1518,16 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
               key={task.id}
               href={`/dashboard/tasks/${task.id}`}
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium text-brand-600 bg-brand-50 border-brand-200 hover:bg-brand-100 transition-colors max-w-[140px]"
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-colors max-w-[140px] ${
+                task.status === 'completed'
+                  ? 'border-success-100 bg-success-50/70 text-success hover:bg-success-100/70'
+                  : 'border-brand-200 bg-brand-50 text-brand-600 hover:bg-brand-100'
+              }`}
               title={task.title}
             >
-              <CheckSquare className="h-2.5 w-2.5 shrink-0" />
+              {task.status === 'completed'
+                ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
+                : <CheckSquare className="h-2.5 w-2.5 shrink-0" />}
               <span className="truncate">{task.title}</span>
             </Link>
           ))}
@@ -1531,6 +1545,15 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
         </button>
       )}
     </div>
+  )
+}
+
+function CompleteBadge() {
+  return (
+    <Badge variant="outline" className="shrink-0 gap-1 border-success-100 bg-success-50/70 py-0 text-[10px] text-success">
+      <CheckCircle2 className="h-3 w-3" />
+      Complete
+    </Badge>
   )
 }
 

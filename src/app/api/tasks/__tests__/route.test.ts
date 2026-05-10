@@ -5,6 +5,10 @@ vi.mock('@/repositories/task-repo', () => ({
   findTasksPaginated: vi.fn(),
 }))
 
+vi.mock('@/repositories/email-repo', () => ({
+  bulkMarkActioned: vi.fn(),
+}))
+
 vi.mock('@/repositories/stats-repo', () => ({
   invalidateStatsCache: vi.fn(),
 }))
@@ -39,6 +43,7 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
 })
 
 import * as taskRepo from '@/repositories/task-repo'
+import * as emailRepo from '@/repositories/email-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/api-helpers'
@@ -46,6 +51,7 @@ import { GET, POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockFindTasksPaginated = vi.mocked(taskRepo.findTasksPaginated)
+const mockBulkMarkActioned = vi.mocked(emailRepo.bulkMarkActioned)
 const mockInvalidateStatsCache = vi.mocked(invalidateStatsCache)
 const mockProjectContext = vi.mocked(prisma.projectContext)
 const mockMatterMemory = vi.mocked(prisma.matterMemory)
@@ -292,6 +298,7 @@ describe('POST /api/tasks', () => {
       ],
       skipDuplicates: true,
     })
+    expect(mockBulkMarkActioned).toHaveBeenCalledWith('user-1', ['email-1', 'email-2'])
     expect(res.status).toBe(200)
   })
 

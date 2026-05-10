@@ -41,6 +41,7 @@ import {
   type EmailBucket,
   type EmailDisplayState,
 } from '@/lib/email-classification'
+import { getEmailLinkedTaskState } from '@/lib/email-linked-task-status'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
@@ -54,6 +55,7 @@ type EmailTaskLink = {
     actionItems?: string | null
     checkedActionItems?: string | null
     status: string
+    completedAt?: string | null
     priorityScore?: number | null
     startDate?: string | null
     explicitDeadline?: string | null
@@ -489,6 +491,8 @@ export default function EmailDetailPage() {
   const project = email.project ?? null
   const matter = email.matter ?? null
   const taskLinks = (email.taskLinks ?? []) as EmailTaskLink[]
+  const linkedTaskState = getEmailLinkedTaskState(taskLinks)
+  const isCompletedTrackedEmail = displayState === 'tracked' && linkedTaskState === 'completed'
   const canShowReplyDraft = email.classification === 'action' || email.classification === 'uncertain' || taskLinks.length > 0 || !!email.aiReplyDraft
   const canGenerateReply = email.retentionStatus !== 'PURGED'
   const canExtractTask = (email.classification === 'action' || email.classification === 'uncertain') && taskLinks.length === 0
@@ -572,7 +576,9 @@ export default function EmailDetailPage() {
         {/* Left: Email content */}
         <div className="space-y-4">
           {/* Header card */}
-          <Card className={`animate-fade-in-up stagger-3 overflow-hidden border-white/70 bg-gradient-to-br ${detailHeaderTone} shadow-sm`}>
+          <Card className={`animate-fade-in-up stagger-3 overflow-hidden border-white/70 bg-gradient-to-br ${
+            isCompletedTrackedEmail ? 'from-slate-50/45 via-white to-white' : detailHeaderTone
+          } shadow-sm`}>
             <CardContent className="py-5 space-y-4">
               {/* Meta badges */}
               <div className="flex items-center gap-2 flex-wrap">
@@ -580,6 +586,7 @@ export default function EmailDetailPage() {
                   <ClsIcon className="h-3 w-3" />
                   {cls.label}
                 </Badge>
+                {isCompletedTrackedEmail && <CompleteBadge />}
                 {email.hasAttachments && (
                   <Badge variant="outline" className="gap-1 bg-white/60 text-gray-500 border-gray-200 text-[10px]">
                     <Paperclip className="h-3 w-3" />
@@ -589,8 +596,12 @@ export default function EmailDetailPage() {
               </div>
 
               {/* Sender row */}
-              <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 backdrop-blur-sm ${detailSenderTone}`}>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white text-sm font-bold">
+              <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 backdrop-blur-sm ${
+                isCompletedTrackedEmail ? 'border-slate-100 bg-white/90' : detailSenderTone
+              }`}>
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                  isCompletedTrackedEmail ? 'bg-slate-200 text-slate-600' : 'bg-brand-600 text-white'
+                }`}>
                   {senderInitial}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -660,11 +671,11 @@ export default function EmailDetailPage() {
 
           {/* Reply draft */}
           {canShowReplyDraft && (
-            <Card className="animate-fade-in-up stagger-5 border-warning-100/70 bg-gradient-to-br from-yellow-50/35 to-white shadow-sm">
+            <Card className="animate-fade-in-up stagger-5 border-warning-100/50 bg-gradient-to-br from-yellow-50/35 via-white to-white shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="flex items-center gap-2 text-sm">
-                    <Sparkles className="h-4 w-4 text-warning" />
+                    <Sparkles className="h-4 w-4 text-warning/75" />
                     AI Reply Draft
                   </CardTitle>
                   {email.aiReplyGeneratedAt && (
@@ -684,7 +695,7 @@ export default function EmailDetailPage() {
                       value={replyDraft}
                       onChange={(e) => setReplyDraft(e.target.value)}
                       rows={8}
-                      className="resize-y bg-white/85 text-sm leading-6"
+                      className="resize-y border-warning-200/70 bg-white text-sm leading-6 shadow-sm focus-visible:ring-warning/20"
                       placeholder="AI reply draft will appear here..."
                     />
                     <div className="flex flex-wrap items-center gap-2">
@@ -702,7 +713,7 @@ export default function EmailDetailPage() {
                         variant="outline"
                         onClick={() => generateReply()}
                         disabled={generatingReply || !canGenerateReply}
-                        className="h-8 gap-1.5"
+                        className="h-8 gap-1.5 border-warning-200/70 bg-white text-slate-600 hover:border-warning-200 hover:bg-warning-50 hover:text-warning-700"
                       >
                         {generatingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                         Regenerate
@@ -712,7 +723,7 @@ export default function EmailDetailPage() {
                         variant="outline"
                         onClick={copyReply}
                         disabled={!replyDraft.trim()}
-                        className="h-8 gap-1.5"
+                        className="h-8 gap-1.5 border-warning-200/70 bg-white text-slate-600 hover:border-warning-200 hover:bg-warning-50 hover:text-warning-700"
                       >
                         <Copy className="h-3.5 w-3.5" />
                         Copy
@@ -720,9 +731,9 @@ export default function EmailDetailPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-warning-100/80 bg-white/70 px-4 py-4">
-                    <p className="text-sm font-medium text-warning-700">No reply draft yet</p>
-                    <p className="mt-1 text-xs leading-5 text-warning-700/80">
+                  <div className="rounded-xl border border-dashed border-warning-200/70 bg-white/90 px-4 py-4 shadow-sm">
+                    <p className="text-sm font-medium text-slate-700">No reply draft yet</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
                       Generate a draft when you want a starting point, then edit it before using it.
                     </p>
                     <Button
@@ -730,13 +741,13 @@ export default function EmailDetailPage() {
                       onClick={() => generateReply()}
                       disabled={generatingReply || !canGenerateReply}
                       variant="outline"
-                      className="mt-3 h-8 gap-1.5 border-warning-200 bg-warning-100/80 text-warning-700 hover:bg-warning-100"
+                      className="mt-3 h-8 gap-1.5 !border-warning-200 bg-yellow-50/70 text-warning-700 hover:!border-warning-200 hover:!bg-warning-100/60 hover:!text-warning-700 focus-visible:!border-warning-200 focus-visible:!ring-warning/20 aria-expanded:!border-warning-200 aria-expanded:!bg-warning-100/60 aria-expanded:!text-warning-700"
                     >
                       {generatingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                       Generate reply
                     </Button>
                     {!canGenerateReply && (
-                      <p className="mt-2 text-[11px] text-warning-700/70">This email no longer has enough content to generate a draft.</p>
+                      <p className="mt-2 text-[11px] text-slate-400">This email no longer has enough content to generate a draft.</p>
                     )}
                   </div>
                 )}
@@ -767,13 +778,16 @@ export default function EmailDetailPage() {
         {/* Right sidebar */}
         <div className="space-y-4">
           {/* Linked Tasks */}
-          <Card className="animate-fade-in-up stagger-5 border-white/70 bg-white/95 shadow-sm">
+          <Card className={`animate-fade-in-up stagger-5 border-white/70 shadow-sm ${
+            isCompletedTrackedEmail ? 'bg-slate-50/55' : 'bg-white/95'
+          }`}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="flex items-center gap-2 text-sm">
                     <CheckSquare className="h-4 w-4 text-brand-600" />
                     Linked Tasks
                     <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700">{taskLinks.length}</span>
+                    {isCompletedTrackedEmail && <CompleteBadge />}
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     {canExtractTask && (
@@ -1183,5 +1197,14 @@ export default function EmailDetailPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+function CompleteBadge() {
+  return (
+    <Badge variant="outline" className="shrink-0 gap-1 border-success-100 bg-success-50/70 py-0 text-[10px] text-success">
+      <CheckCircle2 className="h-3 w-3" />
+      Complete
+    </Badge>
   )
 }

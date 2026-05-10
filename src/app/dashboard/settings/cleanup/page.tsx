@@ -15,9 +15,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   FileText,
-  HardDrive,
   Loader2,
-  Paperclip,
   RefreshCw,
   Trash2,
 } from 'lucide-react'
@@ -199,7 +197,7 @@ export default function CleanupPage() {
             </div>
           ) : preview ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <StatTile
                   icon={<Archive className="h-4 w-4 text-gray-500" />}
                   label="Will archive"
@@ -218,23 +216,20 @@ export default function CleanupPage() {
                   value={preview.willPurge}
                   color="text-critical"
                 />
-                <StatTile
-                  icon={<Paperclip className="h-4 w-4 text-purple-400" />}
-                  label="Attachments"
-                  value={preview.attachmentsAffected}
-                  color="text-purple-700"
-                />
               </div>
 
-              <div className="flex items-center gap-4 rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-3 text-sm">
-                <HardDrive className="h-4 w-4 shrink-0 text-gray-400" />
-                <div>
+              {preview.attachmentsAffected > 0 && (
+                <div className="rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-3 text-sm">
                   <span className="font-medium text-gray-900">
-                    ~{formatBytes(preview.estimatedBytesFreed)}
+                    {preview.attachmentsAffected} attachment record{preview.attachmentsAffected === 1 ? '' : 's'}
                   </span>
-                  <span className="ml-1 text-gray-500">estimated space freed from attachment records</span>
+                  {preview.estimatedBytesFreed > 0 && (
+                    <span className="ml-1 text-gray-500">
+                      may clear ~{formatBytes(preview.estimatedBytesFreed)}
+                    </span>
+                  )}
                 </div>
-              </div>
+              )}
 
               <div className="flex flex-wrap gap-2 text-xs text-gray-500">
                 <span className="flex items-center gap-1">
@@ -310,7 +305,7 @@ export default function CleanupPage() {
                     </div>
                     <p className="text-xs text-gray-500">
                       {log.emailsArchived} archived · {log.emailsMetaOnly} body-only · {log.emailsPurged} purged
-                      {log.attachmentsPurged > 0 && ` · ${log.attachmentsPurged} attachments`}
+                      {log.attachmentsPurged > 0 && ` · ${log.attachmentsPurged} attachment records`}
                       {Number(log.bytesFreed) > 0 && ` · ${formatBytes(Number(log.bytesFreed))} freed`}
                     </p>
                   </div>

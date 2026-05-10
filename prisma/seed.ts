@@ -667,6 +667,10 @@ async function main() {
       update: { relationship: 'source' },
       create: { taskId: task.id, emailId: sourceEmail.id, relationship: 'source' },
     })
+    await prisma.email.update({
+      where: { id: sourceEmail.id },
+      data: { actioned: true },
+    })
   }
 
   // Standalone tasks (not linked to email)

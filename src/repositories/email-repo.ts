@@ -153,6 +153,14 @@ export async function markActioned(emailId: string) {
   })
 }
 
+export async function bulkMarkActioned(userId: string, emailIds: string[]) {
+  if (emailIds.length === 0) return { count: 0 }
+  return prisma.email.updateMany({
+    where: { id: { in: emailIds }, userId },
+    data: { actioned: true },
+  })
+}
+
 // User-facing bucket → (classification, actioned) translation.
 // The picker on the email detail page exposes 4 buckets; each maps to a
 // deterministic DB state so round-trips are predictable. `tracked` forces
@@ -357,7 +365,7 @@ export async function findEmailsPaginated(
         taskLinks: {
           select: {
             id: true,
-            task: { select: { id: true, title: true, status: true } },
+            task: { select: { id: true, title: true, status: true, completedAt: true } },
           },
         },
       },
@@ -437,6 +445,7 @@ export async function findEmailById(userId: string, emailId: string) {
               actionItems: true,
               checkedActionItems: true,
               status: true,
+              completedAt: true,
               priorityScore: true,
               startDate: true,
               explicitDeadline: true,

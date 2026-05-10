@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
+import * as emailRepo from '@/repositories/email-repo'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(
@@ -25,6 +26,7 @@ export async function POST(
       data: [{ taskId, emailId, relationship: 'source' }],
       skipDuplicates: true,
     })
+    await emailRepo.bulkMarkActioned(user.id, [emailId])
 
     return success({ message: 'Email linked to task' })
   } catch (err) {

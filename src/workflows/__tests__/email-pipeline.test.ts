@@ -468,6 +468,7 @@ describe('processEmail — task deduplication', () => {
     expect(result.taskCreated).toBe(false)
     expect(result.taskId).toBe('existing-task')
     expect(taskRepo.createTask).not.toHaveBeenCalled()
+    expect(emailRepo.markActioned).toHaveBeenCalledWith('email-1')
   })
 
   it('does not create a new task when the thread already has a linked task', async () => {
@@ -481,6 +482,7 @@ describe('processEmail — task deduplication', () => {
     expect(result.taskCreated).toBe(false)
     expect(result.taskId).toBe('thread-task')
     expect(taskRepo.createTask).not.toHaveBeenCalled()
+    expect(emailRepo.markActioned).toHaveBeenCalledWith('email-1')
   })
 })
 

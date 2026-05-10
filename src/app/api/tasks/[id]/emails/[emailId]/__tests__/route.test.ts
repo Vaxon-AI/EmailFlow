@@ -5,6 +5,10 @@ vi.mock('@/repositories/task-repo', () => ({
   findTaskById: vi.fn(),
 }))
 
+vi.mock('@/repositories/email-repo', () => ({
+  bulkMarkActioned: vi.fn(),
+}))
+
 vi.mock('@/lib/api-helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api-helpers')>()
   return {
@@ -26,12 +30,14 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 import * as taskRepo from '@/repositories/task-repo'
+import * as emailRepo from '@/repositories/email-repo'
 import { getAuthUser } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 import { DELETE, POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockFindTaskById = vi.mocked(taskRepo.findTaskById)
+const mockBulkMarkActioned = vi.mocked(emailRepo.bulkMarkActioned)
 const mockEmailFindFirst = vi.mocked(prisma.email.findFirst)
 const mockCreateMany = vi.mocked(prisma.taskEmail.createMany)
 const mockDeleteMany = vi.mocked(prisma.taskEmail.deleteMany)
@@ -116,6 +122,7 @@ describe('POST /api/tasks/[id]/emails/[emailId]', () => {
       data: [{ taskId: 'task-1', emailId: 'email-1', relationship: 'source' }],
       skipDuplicates: true,
     })
+    expect(mockBulkMarkActioned).toHaveBeenCalledWith('user-1', ['email-1'])
     expect(res.status).toBe(200)
     expect((await res.json()).data.message).toContain('linked')
   })

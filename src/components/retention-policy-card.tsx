@@ -274,21 +274,6 @@ export function RetentionPolicyCard() {
                 </div>
               </div>
 
-              {/* Attachments */}
-              <div className="space-y-2 border-t border-gray-200/80 pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Attachments
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <PolicyField
-                    label="Clear attachment records after"
-                    unit="days"
-                    value={displayPolicy.attachmentPurgeAfterDays}
-                    editing={editMode}
-                    onChange={(v) => handleDraftChange('attachmentPurgeAfterDays', v)}
-                  />
-                </div>
-              </div>
             </div>
           ) : null}
 
