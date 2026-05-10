@@ -101,11 +101,11 @@ function getTaskEnd(task: TimelineTask): Date | null {
   return raw ? startOfDay(new Date(raw)) : null
 }
 
-const BAND_COLORS: Record<string, { bar: string; border: string; text: string }> = {
-  critical: { bar: 'bg-critical-50', border: 'border-critical-100', text: 'text-critical-700' },
-  high:     { bar: 'bg-orange-50',   border: 'border-orange-100',   text: 'text-orange-700' },
-  medium:   { bar: 'bg-yellow-50',   border: 'border-yellow-100',   text: 'text-yellow-700' },
-  low:      { bar: 'bg-slate-100',   border: 'border-slate-200',    text: 'text-slate-600' },
+const BAND_COLORS: Record<string, { bar: string; border: string; text: string; dot: string }> = {
+  critical: { bar: 'bg-critical', border: 'border-critical-700/20', text: 'text-white', dot: 'bg-critical' },
+  high:     { bar: 'bg-orange',   border: 'border-orange-700/20',   text: 'text-white', dot: 'bg-orange' },
+  medium:   { bar: 'bg-yellow',   border: 'border-yellow-700/20',   text: 'text-white', dot: 'bg-yellow' },
+  low:      { bar: 'bg-slate-500', border: 'border-slate-600/20',    text: 'text-white', dot: 'bg-slate-500' },
 }
 
 interface Props {
@@ -548,10 +548,10 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
   }, [visibleTaskLookup])
 
   return (
-    <Card className="border-gray-200/80 bg-white/95 shadow-sm">
-      <CardContent className="min-w-0 overflow-hidden py-4">
+    <Card className="border-0 bg-transparent shadow-none">
+      <CardContent className="min-w-0 overflow-hidden p-0">
         {/* Controls */}
-        <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl border border-slate-200/80 bg-white px-3 py-2.5 shadow-sm">
           <div className="flex items-center gap-2 justify-self-start">
             <Button variant="ghost" size="sm" onClick={() => transitionToRange(addDays(rangeStart, -7))}>
               <ChevronLeft className="h-4 w-4" />
@@ -592,7 +592,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                           }}
                           className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
                             active
-                              ? 'border-brand-300 bg-brand-100 text-blue-900'
+                              ? 'border-brand-300 bg-brand-100 text-brand-700'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700'
                           }`}
                         >
@@ -628,11 +628,11 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
             </p>
           </div>
         ) : (
-        <div className="max-w-full overflow-x-auto pb-1">
+        <div className="max-w-full overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-sm">
             <div style={{ minWidth: LABEL_WIDTH + gridWidth }} className="select-none">
             {/* Day headers */}
-            <div className="flex border-b" style={{ height: 40 }}>
-              <div style={{ width: LABEL_WIDTH }} className="shrink-0 border-r px-3 text-xs font-medium text-gray-500 flex items-end pb-1">
+            <div className="flex border-b border-slate-200 bg-slate-50/80" style={{ height: 40 }}>
+              <div style={{ width: LABEL_WIDTH }} className="shrink-0 border-r border-slate-200 px-3 text-xs font-semibold text-slate-500 flex items-end pb-1">
                 Task
               </div>
               <div className="relative flex">
@@ -644,7 +644,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                       key={day.toISOString()}
                       style={{ width: COL_WIDTH }}
                       className={`shrink-0 border-r text-center text-[10px] flex flex-col justify-end pb-1 ${
-                        isToday ? 'bg-brand-50 font-bold text-brand-700' : isWeekend ? 'bg-gray-50 text-gray-400' : 'text-gray-500'
+                        isToday ? 'bg-brand-50 font-bold text-brand-700' : isWeekend ? 'bg-slate-100/75 text-slate-500' : 'text-slate-600'
                       }`}
                     >
                       <div>{day.toLocaleDateString('en', { weekday: 'narrow' })}</div>
@@ -662,19 +662,19 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
 
               return (
                 <div key={identity.id}>
-                  <div className="flex border-b border-sky-100 bg-gradient-to-r from-sky-50/95 via-sky-50/75 to-white">
+                  <div className="flex border-b border-slate-100 bg-white transition-colors hover:bg-slate-50">
                     <button
                       type="button"
                       onClick={() => toggleIdentity(identity.id)}
                       className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
                       style={{ width: LABEL_WIDTH + gridWidth }}
                     >
-                      <ChevronDown className={`h-4 w-4 shrink-0 text-sky-500 transition-transform ${identityCollapsed ? '-rotate-90' : ''}`} />
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/90 shadow-sm ring-1 ring-sky-100">
-                        <UserRound className="h-3.5 w-3.5 text-sky-600" />
+                      <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${identityCollapsed ? '-rotate-90' : ''}`} />
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-50 shadow-sm ring-1 ring-slate-200">
+                        <UserRound className="h-3.5 w-3.5 text-slate-500" />
                       </span>
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">{identity.name}</span>
-                      <span className="ml-auto rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-medium text-sky-600 ring-1 ring-sky-100">{identityCount} tasks</span>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{identity.name}</span>
+                      <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">{identityCount} tasks</span>
                     </button>
                   </div>
 
@@ -683,7 +683,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                     const projectSpan = getGroupSpan(project.tasks)
                     return (
                       <div key={project.id}>
-                        <div className="flex border-b border-slate-200/80 bg-slate-50/65">
+                        <div className="flex border-b border-slate-100 bg-slate-50/70 transition-colors hover:bg-slate-50">
                           <button
                             type="button"
                             onClick={() => toggleProject(project.id)}
@@ -710,25 +710,25 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                                   style={{ width: COL_WIDTH }}
                                   className={`shrink-0 border-r ${
                                     day.toDateString() === today.toDateString()
-                                      ? 'bg-brand-50/80'
+                                      ? 'bg-brand-50/70'
                                       : day.getDay() === 0 || day.getDay() === 6
-                                        ? 'bg-gray-50/40'
+                                        ? 'bg-slate-100/55'
                                         : ''
                                   }`}
                                 />
                               ))}
                               {projectSpan ? (
                                 <div
-                                  className="pointer-events-none absolute top-1/2 z-10 flex h-7 -translate-y-1/2 items-center rounded-full border border-sky-300/80 bg-gradient-to-r from-sky-500/15 via-blue-500/12 to-indigo-500/15 px-3 shadow-sm"
+                                  className="pointer-events-none absolute top-1/2 z-10 flex h-7 -translate-y-1/2 items-center rounded-full border border-brand-200 bg-white/95 px-3 shadow-sm"
                                   style={{
                                     left: Math.max(projectSpan.left + 6, 6),
                                     width: Math.max(Math.min(projectSpan.width - 12, gridWidth - 12), 88),
                                   }}
                                 >
-                                  <span className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700">
+                                  <span className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-700">
                                     {project.name}
                                   </span>
-                                  <span className="ml-auto shrink-0 pl-3 text-[10px] text-sky-600/80">
+                                  <span className="ml-auto shrink-0 pl-3 text-[10px] text-brand-600/80">
                                     {formatShort(projectSpan.start)} - {formatShort(projectSpan.end)}
                                   </span>
                                 </div>
@@ -758,12 +758,12 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                   key={task.id}
                   className={`flex border-b transition-colors ${
                     isCompleted
-                      ? 'bg-gray-50/70 opacity-70'
+                      ? 'bg-slate-50/80 opacity-70'
                       : dropTargetTaskId === task.id && draggedTaskId !== task.id
                         ? 'bg-brand-50/80'
                       : isDragging
-                        ? 'bg-brand-50/50'
-                        : 'hover:bg-gray-50/50'
+                        ? 'bg-brand-50/60'
+                        : 'hover:bg-brand-50/55'
                   }`}
                   style={{ height: ROW_HEIGHT }}
                   onDragOver={(e) => {
@@ -794,7 +794,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                   <div
                     style={{ width: LABEL_WIDTH }}
                     className={`shrink-0 border-r flex items-center px-3 gap-2 z-20 relative ${
-                      isCompleted ? 'bg-gray-50/80' : 'bg-white'
+                      isCompleted ? 'bg-slate-50/90' : 'bg-white'
                     }`}
                   >
                     <button
@@ -816,7 +816,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                     >
                       <GripVertical className="h-4 w-4" />
                     </button>
-                    <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${colors.bar}`} />
+                    <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${colors.dot}`} />
                     <div className="min-w-0 flex-1">
                       <Link
                         href={`/dashboard/tasks/${task.id}`}
@@ -850,7 +850,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                         key={day.toISOString()}
                         style={{ width: COL_WIDTH }}
                         className={`shrink-0 border-r ${
-                          day.toDateString() === today.toDateString() ? 'bg-brand-50' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-gray-50/50' : ''
+                          day.toDateString() === today.toDateString() ? 'bg-brand-50/70' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-slate-50/80' : ''
                         }`}
                       />
                     ))}
@@ -865,9 +865,9 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                       <div
                         className={`absolute rounded-md border shadow-sm cursor-grab active:cursor-grabbing ${
                           isCompleted
-                            ? 'z-10 opacity-60'
+                            ? 'z-10 opacity-45 saturate-75'
                             : isDragging
-                              ? 'shadow-lg ring-2 ring-blue-300 z-20'
+                              ? 'shadow-lg ring-2 ring-brand-300 z-20'
                               : 'z-10 hover:shadow-md'
                         } ${colors.bar} ${colors.border}`}
                         style={{
@@ -937,7 +937,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
 
             {groupedTimeline.ungrouped.length > 0 && (
               <div>
-                <div className="flex border-b border-slate-200/80 bg-slate-50/75">
+                <div className="flex border-b border-slate-100 bg-white transition-colors hover:bg-slate-50">
                   <div className="flex items-center gap-2 px-3 py-2.5" style={{ width: LABEL_WIDTH + gridWidth }}>
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
                       <FolderOpen className="h-3.5 w-3.5 text-slate-600" />
@@ -961,12 +961,12 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                       key={task.id}
                       className={`flex border-b transition-colors ${
                         isCompleted
-                          ? 'bg-gray-50/70 opacity-70'
+                          ? 'bg-slate-50/80 opacity-70'
                           : dropTargetTaskId === task.id && draggedTaskId !== task.id
                             ? 'bg-brand-50/80'
                             : isDragging
-                              ? 'bg-brand-50/50'
-                              : 'hover:bg-gray-50/50'
+                              ? 'bg-brand-50/60'
+                              : 'hover:bg-brand-50/55'
                       }`}
                       style={{ height: ROW_HEIGHT }}
                       onDragOver={(e) => {
@@ -996,7 +996,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                       <div
                         style={{ width: LABEL_WIDTH }}
                         className={`shrink-0 border-r flex items-center px-3 gap-2 z-20 relative ${
-                          isCompleted ? 'bg-gray-50/80' : 'bg-white'
+                          isCompleted ? 'bg-slate-50/90' : 'bg-white'
                         }`}
                       >
                         <button
@@ -1018,7 +1018,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                         >
                           <GripVertical className="h-4 w-4" />
                         </button>
-                        <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${colors.bar}`} />
+                        <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${colors.dot}`} />
                         <div className="min-w-0 flex-1">
                           <Link
                             href={`/dashboard/tasks/${task.id}`}
@@ -1048,7 +1048,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                             key={day.toISOString()}
                             style={{ width: COL_WIDTH }}
                             className={`shrink-0 border-r ${
-                              day.toDateString() === today.toDateString() ? 'bg-brand-50' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-gray-50/50' : ''
+                              day.toDateString() === today.toDateString() ? 'bg-brand-50/70' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-slate-50/80' : ''
                             }`}
                           />
                         ))}
@@ -1061,9 +1061,9 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                           <div
                             className={`absolute rounded-md border shadow-sm cursor-grab active:cursor-grabbing ${
                               isCompleted
-                                ? 'z-10 opacity-60'
+                                ? 'z-10 opacity-45 saturate-75'
                                 : isDragging
-                                  ? 'shadow-lg ring-2 ring-blue-300 z-20'
+                                  ? 'shadow-lg ring-2 ring-brand-300 z-20'
                                   : 'z-10 hover:shadow-md'
                             } ${colors.bar} ${colors.border}`}
                             style={{

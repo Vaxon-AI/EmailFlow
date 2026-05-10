@@ -23,6 +23,7 @@ import {
 import { format } from 'date-fns'
 
 import { PageHeader } from '@/components/page-header'
+import { SegmentedControl } from '@/components/segmented-control'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -517,7 +518,11 @@ function DashboardContent() {
             <p className="text-xs text-slate-500">Filter dashboard metrics by time, identity, and project.</p>
           </div>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-            <TimeViewToggle value={selectedView} onChange={(view) => updateDashboardFilter({ view })} />
+            <SegmentedControl
+              value={selectedView}
+              onChange={(view) => updateDashboardFilter({ view })}
+              options={DASHBOARD_VIEWS.map((view) => ({ value: view.id, label: view.label }))}
+            />
             <ContextMultiFilter
               icon={<UserRound className="h-3.5 w-3.5 text-slate-400" />}
               label="Identity"
@@ -540,13 +545,13 @@ function DashboardContent() {
       </div>
 
       {attentionEmailCount > 0 && (
-        <Link href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} className="animate-fade-in-up stagger-2 block">
-          <div className="flex items-center gap-3 rounded-2xl border border-warning-200 bg-warning-100/60 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+        <Link href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} className="group animate-fade-in-up stagger-2 block">
+          <div className="flex items-center gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-3.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-warning-200 hover:shadow-md">
             <div className="relative shrink-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-warning text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning-100/85 text-warning-700 ring-1 ring-warning-200">
                 <AlertTriangle className="h-4.5 w-4.5" />
               </div>
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning-700 text-[9px] font-bold text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-warning text-[9px] font-bold text-white shadow-sm">
                 {attentionEmailCount}
               </span>
             </div>
@@ -559,7 +564,7 @@ function DashboardContent() {
                 {attentionEmailCount > 1 ? ` and ${attentionEmailCount - 1} more...` : ''}
               </p>
             </div>
-            <span className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-warning-200">
+            <span className="shrink-0 rounded-lg border border-warning-200 bg-yellow-50/80 px-3 py-1.5 text-xs font-semibold text-warning-700 shadow-sm transition-all group-hover:-translate-y-px group-hover:bg-warning-100/70 group-hover:shadow-md">
               View
             </span>
           </div>
@@ -567,17 +572,17 @@ function DashboardContent() {
       )}
 
       {pendingTaskCount > 0 && (
-        <Link href={dashboardLink('/dashboard/tasks', { status: 'pending' })} className="animate-fade-in-up stagger-2 block">
+        <Link href={dashboardLink('/dashboard/tasks', { status: 'pending' })} className="group animate-fade-in-up stagger-2 block">
           {/* Banner colour pairs with "X emails need your review" above —
               both are alert banners, both warning-amber. AI Suggestions's
-              purple identity lives in compact spots (donut legend, status
+              AI identity lives in compact spots (donut legend, status
               tag), not a full-width attention banner. */}
-          <div className="flex items-center gap-3 rounded-2xl border border-warning-200 bg-warning-100/60 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex items-center gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-3.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-warning-200 hover:shadow-md">
             <div className="relative shrink-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-warning text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning-100/85 text-warning-700 ring-1 ring-warning-200">
                 <CheckSquare className="h-4.5 w-4.5" />
               </div>
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning-700 text-[9px] font-bold text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-warning text-[9px] font-bold text-white shadow-sm">
                 {pendingTaskCount}
               </span>
             </div>
@@ -590,7 +595,7 @@ function DashboardContent() {
                 {pendingTaskCount > 1 ? ` and ${pendingTaskCount - 1} more...` : ''}
               </p>
             </div>
-            <span className="shrink-0 rounded-md bg-warning px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-warning-200">
+            <span className="shrink-0 rounded-lg border border-warning-200 bg-yellow-50/80 px-3 py-1.5 text-xs font-semibold text-warning-700 shadow-sm transition-all group-hover:-translate-y-px group-hover:bg-warning-100/70 group-hover:shadow-md">
               View
             </span>
           </div>
@@ -695,7 +700,7 @@ function DashboardContent() {
                 {(emailData.unclassified ?? 0) > 0 && (
                   <Link
                     href={dashboardLink('/dashboard/emails', { tab: 'unclassified' })}
-                    className="mt-2.5 block rounded-md border border-warning-200 bg-warning-100/60 px-2 py-1.5 text-[11px] text-warning-700 transition-colors hover:bg-warning-100/60"
+                    className="mt-2.5 inline-flex rounded-lg border border-warning-200 bg-yellow-50/80 px-2.5 py-1.5 text-[11px] font-semibold text-warning-700 shadow-sm transition-all hover:-translate-y-px hover:bg-warning-100/70 hover:shadow-md"
                   >
                     +{emailData.unclassified} unclassified (uncertain or quota-skipped)
                   </Link>
@@ -749,7 +754,7 @@ function DashboardContent() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Top Priority Tasks</CardTitle>
-            <Link href="/dashboard/tasks" className="text-sm text-brand-600 hover:underline">View all</Link>
+            <Link href="/dashboard/tasks" className="inline-flex h-7 items-center rounded-lg border border-brand-100 bg-brand-50/70 px-2.5 text-xs font-semibold text-brand-700 shadow-sm transition-all hover:-translate-y-px hover:border-brand-200 hover:bg-brand-100/70 hover:shadow-md">View all</Link>
           </div>
         </CardHeader>
         <CardContent>
@@ -770,7 +775,7 @@ function DashboardContent() {
               <CheckSquare className="h-8 w-8 text-gray-200" />
               <p className="text-sm text-gray-400">No active tasks yet.</p>
               <Link href="/dashboard/tasks">
-                <Button variant="outline" size="sm">Open tasks</Button>
+                <Button variant="utility" size="sm">Open tasks</Button>
               </Link>
             </div>
           ) : (
@@ -1076,27 +1081,6 @@ function ListCardSkeleton() {
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-function TimeViewToggle({ value, onChange }: { value: DashboardView; onChange: (view: DashboardView) => void }) {
-  return (
-    <div className="flex h-8 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-      {DASHBOARD_VIEWS.map((view) => (
-        <button
-          key={view.id}
-          type="button"
-          onClick={() => onChange(view.id)}
-          className={`rounded-md px-3 text-xs font-semibold transition-colors ${
-            value === view.id
-              ? 'bg-white text-brand-700 shadow-sm'
-              : 'text-slate-500 hover:bg-white/70 hover:text-slate-800'
-          }`}
-        >
-          {view.label}
-        </button>
-      ))}
-    </div>
   )
 }
 

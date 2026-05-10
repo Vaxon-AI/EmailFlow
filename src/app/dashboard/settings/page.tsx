@@ -880,8 +880,8 @@ function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string | null }
                 disabled={syncRangeMutation.isPending}
                 className={`transition-all duration-200 ${
                   isActive
-                    ? 'scale-110 shadow-md ring-2 ring-brand-300/40'
-                    : 'scale-90 opacity-60 hover:opacity-80'
+                    ? 'border-brand-300 bg-brand-600 text-white shadow-sm ring-2 ring-brand-200/70 hover:bg-brand-700'
+                    : 'opacity-75 hover:opacity-100'
                 }`}
               >
                 {days} days

@@ -16,10 +16,18 @@ const buttonVariants = cva(
           "border-border bg-background hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 aria-expanded:border-brand-300 aria-expanded:bg-brand-50 aria-expanded:text-brand-700 dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
           "bg-brand-100/80 text-brand-700 hover:bg-brand-100 aria-expanded:bg-brand-100 aria-expanded:text-brand-700",
+        brandSoft:
+          "border-brand-200 bg-brand-50/80 text-brand-700 shadow-sm hover:-translate-y-px hover:border-brand-300 hover:bg-brand-100/80 hover:text-brand-700 hover:shadow-md focus-visible:border-brand-300 focus-visible:ring-brand-200/80 aria-expanded:border-brand-300 aria-expanded:bg-brand-100/80 aria-expanded:text-brand-700",
+        utility:
+          "border-slate-200 bg-white text-slate-600 shadow-sm hover:-translate-y-px hover:border-brand-200 hover:bg-brand-50/70 hover:text-brand-700 hover:shadow-md focus-visible:border-brand-300 focus-visible:ring-brand-200/70 aria-expanded:border-brand-300 aria-expanded:bg-brand-50 aria-expanded:text-brand-700",
+        success:
+          "border-success/20 bg-success/10 text-success shadow-sm hover:-translate-y-px hover:border-success/30 hover:bg-success/15 hover:shadow-md focus-visible:border-success/40 focus-visible:ring-success/20 aria-expanded:border-success/30 aria-expanded:bg-success/15",
+        warning:
+          "border-warning-200 bg-yellow-50/80 text-warning-700 shadow-sm hover:-translate-y-px hover:border-warning-200 hover:bg-warning-100/70 hover:text-warning-700 hover:shadow-md focus-visible:border-warning-200 focus-visible:ring-warning/20 aria-expanded:border-warning-200 aria-expanded:bg-warning-100/70 aria-expanded:text-warning-700",
         ghost:
           "hover:bg-brand-50 hover:text-brand-700 aria-expanded:bg-brand-50 aria-expanded:text-brand-700 dark:hover:bg-muted/50",
         destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+          "border-destructive/20 bg-destructive/10 text-destructive shadow-sm hover:-translate-y-px hover:border-destructive/30 hover:bg-destructive/20 hover:shadow-md focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

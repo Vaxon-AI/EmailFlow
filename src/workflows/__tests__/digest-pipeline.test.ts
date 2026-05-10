@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/repositories/email-repo', () => ({
   findEmailsByClassification: vi.fn(),
+  findActionedEmails: vi.fn(),
 }))
 
 vi.mock('@/repositories/task-repo', () => ({
@@ -56,6 +57,7 @@ const mockUser = vi.mocked(prisma.user)
 beforeEach(() => {
   vi.clearAllMocks()
   mockEmailRepo.findEmailsByClassification.mockResolvedValue([])
+  mockEmailRepo.findActionedEmails.mockResolvedValue([])
   mockTaskRepo.findTasksByDateRange.mockResolvedValue([])
   mockDigestRepo.createDigest.mockResolvedValue({ id: 'digest-1' } as never)
   mockUser.findUnique.mockResolvedValue({ timezone: 'UTC' } as never)
@@ -145,6 +147,7 @@ describe('createDailyDigest', () => {
       if (category === 'awareness') return [makeEmail('C')]
       return []
     })
+    mockEmailRepo.findActionedEmails.mockResolvedValue([makeEmail('D')])
     mockTaskRepo.findTasksByDateRange.mockResolvedValue([
       makeTask('T1', 'confirmed') as never,
       makeTask('T2', 'pending') as never,
@@ -154,6 +157,7 @@ describe('createDailyDigest', () => {
     const stats = mockDigestRepo.createDigest.mock.calls[0][0].stats
     expect(stats).toMatchObject({
       actionCount: 2,
+      trackedCount: 1,
       awarenessCount: 1,
       unresolvedCount: 0,
       ignoredCount: 0,

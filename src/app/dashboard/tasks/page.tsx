@@ -886,10 +886,10 @@ function TasksContent() {
               ]}
             />
             <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex h-8 items-center gap-2 rounded-md bg-brand-600 px-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200">
+              <DropdownMenuTrigger className="group/trigger inline-flex h-8 items-center gap-2 rounded-md bg-brand-600 px-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 aria-expanded:bg-brand-700">
                 <Plus className="h-4 w-4" />
                 Create Task
-                <ChevronDown className="h-3.5 w-3.5 opacity-80" />
+                <ChevronDown className="h-3.5 w-3.5 opacity-80 transition-transform duration-150 group-aria-expanded/trigger:rotate-180" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
@@ -909,7 +909,7 @@ function TasksContent() {
                   <Sparkles className="h-4 w-4" />
                   <span className="flex-1">Paste Text</span>
                   {!isPro && pasteTextQuota?.limit ? (
-                    <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-violet-700">
+                    <span className="rounded-full bg-ai-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-ai-700">
                       {pasteTextQuota.used}/{pasteTextQuota.limit}
                     </span>
                   ) : null}
@@ -944,56 +944,85 @@ function TasksContent() {
             <SegmentedControl
               value={statusFilter}
               onChange={handleStatusFilterChange}
-              options={STATUS_OPTIONS}
+              options={STATUS_OPTIONS.map((o) =>
+                o.value === 'completed'
+                  ? {
+                      ...o,
+                      // Cleanup options sit inside the Completed tab and only
+                      // expand when this tab is active — keeps other tabs at
+                      // their normal width.
+                      trailing: (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            className="group/trigger inline-flex h-5 w-5 items-center justify-center rounded transition-[background-color,transform] duration-150 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 aria-expanded:scale-95 aria-expanded:bg-white/20"
+                            title="Cleanup options for completed tasks"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5 transition-transform duration-150 group-aria-expanded/trigger:rotate-90" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-60 p-1.5">
+                            <div className="px-1.5 py-1">
+                              <p className="text-xs font-semibold text-gray-600">Auto-clean completed</p>
+                              <p className="mt-0.5 text-[10px] text-gray-400">Clear standalone completed tasks after</p>
+                            </div>
+                            <div className="space-y-1">
+                              {[7, 14, 30, 60].map((days) => {
+                                const selected = taskRetainAfterDays === days
+                                return (
+                                  <DropdownMenuItem
+                                    key={days}
+                                    onClick={() => updateTaskRetainMutation.mutate(days)}
+                                    className={`cursor-pointer justify-between rounded-lg px-2 py-1.5 text-xs transition-[background-color,color,transform] duration-150 hover:translate-x-0.5 ${
+                                      selected
+                                        ? 'bg-brand-50 text-brand-700 focus:bg-brand-50 focus:text-brand-700'
+                                        : 'text-slate-600 focus:bg-slate-50 focus:text-slate-800'
+                                    }`}
+                                  >
+                                    <span>{days} days</span>
+                                    {selected ? <Check className="h-3.5 w-3.5 text-brand-600" /> : null}
+                                  </DropdownMenuItem>
+                                )
+                              })}
+                            </div>
+                            <p className="mt-2 border-t border-slate-100 px-1.5 pt-2 text-[10px] leading-snug text-gray-400">
+                              Standalone tasks deleted; tasks linked to emails are archived until the source emails are also removed.
+                            </p>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ),
+                    }
+                  : o
+              )}
             />
-            {/* Cleanup options live next to the Completed tab — only relevant there. */}
-            {statusFilter === 'completed' && (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200"
-                  title="Cleanup options for completed tasks"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-60">
-                  <div className="px-2 py-1.5 space-y-1.5">
-                    <p className="text-xs font-semibold text-gray-500">Auto-clean completed</p>
-                    <Select
-                      value={String(taskRetainAfterDays)}
-                      onValueChange={(v) => updateTaskRetainMutation.mutate(Number(v))}
-                    >
-                      <SelectTrigger size="sm" className="w-full bg-white">
-                        <SelectValue>{taskRetainAfterDays} days</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="7">7 days</SelectItem>
-                        <SelectItem value="14">14 days</SelectItem>
-                        <SelectItem value="30">30 days</SelectItem>
-                        <SelectItem value="60">60 days</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[10px] text-gray-400 leading-snug">
-                      Standalone tasks deleted; tasks linked to emails are archived until the source emails are also removed.
-                    </p>
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
           </div>
 
           <div className="flex min-h-7 justify-start sm:min-w-[180px] sm:justify-end">
             {viewMode === 'list' ? (
               <div className="flex flex-wrap items-center gap-2">
-                <Select value={priorityFilter} onValueChange={handlePriorityFilterChange}>
-                  <SelectTrigger size="sm" className="bg-white">
-                    <SelectValue>{priorityFilterLabel}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRIORITY_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="group/trigger inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-150 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 aria-expanded:border-brand-300 aria-expanded:bg-brand-50 aria-expanded:text-brand-700">
+                    {priorityFilterLabel}
+                    <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150 group-aria-expanded/trigger:rotate-180" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44 p-1.5">
+                    {PRIORITY_OPTIONS.map((option) => {
+                      const selected = priorityFilter === option.value
+                      return (
+                        <DropdownMenuItem
+                          key={option.value}
+                          onClick={() => handlePriorityFilterChange(option.value)}
+                          className={`cursor-pointer justify-between rounded-lg px-2 py-1.5 text-xs transition-[background-color,color,transform] duration-150 hover:translate-x-0.5 ${
+                            selected
+                              ? 'bg-brand-50 text-brand-700 focus:bg-brand-50 focus:text-brand-700'
+                              : 'text-slate-600 focus:bg-slate-50 focus:text-slate-800'
+                          }`}
+                        >
+                          <span>{option.label}</span>
+                          {selected ? <Check className="h-3.5 w-3.5 text-brand-600" /> : null}
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <SegmentedControl
                   value={sortBy}
                   onChange={setSortBy}
@@ -1010,7 +1039,7 @@ function TasksContent() {
 
       {/* Batch action bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/80 px-4 py-2.5 shadow-sm">
+        <div className="animate-soft-enter flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/75 px-4 py-2.5 shadow-sm">
           <span className="text-sm font-medium text-brand-700">{selectedIds.size} selected</span>
           {selectedIds.size < tasks.length && (
             <button onClick={selectAll} className="text-xs text-brand-500 hover:text-brand-700 hover:underline">
@@ -1018,13 +1047,13 @@ function TasksContent() {
             </button>
           )}
           <div className="flex-1" />
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => batchOp('confirm')}>
+          <Button size="sm" variant="brandSoft" className="h-7 text-xs" onClick={() => batchOp('confirm')}>
             <ThumbsUp className="mr-1 h-3 w-3" /> Activate
           </Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => batchOp('complete')}>
+          <Button size="sm" variant="success" className="h-7 text-xs" onClick={() => batchOp('complete')}>
             <Check className="mr-1 h-3 w-3" /> Mark Done
           </Button>
-          <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setShowBatchReassign(true)}>
+          <Button size="sm" variant="utility" className="h-7 gap-1 text-xs" onClick={() => setShowBatchReassign(true)}>
             <FolderOpen className="h-3 w-3" /> Change Project
           </Button>
           <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => batchOp('delete')}>
@@ -1052,6 +1081,7 @@ function TasksContent() {
           />
         ) : viewMode === 'list' ? (
           <TaskListView
+            key={`${statusFilter}-${priorityFilter}-${sortBy}`}
             tasks={tasks}
             updateTask={updateTask}
             focusProjectId={focusProjectId}
@@ -1102,7 +1132,7 @@ function TasksContent() {
 
           <div className="mt-1 space-y-4">
             {!isPro && pasteTextQuota?.limit ? (
-              <div className="flex items-center justify-between rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs text-violet-700">
+              <div className="flex items-center justify-between rounded-lg border border-ai-100 bg-ai-50 px-3 py-2 text-xs text-ai-700">
                 <span className="font-medium">Free Paste Text trial</span>
                 <span className="tabular-nums">{pasteTextQuota.used}/{pasteTextQuota.limit}</span>
               </div>
@@ -1617,7 +1647,7 @@ function TaskListView({ tasks, updateTask, focusProjectId, onReassign, onDelete,
             </div>
 
             {!isIdentityCollapsed && (
-              <div className="divide-y divide-slate-100 border-t border-slate-100">
+              <div className="animate-soft-enter divide-y divide-slate-100 border-t border-slate-100">
                 {identity.projects.map((project) => {
                   const isProjectCollapsed = !userHasToggled && focusProjectId
                     ? project.id !== focusProjectId
@@ -1657,7 +1687,7 @@ function TaskListView({ tasks, updateTask, focusProjectId, onReassign, onDelete,
                       </div>
 
                       {!isProjectCollapsed && (
-                        <div className="space-y-2 px-4 pb-3 pt-1">
+                        <div className="animate-soft-enter space-y-2 px-4 pb-3 pt-1">
                           {project.items.map((task) => (
                             <TaskRow key={task.id} task={task} updateTask={updateTask} onReassign={onReassign} onDelete={onDelete} isSelected={selectedIds.has(task.id)} onToggleSelect={onToggleSelect} />
                           ))}
@@ -1813,21 +1843,21 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReassign(task) }}
           title="Change project"
-          className="hidden group-hover:flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 transition-colors"
+          className="hidden items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-600 shadow-sm transition-all hover:-translate-y-px hover:border-brand-200 hover:bg-brand-50/70 hover:text-brand-700 hover:shadow-md group-hover:flex"
         >
           <FolderOpen className="h-3.5 w-3.5" />
         </button>
         {isPending ? (
           <>
             <button
-              className="flex items-center justify-center gap-1 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition-colors min-w-[4.5rem]"
+              className="flex min-w-[4.5rem] items-center justify-center gap-1 rounded-md border border-brand-200 bg-brand-50/80 px-2.5 py-1.5 text-xs font-medium text-brand-700 shadow-sm transition-all hover:-translate-y-px hover:bg-brand-100/80 hover:shadow-md"
               onClick={() => { updateTask.mutate({ id: task.id, data: { status: 'confirmed' } }); toast.success('Task moved to Active') }}
             >
               <ThumbsUp className="h-3.5 w-3.5" />
               Activate
             </button>
             <button
-              className="flex items-center gap-1 rounded-md border border-critical-100 px-2.5 py-1.5 text-xs font-medium text-critical hover:bg-critical-50 transition-colors"
+              className="flex items-center gap-1 rounded-md border border-critical-100 bg-critical-50/60 px-2.5 py-1.5 text-xs font-medium text-critical shadow-sm transition-all hover:-translate-y-px hover:bg-critical-100/60 hover:shadow-md"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(task.id) }}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1837,7 +1867,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
         ) : task.status === 'confirmed' ? (
           <>
             <button
-              className="flex items-center justify-center gap-1 rounded-md bg-success px-2.5 py-1.5 text-xs font-medium text-white hover:bg-success transition-colors min-w-[4.5rem]"
+              className="flex min-w-[4.5rem] items-center justify-center gap-1 rounded-md border border-success/20 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success shadow-sm transition-all hover:-translate-y-px hover:bg-success/15 hover:shadow-md"
               onClick={() => {
                 const prevStatus = task.status
                 updateTask.mutate({ id: task.id, data: { status: 'completed' } })
@@ -1850,7 +1880,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
               Done
             </button>
             <button
-              className="flex items-center gap-1 rounded-md border border-critical-100 px-2.5 py-1.5 text-xs font-medium text-critical hover:bg-critical-50 transition-colors"
+              className="flex items-center gap-1 rounded-md border border-critical-100 bg-critical-50/60 px-2.5 py-1.5 text-xs font-medium text-critical shadow-sm transition-all hover:-translate-y-px hover:bg-critical-100/60 hover:shadow-md"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(task.id) }}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1952,9 +1982,9 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
   }
 
   return (
-    <Card>
-      <CardContent className="py-4">
-        <div className="mb-4 flex items-center justify-between">
+    <Card className="overflow-hidden rounded-2xl border-slate-200/80 bg-white shadow-sm">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <Button variant="ghost" size="sm" onClick={prevMonth}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -1977,9 +2007,9 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
           </Button>
         </div>
 
-        <div className="grid grid-cols-7 border-b pb-2">
+        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/80 py-2">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-            <div key={d} className="text-center text-xs font-medium text-gray-500">{d}</div>
+            <div key={d} className="text-center text-xs font-semibold text-slate-600">{d}</div>
           ))}
         </div>
 
@@ -1992,16 +2022,16 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
             return (
               <div
                 key={idx}
-                className={`min-h-[100px] border-b border-r p-1 transition-colors ${
-                  !cell.isCurrentMonth ? 'bg-gray-50/70' :
-                  isToday ? 'bg-brand-50' : 'hover:bg-gray-50'
+                className={`min-h-[100px] border-b border-r border-slate-200/80 p-1.5 transition-colors ${
+                  !cell.isCurrentMonth ? 'bg-slate-50/90' :
+                  isToday ? 'bg-brand-50/80 ring-1 ring-inset ring-brand-200' : 'bg-white hover:bg-brand-50/60'
                 }`}
                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
                 onDrop={handleDrop(cell.date)}
               >
                 <div className={`mb-1 text-right text-xs ${
-                  !cell.isCurrentMonth ? 'text-gray-300' :
-                  isToday ? 'font-bold text-brand-700' : 'text-gray-400'
+                  !cell.isCurrentMonth ? 'text-slate-400' :
+                  isToday ? 'font-bold text-brand-700' : 'text-slate-600'
                 }`}>
                   {cell.day}
                 </div>
@@ -2009,10 +2039,10 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
                   {dayTasks.map((task) => {
                     const band = getPriorityBand(task.priorityScore || 0)
                     const isCompleted = task.status === 'completed'
-                    const bgColor = band === 'critical' ? 'bg-critical-50 border-critical-100 text-critical-700'
-                      : band === 'high' ? 'bg-orange-50 border-orange-100 text-orange-700'
-                      : band === 'medium' ? 'bg-yellow-50 border-yellow-100 text-yellow-700'
-                      : 'bg-slate-100 border-slate-200 text-slate-600'
+                    const bgColor = band === 'critical' ? 'bg-critical border-critical-700/20 text-white'
+                      : band === 'high' ? 'bg-orange border-orange-700/20 text-white'
+                      : band === 'medium' ? 'bg-yellow border-yellow-700/20 text-white'
+                      : 'bg-slate-500 border-slate-600/20 text-white'
                     return (
                       <Link
                         key={task.id}
@@ -2022,8 +2052,8 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
                           e.dataTransfer.setData('text/plain', task.id)
                           e.dataTransfer.effectAllowed = 'move'
                         }}
-                        className={`block cursor-grab truncate rounded-md border px-1.5 py-1 text-[10px] font-semibold leading-tight shadow-sm active:cursor-grabbing ${bgColor} ${
-                          isCompleted ? 'opacity-55 line-through saturate-[0.8]' : ''
+                        className={`block cursor-grab truncate rounded-md border px-1.5 py-1 text-[10px] font-semibold leading-tight shadow-sm transition-[filter,box-shadow,transform] hover:-translate-y-px hover:brightness-95 hover:shadow-md active:cursor-grabbing ${bgColor} ${
+                          isCompleted ? 'opacity-50 line-through saturate-[0.75]' : ''
                         } ${
                           !cell.isCurrentMonth ? 'opacity-50' : ''
                         }`}
@@ -2039,7 +2069,7 @@ function TaskCalendarView({ tasks, updateTask }: { tasks: TaskItem[]; updateTask
           })}
         </div>
 
-        <p className="mt-3 text-[10px] text-gray-400">
+        <p className="border-t border-slate-100 px-4 py-2.5 text-[10px] text-gray-400">
           Drag tasks between dates to reschedule. Click a task to open details.
         </p>
       </CardContent>

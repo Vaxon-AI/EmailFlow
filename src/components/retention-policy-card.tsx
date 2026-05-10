@@ -54,7 +54,7 @@ const RULE_TYPE_LABELS: Record<ProtectionRule['ruleType'], string> = {
 
 const RULE_TYPE_COLORS: Record<ProtectionRule['ruleType'], string> = {
   CONTACT: 'bg-brand-50 text-brand-700 border-brand-200',
-  DOMAIN: 'bg-purple-50 text-purple-700 border-purple-200',
+  DOMAIN: 'bg-brand-50 text-brand-700 border-brand-100',
   LABEL: 'bg-warning-50 text-warning-700 border-warning-100',
 }
 

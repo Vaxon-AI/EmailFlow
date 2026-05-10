@@ -12,9 +12,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Eye,
-  Mail,
   Clock,
-  ChevronDown,
   ChevronRight,
   BarChart3,
 } from 'lucide-react'
@@ -28,6 +26,7 @@ type Period = 'daily' | 'weekly'
 
 type DigestStats = {
   actionCount?: number
+  trackedCount?: number
   awarenessCount?: number
   unresolvedCount?: number
   ignoredCount?: number
@@ -237,28 +236,20 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       href: digestPeriodLink('/dashboard/emails', digest, { tab: 'needs_action' }),
     },
     {
+      label: 'Tracked',
+      value: stats.trackedCount || 0,
+      icon: CheckCircle2,
+      color: 'text-brand-700',
+      bg: 'bg-brand-50',
+      href: digestPeriodLink('/dashboard/emails', digest, { tab: 'tracked' }),
+    },
+    {
       label: 'FYI',
       value: stats.awarenessCount || 0,
       icon: Eye,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
+      color: 'text-brand-500',
+      bg: 'bg-brand-50/70',
       href: digestPeriodLink('/dashboard/emails', digest, { tab: 'fyi' }),
-    },
-    {
-      label: 'Unclassified',
-      value: stats.unresolvedCount || 0,
-      icon: AlertTriangle,
-      color: 'text-warning',
-      bg: 'bg-warning-50',
-      href: digestPeriodLink('/dashboard/emails', digest, { tab: 'unclassified' }),
-    },
-    {
-      label: 'Ignored',
-      value: stats.ignoredCount || 0,
-      icon: Mail,
-      color: 'text-gray-400',
-      bg: 'bg-gray-50',
-      href: digestPeriodLink('/dashboard/emails', digest, { tab: 'ignored' }),
     },
   ]
 
@@ -300,7 +291,7 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
 
       <section>
         <h3 className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Emails</h3>
-        <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
           {emailCards.map((card) => (
             <DigestStatLink key={`email-${card.label}`} card={card} />
           ))}
@@ -320,7 +311,7 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
         <div className="flex items-center gap-2 rounded-md border border-brand-100 bg-brand-50/50 px-2.5 py-2">
           <TrendingUp className="h-4 w-4 shrink-0 text-brand-600" />
           <div>
-            <p className="text-sm font-medium text-blue-900">
+            <p className="text-sm font-medium text-gray-900">
               {(stats.actionCount || 0) >= 5
                 ? 'Busy day!'
                 : (stats.actionCount || 0) >= 3
@@ -386,11 +377,7 @@ function DigestCard({
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50"
       >
-        {expanded ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
-        )}
+        <ChevronRight className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-gray-900">
@@ -418,7 +405,7 @@ function DigestCard({
             {stats.actionCount || 0}
           </span>
           <span className="flex items-center gap-1">
-            <Eye className="h-3 w-3 text-blue-500" />
+            <Eye className="h-3 w-3 text-brand-500" />
             {stats.awarenessCount || 0}
           </span>
           <span className="flex items-center gap-1">
@@ -432,13 +419,15 @@ function DigestCard({
         </div>
       </button>
 
-      {expanded ? (
-        <div className="border-t px-5 py-4">
-          <div className="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-h2:mb-2 prose-h2:mt-4 prose-h2:text-lg prose-h2:font-bold prose-h3:mb-1 prose-h3:mt-3 prose-h3:text-base prose-h3:font-semibold prose-strong:text-gray-900 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1">
-            <ReactMarkdown>{digest.content}</ReactMarkdown>
+      <div className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+        <div className="overflow-hidden">
+          <div className="border-t px-5 py-4">
+            <div className="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-h2:mb-2 prose-h2:mt-4 prose-h2:text-lg prose-h2:font-bold prose-h3:mb-1 prose-h3:mt-3 prose-h3:text-base prose-h3:font-semibold prose-strong:text-gray-900 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1">
+              <ReactMarkdown>{digest.content}</ReactMarkdown>
+            </div>
           </div>
         </div>
-      ) : null}
+      </div>
     </Card>
   )
 }
@@ -449,6 +438,7 @@ function parseStats(raw: string | DigestStats | null | undefined): DigestStats {
     return {
       // new field names (from updated pipeline)
       actionCount:    parsed.actionCount    ?? parsed.actionTasks    ?? 0,
+      trackedCount:   parsed.trackedCount   ?? parsed.trackedEmails  ?? 0,
       awarenessCount: parsed.awarenessCount ?? parsed.awarenessEmails ?? 0,
       unresolvedCount:parsed.unresolvedCount ?? 0,
       ignoredCount:   parsed.ignoredCount   ?? parsed.ignoredEmails  ?? 0,

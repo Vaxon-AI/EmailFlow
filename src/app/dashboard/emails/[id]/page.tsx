@@ -640,8 +640,8 @@ export default function EmailDetailPage() {
               </div>
               <Button
                 size="sm"
-                variant="outline"
-                className="shrink-0 gap-1.5 border-warning-100 bg-white text-warning-700 hover:bg-warning-100"
+                variant="warning"
+                className="shrink-0 gap-1.5"
                 onClick={handleRestore}
                 disabled={restoring}
               >
@@ -696,7 +696,7 @@ export default function EmailDetailPage() {
                       value={replyDraft}
                       onChange={(e) => setReplyDraft(e.target.value)}
                       rows={8}
-                      className="resize-y border-warning-200/70 bg-white text-sm leading-6 shadow-sm focus-visible:ring-warning/20"
+                      className="resize-y border-warning-200/70 bg-white text-sm leading-6 shadow-sm focus-visible:border-warning-200 focus-visible:ring-warning/20"
                       placeholder="AI reply draft will appear here..."
                     />
                     <div className="flex flex-wrap items-center gap-2">
@@ -711,20 +711,20 @@ export default function EmailDetailPage() {
                       </Button>
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="warning"
                         onClick={() => generateReply()}
                         disabled={generatingReply || !canGenerateReply}
-                        className="h-8 gap-1.5 border-warning-200/70 bg-white text-slate-600 hover:border-warning-200 hover:bg-warning-50 hover:text-warning-700"
+                        className="h-8 gap-1.5"
                       >
                         {generatingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                         Regenerate
                       </Button>
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="warning"
                         onClick={copyReply}
                         disabled={!replyDraft.trim()}
-                        className="h-8 gap-1.5 border-warning-200/70 bg-white text-slate-600 hover:border-warning-200 hover:bg-warning-50 hover:text-warning-700"
+                        className="h-8 gap-1.5"
                       >
                         <Copy className="h-3.5 w-3.5" />
                         Copy
@@ -732,7 +732,7 @@ export default function EmailDetailPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-warning-200/70 bg-white/90 px-4 py-4 shadow-sm">
+                  <div className="rounded-xl border border-warning-200/70 bg-yellow-50/45 px-4 py-4 shadow-sm">
                     <p className="text-sm font-medium text-slate-700">No reply draft yet</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                       Generate a draft when you want a starting point, then edit it before using it.
@@ -741,8 +741,8 @@ export default function EmailDetailPage() {
                       size="sm"
                       onClick={() => generateReply()}
                       disabled={generatingReply || !canGenerateReply}
-                      variant="outline"
-                      className="mt-3 h-8 gap-1.5 !border-warning-200 bg-yellow-50/70 text-warning-700 hover:!border-warning-200 hover:!bg-warning-100/60 hover:!text-warning-700 focus-visible:!border-warning-200 focus-visible:!ring-warning/20 aria-expanded:!border-warning-200 aria-expanded:!bg-warning-100/60 aria-expanded:!text-warning-700"
+                      variant="warning"
+                      className="mt-3 h-8 gap-1.5"
                     >
                       {generatingReply ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                       Generate reply

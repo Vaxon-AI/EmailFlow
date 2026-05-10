@@ -617,7 +617,7 @@ function EmailsContent() {
       />
 
       {unclassifiedCount > 0 && tab !== 'unclassified' && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-warning-200 bg-warning-100/60 px-4 py-3 text-sm">
+        <div className="animate-soft-enter flex items-start justify-between gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-4 py-3 text-sm shadow-sm">
           <div className="min-w-0">
             <p className="font-medium text-warning-700">
               {unclassifiedCount} unclassified email{unclassifiedCount === 1 ? '' : 's'}
@@ -628,7 +628,8 @@ function EmailsContent() {
           </div>
           <Button
             size="sm"
-            className="shrink-0 bg-warning text-white hover:bg-warning-700"
+            variant="warning"
+            className="shrink-0"
             onClick={() => {
               clearSelection()
               setPage(1)
@@ -827,7 +828,7 @@ function EmailsContent() {
                 {reviewModeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
                 {manualReviewMode ? 'Manual Review' : 'Auto'}
               </button>
-              <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 shadow-lg group-hover/review-toggle:block">
+              <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 translate-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 opacity-0 shadow-lg transition-all duration-150 group-hover/review-toggle:translate-y-0 group-hover/review-toggle:opacity-100">
                 {manualReviewMode
                   ? 'Manual Review is on. Switching to Auto will create tasks from emails waiting for review.'
                   : 'Auto is on. Click to send future action emails to Manual Review before tasks are created.'}
@@ -844,7 +845,7 @@ function EmailsContent() {
           // Classification in progress
           const count = batchStatus?.totalEmails ?? pendingCount
           return (
-            <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-2.5 text-sm text-brand-700">
+            <div className="animate-soft-enter flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/55 px-4 py-2.5 text-sm text-brand-700 shadow-sm">
               <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
               <span>
                 {count > 0
@@ -856,12 +857,12 @@ function EmailsContent() {
         }
         if (batchStatus.actionEmailCount > 0) {
           return (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-warning-200 bg-warning-100/60 px-4 py-3 shadow-sm">
+            <div className="animate-soft-enter flex items-center justify-between gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-4 py-3 shadow-sm">
               <button
                 onClick={() => setShowBatchModal(true)}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning text-white">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-100/85 text-warning-700 ring-1 ring-warning-200">
                   <Zap className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
@@ -870,6 +871,12 @@ function EmailsContent() {
                   </p>
                   <p className="text-xs text-warning-700">Tap to review — see what needs your attention.</p>
                 </div>
+              </button>
+              <button
+                onClick={() => setShowBatchModal(true)}
+                className="shrink-0 rounded-lg border border-warning-200 bg-yellow-50/80 px-3 py-1.5 text-xs font-semibold text-warning-700 shadow-sm transition-all hover:-translate-y-px hover:bg-warning-100/70 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/20"
+              >
+                Review
               </button>
               <button
                 onClick={dismissBatchBanner}
@@ -886,7 +893,7 @@ function EmailsContent() {
 
       {/* Fallback processing banner — shown when no active batch but pending emails exist */}
       {!isLoading && !batchBannerActive && pendingCount > 0 && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-2.5 text-sm text-brand-700">
+        <div className="animate-soft-enter flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/55 px-4 py-2.5 text-sm text-brand-700 shadow-sm">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
           <span>
             <span className="font-medium">{pendingCount} email{pendingCount === 1 ? '' : 's'}</span>
@@ -900,7 +907,7 @@ function EmailsContent() {
           Change Project). The dedicated review modal was removed; the tab is
           now the single source of truth. */}
       {!isLoading && manualReviewMode && pendingReviewCount > 0 && !reviewBannerDismissed && (
-        <div className="flex w-full items-center gap-3 rounded-xl border border-warning-200 bg-warning-100/60 px-4 py-3 shadow-sm">
+        <div className="animate-soft-enter flex w-full items-center gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-4 py-3 shadow-sm">
           <button
             onClick={() => {
               ackCurrentReviewBatch()
@@ -910,9 +917,9 @@ function EmailsContent() {
                 updateEmailUrlFilter({ tab: 'needs_action' })
               }
             }}
-            className="flex flex-1 items-center gap-3 text-left transition-colors hover:opacity-80"
+            className="flex flex-1 items-center gap-3 text-left transition-colors hover:opacity-85"
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning text-white">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-100/85 text-warning-700 ring-1 ring-warning-200">
               <Eye className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
@@ -921,6 +928,19 @@ function EmailsContent() {
               </p>
               <p className="text-xs text-warning-700">Tap to triage — generate tasks or ignore in bulk.</p>
             </div>
+          </button>
+          <button
+            onClick={() => {
+              ackCurrentReviewBatch()
+              if (tab !== 'needs_action') {
+                clearSelection()
+                setPage(1)
+                updateEmailUrlFilter({ tab: 'needs_action' })
+              }
+            }}
+            className="shrink-0 rounded-lg border border-warning-200 bg-yellow-50/80 px-3 py-1.5 text-xs font-semibold text-warning-700 shadow-sm transition-all hover:-translate-y-px hover:bg-warning-100/70 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/20"
+          >
+            Review
           </button>
           <button
             onClick={ackCurrentReviewBatch}
@@ -947,7 +967,7 @@ function EmailsContent() {
         const ids = [...selectedIds]
         const busy = generating || ignoring || classifying
         return (
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/80 px-4 py-2.5 shadow-sm">
+          <div className="animate-soft-enter flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/75 px-4 py-2.5 shadow-sm">
             <span className="text-sm font-medium text-brand-700">{selectedIds.size} selected</span>
             {selectedIds.size < filtered.length && (
               <button onClick={selectAll} className="text-xs text-brand-500 hover:text-brand-700 hover:underline">
@@ -957,7 +977,7 @@ function EmailsContent() {
             <div className="flex-1" />
             <Button
               size="sm"
-              variant="outline"
+              variant="warning"
               className="h-7 gap-1 text-xs"
               disabled={eligibleForGenerate === 0 || busy}
               onClick={() => bulkGenerateTasksMutation.mutate(ids)}
@@ -973,7 +993,7 @@ function EmailsContent() {
             )}
             <Button
               size="sm"
-              variant="outline"
+              variant="utility"
               className="h-7 gap-1 text-xs"
               disabled={busy}
               onClick={() => bulkIgnoreMutation.mutate(ids)}
@@ -984,11 +1004,11 @@ function EmailsContent() {
             <DropdownMenu>
               <DropdownMenuTrigger
                 disabled={busy}
-                className="inline-flex h-7 items-center justify-center gap-1 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-gray-600 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:pointer-events-none disabled:opacity-50"
+                className="group/trigger inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:-translate-y-px hover:border-brand-200 hover:bg-brand-50/70 hover:text-brand-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 aria-expanded:border-brand-300 aria-expanded:bg-brand-50 aria-expanded:text-brand-700 disabled:pointer-events-none disabled:opacity-50"
               >
                 {classifying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Tag className="h-3 w-3" />}
                 Mark as
-                <ChevronDown className="h-3 w-3" />
+                <ChevronDown className="h-3 w-3 transition-transform duration-150 group-aria-expanded/trigger:rotate-180" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
                 {(Object.keys(EMAIL_BUCKET_LABELS) as EmailBucket[]).map((bucket) => (
@@ -1004,7 +1024,7 @@ function EmailsContent() {
             </DropdownMenu>
             <Button
               size="sm"
-              variant="outline"
+              variant="utility"
               className="h-7 gap-1 text-xs"
               disabled={busy}
               onClick={() => setShowBatchReassign(true)}
@@ -1091,6 +1111,7 @@ function EmailsContent() {
         />
       ) : (
         <EmailMatterView
+          key={`${tab}-${page}-${accountFilter}-${searchQuery}`}
           emails={filtered}
           focusIdentityId={focusIdentityId}
           onReassign={setReassignEmail}
@@ -1355,7 +1376,7 @@ function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onT
             </div>
 
             {!isIdentityCollapsed && (
-              <div className="divide-y divide-slate-100 border-t border-slate-100">
+              <div className="animate-soft-enter divide-y divide-slate-100 border-t border-slate-100">
                 {identity.projects.map((project) => {
                   const isProjectCollapsed = collapsedProjects.has(project.id)
                   const projectAttention = attentionCount(project.items)
@@ -1399,7 +1420,7 @@ function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onT
                       </div>
 
                       {!isProjectCollapsed && (
-                        <div className="space-y-1.5 px-4 pb-3 pt-1">
+                        <div className="animate-soft-enter space-y-1.5 px-4 pb-3 pt-1">
                           {project.items.map((email) => (
                             <EmailRow key={email.id} email={email} onReassign={onReassign} isSelected={selectedIds.has(email.id)} onToggleSelect={onToggleSelect} />
                           ))}

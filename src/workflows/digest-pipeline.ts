@@ -254,9 +254,10 @@ async function buildDailyDigest(userId: string, timezone?: string, useAi = true)
   const start = startOfTodayInTz(now, tz)
   const end = now
 
-  const [action, awareness, uncertain, ignored, tasks] = await Promise.all([
-    emailRepo.findEmailsByClassification(userId, 'action', { start, end }),
-    emailRepo.findEmailsByClassification(userId, 'awareness', { start, end }),
+  const [action, tracked, awareness, uncertain, ignored, tasks] = await Promise.all([
+    emailRepo.findEmailsByClassification(userId, 'action', { start, end }, { actioned: false }),
+    emailRepo.findActionedEmails(userId, { start, end }),
+    emailRepo.findEmailsByClassification(userId, 'awareness', { start, end }, { actioned: false }),
     emailRepo.findEmailsByClassification(userId, 'uncertain', { start, end }),
     emailRepo.findEmailsByClassification(userId, 'ignore', { start, end }),
     taskRepo.findTasksByDateRange(userId, { start, end }),
@@ -268,6 +269,7 @@ async function buildDailyDigest(userId: string, timezone?: string, useAi = true)
 
   const stats = {
     actionCount: action.length,
+    trackedCount: tracked.length,
     awarenessCount: awareness.length,
     unresolvedCount: uncertain.length,
     ignoredCount: ignored.length,
@@ -324,14 +326,15 @@ async function buildWeeklyDigest(userId: string, timezone?: string, useAi = true
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1)
       const range = { start: dayStart, end: dayEnd }
 
-      const [action, awareness, uncertain, ignored] = await Promise.all([
-        emailRepo.findEmailsByClassification(userId, 'action', range),
-        emailRepo.findEmailsByClassification(userId, 'awareness', range),
+      const [action, tracked, awareness, uncertain, ignored] = await Promise.all([
+        emailRepo.findEmailsByClassification(userId, 'action', range, { actioned: false }),
+        emailRepo.findActionedEmails(userId, range),
+        emailRepo.findEmailsByClassification(userId, 'awareness', range, { actioned: false }),
         emailRepo.findEmailsByClassification(userId, 'uncertain', range),
         emailRepo.findEmailsByClassification(userId, 'ignore', range),
       ])
 
-      return { date: dayStart, action, awareness, uncertain, ignored }
+      return { date: dayStart, action, tracked, awareness, uncertain, ignored }
     })
   )
 
@@ -341,12 +344,14 @@ async function buildWeeklyDigest(userId: string, timezone?: string, useAi = true
   const completed = tasks.filter(t => t.status === 'completed')
 
   const totalAction = byDay.reduce((s, d) => s + d.action.length, 0)
+  const totalTracked = byDay.reduce((s, d) => s + d.tracked.length, 0)
   const totalAwareness = byDay.reduce((s, d) => s + d.awareness.length, 0)
   const totalUncertain = byDay.reduce((s, d) => s + d.uncertain.length, 0)
   const totalIgnored = byDay.reduce((s, d) => s + d.ignored.length, 0)
 
   const stats = {
     actionCount: totalAction,
+    trackedCount: totalTracked,
     awarenessCount: totalAwareness,
     unresolvedCount: totalUncertain,
     ignoredCount: totalIgnored,
@@ -412,14 +417,15 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1)
       const range = { start: dayStart, end: dayEnd }
 
-      const [action, awareness, uncertain, ignored] = await Promise.all([
-        emailRepo.findEmailsByClassification(userId, 'action', range),
-        emailRepo.findEmailsByClassification(userId, 'awareness', range),
+      const [action, tracked, awareness, uncertain, ignored] = await Promise.all([
+        emailRepo.findEmailsByClassification(userId, 'action', range, { actioned: false }),
+        emailRepo.findActionedEmails(userId, range),
+        emailRepo.findEmailsByClassification(userId, 'awareness', range, { actioned: false }),
         emailRepo.findEmailsByClassification(userId, 'uncertain', range),
         emailRepo.findEmailsByClassification(userId, 'ignore', range),
       ])
 
-      return { date: dayStart, action, awareness, uncertain, ignored }
+      return { date: dayStart, action, tracked, awareness, uncertain, ignored }
     })
   )
 
@@ -429,12 +435,14 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
   const completed = tasks.filter(t => t.status === 'completed')
 
   const totalAction = byDay.reduce((s, d) => s + d.action.length, 0)
+  const totalTracked = byDay.reduce((s, d) => s + d.tracked.length, 0)
   const totalAwareness = byDay.reduce((s, d) => s + d.awareness.length, 0)
   const totalUncertain = byDay.reduce((s, d) => s + d.uncertain.length, 0)
   const totalIgnored = byDay.reduce((s, d) => s + d.ignored.length, 0)
 
   const stats = {
     actionCount: totalAction,
+    trackedCount: totalTracked,
     awarenessCount: totalAwareness,
     unresolvedCount: totalUncertain,
     ignoredCount: totalIgnored,

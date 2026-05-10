@@ -17,19 +17,19 @@ type InlineNoticeProps = {
 
 const variantStyles = {
   error: {
-    container: "border-critical-100 bg-critical-50 text-critical-700",
+    container: "border-critical-100 bg-critical-50/80 text-critical-700",
     icon: <AlertCircle className="h-4 w-4 shrink-0" />,
   },
   success: {
-    container: "border-success-100 bg-success-50 text-success",
+    container: "border-success-100 bg-success-50/75 text-success",
     icon: <CheckCircle2 className="h-4 w-4 shrink-0" />,
   },
   info: {
-    container: "border-brand-200 bg-brand-50 text-brand-700",
+    container: "border-brand-100 bg-brand-50/60 text-brand-700",
     icon: <Info className="h-4 w-4 shrink-0" />,
   },
   warning: {
-    container: "border-warning-100 bg-warning-50 text-warning-700",
+    container: "border-warning-100 bg-yellow-50/55 text-warning-700",
     icon: <TriangleAlert className="h-4 w-4 shrink-0" />,
   },
 }
@@ -42,7 +42,7 @@ export function InlineNotice({
   const config = variantStyles[variant]
 
   return (
-    <div className={cn("flex items-center gap-2 rounded-lg border px-4 py-3 text-sm", config.container, className)}>
+    <div className={cn("animate-soft-enter flex items-center gap-2 rounded-lg border px-4 py-3 text-sm", config.container, className)}>
       {config.icon}
       <div className="min-w-0 flex-1">{children}</div>
     </div>

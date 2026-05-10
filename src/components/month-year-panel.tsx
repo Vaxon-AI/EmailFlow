@@ -124,7 +124,7 @@ export function MonthYearPanel({
                 onClick={() => updateMonth(index)}
                 className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
                   active
-                    ? 'border-brand-300 bg-brand-100 text-blue-900'
+                    ? 'border-brand-300 bg-brand-100 text-brand-700'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700'
                 }`}
               >
@@ -144,7 +144,7 @@ export function MonthYearPanel({
                 onClick={() => updateYear(year)}
                 className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
                   active
-                    ? 'border-brand-300 bg-brand-100 text-blue-900'
+                    ? 'border-brand-300 bg-brand-100 text-brand-700'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700'
                 }`}
               >

@@ -350,12 +350,28 @@ export async function fixStuckEmails(userId: string | null, staleAfterMs = 2 * 6
 export async function findEmailsByClassification(
   userId: string,
   classification: string,
-  dateRange: { start: Date; end: Date }
+  dateRange: { start: Date; end: Date },
+  options: { actioned?: boolean } = {}
 ) {
   return prisma.email.findMany({
     where: {
       userId,
       classification,
+      ...(options.actioned === undefined ? {} : { actioned: options.actioned }),
+      receivedAt: { gte: dateRange.start, lt: dateRange.end },
+    },
+    select: { subject: true, sender: true },
+  })
+}
+
+export async function findActionedEmails(
+  userId: string,
+  dateRange: { start: Date; end: Date }
+) {
+  return prisma.email.findMany({
+    where: {
+      userId,
+      actioned: true,
       receivedAt: { gte: dateRange.start, lt: dateRange.end },
     },
     select: { subject: true, sender: true },

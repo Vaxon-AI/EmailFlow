@@ -197,7 +197,7 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
             <button
               type="button"
               onClick={() => router.push('/dashboard/emails?tab=unclassified')}
-              className="flex h-9 items-center gap-1.5 rounded-lg border border-warning-200 bg-warning-100/60 px-3 text-sm font-medium text-warning-700 transition-colors hover:bg-warning-100"
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-warning-200 bg-yellow-50/80 px-3 text-sm font-semibold text-warning-700 shadow-sm transition-all hover:-translate-y-px hover:border-warning-200 hover:bg-warning-100/70 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/20"
               title="Emails AI couldn't categorize on its own — open to classify manually"
             >
               <AlertTriangle className="h-3.5 w-3.5" />
