@@ -81,7 +81,8 @@ export async function findTasksPaginated(
     sort?: 'priority' | 'date' | 'deadline' | 'title'
   }
 ) {
-  const where: Prisma.TaskWhereInput = { userId }
+  // Hide soft-archived tasks from list views; they remain accessible by id and via email detail.
+  const where: Prisma.TaskWhereInput = { userId, archivedAt: null }
   if (options.status) {
     where.status = options.status
   } else if (options.scope === 'open') {
@@ -286,6 +287,7 @@ export async function findTasksByDateRange(
   return prisma.task.findMany({
     where: {
       userId,
+      archivedAt: null,
       createdAt: { gte: dateRange.start, lt: dateRange.end },
     },
     orderBy: { priorityScore: 'desc' },

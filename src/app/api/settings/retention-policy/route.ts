@@ -26,11 +26,16 @@ export async function POST(req: Request) {
     const allowed = [
       'metadataOnlyAfterDays',
       'purgeAfterDays',
+      'purgeGracePeriodDays',
       'taskDoneArchiveAfterDays',
       'taskDoneMetadataOnlyAfterDays',
       'taskDoneRestoreWindowDays',
       'attachmentPurgeAfterDays',
+      'staleReviewDismissAfterDays',
+      'taskRetainAfterDays',
     ] as const
+
+    const TASK_RETAIN_OPTIONS = [7, 14, 30, 60]
 
     // Validate: only allow known fields, all must be positive integers
     const updates: Record<string, number> = {}
@@ -39,6 +44,9 @@ export async function POST(req: Request) {
         const val = Number(body[key])
         if (!Number.isInteger(val) || val < 0) {
           return error('INVALID_INPUT', `${key} must be a non-negative integer`, 400)
+        }
+        if (key === 'taskRetainAfterDays' && !TASK_RETAIN_OPTIONS.includes(val)) {
+          return error('INVALID_INPUT', `taskRetainAfterDays must be one of ${TASK_RETAIN_OPTIONS.join(', ')}`, 400)
         }
         updates[key] = val
       }

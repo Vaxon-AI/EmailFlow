@@ -28,11 +28,16 @@ import { CACHE_TIME } from '@/lib/query-cache'
 type RetentionPolicy = {
   metadataOnlyAfterDays: number
   purgeAfterDays: number
+  purgeGracePeriodDays: number
   taskDoneArchiveAfterDays: number
   taskDoneMetadataOnlyAfterDays: number
   taskDoneRestoreWindowDays: number
   attachmentPurgeAfterDays: number
+  staleReviewDismissAfterDays: number
+  taskRetainAfterDays: number
 }
+
+const TASK_RETAIN_OPTIONS = [7, 14, 30, 60] as const
 
 type ProtectionRule = {
   id: string
@@ -242,23 +247,18 @@ export function RetentionPolicyCard() {
                 </div>
               </div>
 
-              {/* Task-done emails */}
+              {/* Task-done emails — archive timing hidden (handled automatically) */}
               <div className="space-y-2 border-t border-gray-200/80 pt-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Emails linked to completed tasks
                 </p>
-                <div className="grid grid-cols-3 gap-3">
-                  <PolicyField
-                    label="Archive after"
-                    unit="days from completion"
-                    value={displayPolicy.taskDoneArchiveAfterDays}
-                    editing={editMode}
-                    onChange={(v) => handleDraftChange('taskDoneArchiveAfterDays', v)}
-                    hint="0 = immediately on task completion"
-                  />
+                <p className="text-[11px] text-gray-400">
+                  Cleanup begins automatically as soon as the task is marked done. You can adjust the timing below.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
                   <PolicyField
                     label="Body-only after"
-                    unit="days from archive"
+                    unit="days from completion"
                     value={displayPolicy.taskDoneMetadataOnlyAfterDays}
                     editing={editMode}
                     onChange={(v) => handleDraftChange('taskDoneMetadataOnlyAfterDays', v)}
@@ -271,6 +271,65 @@ export function RetentionPolicyCard() {
                     onChange={(v) => handleDraftChange('taskDoneRestoreWindowDays', v)}
                     hint="How long the body can be restored after going body-only"
                   />
+                </div>
+              </div>
+
+              {/* Permanent deletion grace period */}
+              <div className="space-y-2 border-t border-gray-200/80 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Permanent deletion
+                </p>
+                <PolicyField
+                  label="Remove from our database after"
+                  unit="days post-purge"
+                  value={displayPolicy.purgeGracePeriodDays}
+                  editing={editMode}
+                  onChange={(v) => handleDraftChange('purgeGracePeriodDays', v)}
+                  hint="Once an email is purged, it stays as a header-only stub for this many extra days, then the row is deleted permanently. After deletion, syncs will not re-fetch it."
+                />
+              </div>
+
+              {/* Manual review queue auto-dismiss */}
+              <div className="space-y-2 border-t border-gray-200/80 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Manual review queue
+                </p>
+                <PolicyField
+                  label="Auto-dismiss after"
+                  unit="days waiting"
+                  value={displayPolicy.staleReviewDismissAfterDays}
+                  editing={editMode}
+                  onChange={(v) => handleDraftChange('staleReviewDismissAfterDays', v)}
+                  hint="Pending-review emails older than this are moved to ignored automatically."
+                />
+              </div>
+
+              {/* Task cleanup */}
+              <div className="space-y-2 border-t border-gray-200/80 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Task cleanup
+                </p>
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-600">Auto-clean completed tasks after</Label>
+                  {editMode ? (
+                    <select
+                      value={displayPolicy.taskRetainAfterDays}
+                      onChange={(e) => handleDraftChange('taskRetainAfterDays', e.target.value)}
+                      className="h-8 rounded-md border border-gray-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200"
+                    >
+                      {TASK_RETAIN_OPTIONS.map((d) => (
+                        <option key={d} value={d}>{d} days</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-sm font-medium text-gray-900">
+                      {displayPolicy.taskRetainAfterDays} <span className="font-normal text-gray-500 text-xs">days</span>
+                    </p>
+                  )}
+                  <p className="text-[11px] text-gray-400">
+                    Standalone tasks (manual + paste-text) are removed permanently after this period.
+                    Tasks linked to emails are hidden from view but kept until their source emails are also fully removed — so you can still trace them from the email side.
+                  </p>
                 </div>
               </div>
 

@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
         const tasks = await prisma.task.findMany({
           where: {
             userId: user.id,
+            archivedAt: null,
             matter: { projectContextId: project.id },
             createdAt: { gte: since },
             OR: [

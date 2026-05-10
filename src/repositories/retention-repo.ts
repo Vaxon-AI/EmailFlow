@@ -54,6 +54,9 @@ function toPolicySnapshot(row: {
   taskDoneMetadataOnlyAfterDays: number
   taskDoneRestoreWindowDays: number
   attachmentPurgeAfterDays: number
+  purgeGracePeriodDays: number
+  staleReviewDismissAfterDays: number
+  taskRetainAfterDays: number
 }): PolicySnapshot {
   return {
     metadataOnlyAfterDays: row.metadataOnlyAfterDays,
@@ -62,6 +65,9 @@ function toPolicySnapshot(row: {
     taskDoneMetadataOnlyAfterDays: row.taskDoneMetadataOnlyAfterDays,
     taskDoneRestoreWindowDays: row.taskDoneRestoreWindowDays,
     attachmentPurgeAfterDays: row.attachmentPurgeAfterDays,
+    purgeGracePeriodDays: row.purgeGracePeriodDays,
+    staleReviewDismissAfterDays: row.staleReviewDismissAfterDays,
+    taskRetainAfterDays: row.taskRetainAfterDays,
   }
 }
 
@@ -180,14 +186,18 @@ export async function archiveEmails(emailIds: string[], reason: string) {
   })
 }
 
+/**
+ * Move emails to METADATA_ONLY (clear bodyFull, set restorableUntil).
+ * Per-email updates run in parallel via allSettled — one failure does not abort the rest.
+ * Returns counts so the caller can attribute errors at the email level.
+ */
 export async function setMetadataOnly(
   emails: Array<{ id: string; restorableUntil: Date }>,
   reason: string
-) {
-  if (emails.length === 0) return
+): Promise<{ succeeded: number; failed: Array<{ id: string; error: string }> }> {
+  if (emails.length === 0) return { succeeded: 0, failed: [] }
   const now = new Date()
-  // Update each individually because restorableUntil differs per email
-  await prisma.$transaction(
+  const results = await Promise.allSettled(
     emails.map(({ id, restorableUntil }) =>
       prisma.email.update({
         where: { id },
@@ -196,12 +206,22 @@ export async function setMetadataOnly(
           metadataOnlyAt: now,
           restorableUntil,
           retentionReason: reason,
-          // Clear body — the defining action of METADATA_ONLY
           bodyFull: null,
         },
       })
     )
   )
+  const failed: Array<{ id: string; error: string }> = []
+  let succeeded = 0
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') {
+      succeeded++
+    } else {
+      const err = r.reason
+      failed.push({ id: emails[i].id, error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+  return { succeeded, failed }
 }
 
 export async function purgeEmails(emailIds: string[], reason: string) {
@@ -218,6 +238,40 @@ export async function purgeEmails(emailIds: string[], reason: string) {
       classReasoning: null,
     },
   })
+}
+
+/**
+ * Permanently DELETE Email rows that have been PURGED for at least gracePeriodDays.
+ * Writes a DeletedEmailMarker tombstone first so future syncs skip these messages.
+ * TaskEmail and Attachment rows cascade via FK onDelete.
+ *
+ * Returns the number of email rows deleted.
+ */
+export async function deleteEmailRows(userId: string, gracePeriodDays: number): Promise<number> {
+  const cutoff = new Date(Date.now() - gracePeriodDays * 24 * 60 * 60 * 1000)
+  const candidates = await prisma.email.findMany({
+    where: {
+      userId,
+      retentionStatus: 'PURGED',
+      purgedAt: { lt: cutoff },
+    },
+    select: { id: true, accountId: true, gmailMessageId: true },
+  })
+  if (candidates.length === 0) return 0
+
+  await prisma.deletedEmailMarker.createMany({
+    data: candidates.map((e) => ({
+      userId,
+      accountId: e.accountId,
+      gmailMessageId: e.gmailMessageId,
+    })),
+    skipDuplicates: true,
+  })
+
+  const { count } = await prisma.email.deleteMany({
+    where: { id: { in: candidates.map((e) => e.id) } },
+  })
+  return count
 }
 
 /**
@@ -254,7 +308,12 @@ export async function completeJobLog(
     emailsArchived: number
     emailsMetaOnly: number
     emailsPurged: number
+    emailsDeleted: number
     attachmentsPurged: number
+    staleReviewsDismissed: number
+    tasksHardDeleted: number
+    tasksSoftArchived: number
+    tasksPurgedFromArchive: number
     bytesFreed: bigint
     errorCount: number
     errors?: Prisma.InputJsonValue
@@ -279,7 +338,12 @@ export async function getRecentJobLogs(userId: string, limit = 10) {
       emailsArchived: true,
       emailsMetaOnly: true,
       emailsPurged: true,
+      emailsDeleted: true,
       attachmentsPurged: true,
+      staleReviewsDismissed: true,
+      tasksHardDeleted: true,
+      tasksSoftArchived: true,
+      tasksPurgedFromArchive: true,
       bytesFreed: true,
       errorCount: true,
     },

@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
@@ -41,6 +41,7 @@ model User {
   pasteTextUsed               Int                  @default(0)
   quotaResetAt                DateTime             @default(now())
   accounts                    Account[]
+  deletedEmailMarkers         DeletedEmailMarker[]
   digests                     Digest[]
   emails                      Email[]
   failedEmailSyncs            FailedEmailSync[]
@@ -57,7 +58,7 @@ model User {
 }
 
 model Account {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   userId            String
   type              String
   provider          String
@@ -69,17 +70,17 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime  @default(now())
   email             String?
-  updatedAt         DateTime @updatedAt
-  syncEnabled       Boolean  @default(true)
+  updatedAt         DateTime  @updatedAt
+  syncEnabled       Boolean   @default(true)
   lastSyncAt        DateTime?
-  reauthRequired    Boolean  @default(false)
+  reauthRequired    Boolean   @default(false)
   reauthReason      String?
   reauthAt          DateTime?
   reauthProvider    String?
   emails            Email[]
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId, provider, syncEnabled])
@@ -114,43 +115,43 @@ model Session {
 }
 
 model Email {
-  id               String          @id @default(cuid())
-  userId           String
-  accountId        String?
-  gmailMessageId   String
-  threadId         String?
-  accountEmail     String          @default("")
-  subject          String
-  sender           String
-  recipients       String          @default("")
-  bodyPreview      String
-  bodyFull         String?
-  receivedAt       DateTime
-  labels           String          @default("")
-  hasAttachments   Boolean         @default(false)
-  classification   String?
-  classConfidence  Float?
-  classReasoning   String?
-  isWorkRelated    Boolean?
-  processedAt      DateTime?
-  createdAt        DateTime        @default(now())
-  retentionStatus  RetentionStatus @default(ACTIVE)
-  archivedAt       DateTime?
-  metadataOnlyAt   DateTime?
-  purgedAt         DateTime?
-  restorableUntil  DateTime?
-  retentionReason  String?
-  processingStatus String          @default("done")
-  syncBatchId      String?
-  awaitingReview   Boolean         @default(false)
-  actioned         Boolean         @default(false)
-  aiReplyDraft      String?
+  id                 String          @id @default(cuid())
+  userId             String
+  accountId          String?
+  gmailMessageId     String
+  threadId           String?
+  accountEmail       String          @default("")
+  subject            String
+  sender             String
+  recipients         String          @default("")
+  bodyPreview        String
+  bodyFull           String?
+  receivedAt         DateTime
+  labels             String          @default("")
+  hasAttachments     Boolean         @default(false)
+  classification     String?
+  classConfidence    Float?
+  classReasoning     String?
+  isWorkRelated      Boolean?
+  processedAt        DateTime?
+  createdAt          DateTime        @default(now())
+  retentionStatus    RetentionStatus @default(ACTIVE)
+  archivedAt         DateTime?
+  metadataOnlyAt     DateTime?
+  purgedAt           DateTime?
+  restorableUntil    DateTime?
+  retentionReason    String?
+  processingStatus   String          @default("done")
+  syncBatchId        String?
+  awaitingReview     Boolean         @default(false)
+  actioned           Boolean         @default(false)
+  aiReplyDraft       String?
   aiReplyGeneratedAt DateTime?
-  aiReplyEditedAt   DateTime?
-  account          Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  attachments      Attachment[]
-  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  taskLinks        TaskEmail[]
+  aiReplyEditedAt    DateTime?
+  account            Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  attachments        Attachment[]
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskLinks          TaskEmail[]
 
   @@unique([userId, accountId, gmailMessageId])
   @@index([userId, receivedAt(sort: Desc)])
@@ -164,12 +165,12 @@ model Email {
 }
 
 model Task {
-  id                 String      @id @default(cuid())
+  id                 String        @id @default(cuid())
   userId             String
   title              String
   summary            String
-  actionItems        String      @default("")
-  status             String      @default("pending")
+  actionItems        String        @default("")
+  status             String        @default("pending")
   urgency            Int?
   impact             Int?
   priorityScore      Int?
@@ -179,17 +180,18 @@ model Task {
   inferredDeadline   DateTime?
   deadlineConfidence Float?
   userSetDeadline    DateTime?
-  isUserEdited       Boolean     @default(false)
+  isUserEdited       Boolean       @default(false)
   userNotes          String?
-  checkedActionItems String      @default("[]")
+  checkedActionItems String        @default("[]")
   confirmedAt        DateTime?
   dismissedAt        DateTime?
   completedAt        DateTime?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
-  source             String      @default("manual")
+  archivedAt         DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  source             String        @default("manual")
   matterId           String?
-  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   emailLinks         TaskEmail[]
   matter             MatterMemory? @relation(fields: [matterId], references: [id], onDelete: SetNull)
 
@@ -197,6 +199,7 @@ model Task {
   @@index([userId, priorityScore(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, completedAt(sort: Desc)])
+  @@index([userId, archivedAt])
 }
 
 model TaskEmail {
@@ -403,10 +406,13 @@ model RetentionPolicy {
   userId                        String   @unique
   metadataOnlyAfterDays         Int      @default(30)
   purgeAfterDays                Int      @default(90)
+  purgeGracePeriodDays          Int      @default(90)
   taskDoneArchiveAfterDays      Int      @default(0)
   taskDoneMetadataOnlyAfterDays Int      @default(30)
   taskDoneRestoreWindowDays     Int      @default(30)
   attachmentPurgeAfterDays      Int      @default(60)
+  staleReviewDismissAfterDays   Int      @default(15)
+  taskRetainAfterDays           Int      @default(30)
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
   user                          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -425,21 +431,38 @@ model ProtectionRule {
 }
 
 model RetentionJobLog {
-  id                String    @id @default(cuid())
-  userId            String
-  triggeredBy       String    @default("cron")
-  startedAt         DateTime  @default(now())
-  completedAt       DateTime?
-  emailsArchived    Int       @default(0)
-  emailsMetaOnly    Int       @default(0)
-  emailsPurged      Int       @default(0)
-  attachmentsPurged Int       @default(0)
-  bytesFreed        BigInt    @default(0)
-  errorCount        Int       @default(0)
-  errors            Json?
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     String    @id @default(cuid())
+  userId                 String
+  triggeredBy            String    @default("cron")
+  startedAt              DateTime  @default(now())
+  completedAt            DateTime?
+  emailsArchived         Int       @default(0)
+  emailsMetaOnly         Int       @default(0)
+  emailsPurged           Int       @default(0)
+  emailsDeleted          Int       @default(0)
+  attachmentsPurged      Int       @default(0)
+  staleReviewsDismissed  Int       @default(0)
+  tasksHardDeleted       Int       @default(0)
+  tasksSoftArchived      Int       @default(0)
+  tasksPurgedFromArchive Int       @default(0)
+  bytesFreed             BigInt    @default(0)
+  errorCount             Int       @default(0)
+  errors                 Json?
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, startedAt(sort: Desc)])
+}
+
+model DeletedEmailMarker {
+  id             String   @id @default(cuid())
+  userId         String
+  accountId      String?
+  gmailMessageId String
+  deletedAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, accountId, gmailMessageId])
+  @@index([userId, gmailMessageId])
 }
 
 enum RetentionStatus {

@@ -14,6 +14,7 @@ vi.mock('@/repositories/retention-repo', () => ({
   archiveEmails: vi.fn(),
   setMetadataOnly: vi.fn(),
   purgeEmails: vi.fn(),
+  deleteEmailRows: vi.fn(),
   restoreEmailBody: vi.fn(),
   updatePolicy: vi.fn(),
 }))
@@ -22,6 +23,14 @@ vi.mock('@/repositories/attachment-repo', () => ({
   getUnpurgedAttachmentsByEmailIds: vi.fn(),
   getTotalUnpurgedSize: vi.fn(),
   markAttachmentsPurged: vi.fn(),
+}))
+
+vi.mock('@/repositories/email-repo', () => ({
+  dismissStaleReviewEmails: vi.fn(),
+}))
+
+vi.mock('@/services/task-cleanup-service', () => ({
+  cleanupTasksForUser: vi.fn(),
 }))
 
 vi.mock('@/integrations/gmail/client', () => ({
@@ -42,6 +51,8 @@ vi.mock('@/lib/prisma', () => ({
 
 import * as retentionRepo from '@/repositories/retention-repo'
 import * as attachmentRepo from '@/repositories/attachment-repo'
+import * as emailRepo from '@/repositories/email-repo'
+import { cleanupTasksForUser } from '@/services/task-cleanup-service'
 import { fetchGmailMessageBody } from '@/integrations/gmail/client'
 import { prisma } from '@/lib/prisma'
 import {
@@ -64,6 +75,9 @@ const DEFAULT_POLICY: PolicySnapshot = {
   taskDoneMetadataOnlyAfterDays: 30,
   taskDoneRestoreWindowDays: 30,
   attachmentPurgeAfterDays: 60,
+  purgeGracePeriodDays: 90,
+  staleReviewDismissAfterDays: 15,
+  taskRetainAfterDays: 30,
 }
 
 const NO_RULES = [] as const
@@ -95,11 +109,15 @@ const mockCompleteLog = retentionRepo.completeJobLog as ReturnType<typeof vi.fn>
 const mockArchive = retentionRepo.archiveEmails as ReturnType<typeof vi.fn>
 const mockMetaOnly = retentionRepo.setMetadataOnly as ReturnType<typeof vi.fn>
 const mockPurge = retentionRepo.purgeEmails as ReturnType<typeof vi.fn>
+const mockDeleteRows = retentionRepo.deleteEmailRows as ReturnType<typeof vi.fn>
 const mockRestoreBody = retentionRepo.restoreEmailBody as ReturnType<typeof vi.fn>
 
 const mockGetAttachments = attachmentRepo.getUnpurgedAttachmentsByEmailIds as ReturnType<typeof vi.fn>
 const mockGetSize = attachmentRepo.getTotalUnpurgedSize as ReturnType<typeof vi.fn>
 const mockPurgeAttachments = attachmentRepo.markAttachmentsPurged as ReturnType<typeof vi.fn>
+
+const mockDismissStale = emailRepo.dismissStaleReviewEmails as ReturnType<typeof vi.fn>
+const mockCleanupTasks = cleanupTasksForUser as ReturnType<typeof vi.fn>
 
 const mockFetchGmail = fetchGmailMessageBody as ReturnType<typeof vi.fn>
 const mockEmailFindFirst = (prisma.email.findFirst as ReturnType<typeof vi.fn>)
@@ -111,12 +129,19 @@ function setupDefaultMocks() {
   mockCreateLog.mockResolvedValue({ id: 'log-1' })
   mockCompleteLog.mockResolvedValue({})
   mockArchive.mockResolvedValue(undefined)
-  mockMetaOnly.mockResolvedValue(undefined)
+  // Default: every email passed to setMetadataOnly succeeds.
+  mockMetaOnly.mockImplementation(async (emails: Array<unknown>) => ({
+    succeeded: emails.length,
+    failed: [],
+  }))
   mockPurge.mockResolvedValue(undefined)
+  mockDeleteRows.mockResolvedValue(0)
   mockRestoreBody.mockResolvedValue({})
   mockGetAttachments.mockResolvedValue([])
   mockGetSize.mockResolvedValue(0)
   mockPurgeAttachments.mockResolvedValue(undefined)
+  mockDismissStale.mockResolvedValue(0)
+  mockCleanupTasks.mockResolvedValue({ hardDeleted: 0, softArchived: 0, purgedFromArchive: 0 })
 }
 
 beforeEach(() => {
@@ -305,6 +330,51 @@ describe('executeRetention', () => {
     expect(mockCompleteLog).toHaveBeenCalledWith('log-1', expect.objectContaining({
       errorCount: 1,
     }))
+  })
+
+  it('setMetadataOnly partial failure: counts succeeded and failed per-email, not per-batch', async () => {
+    const emails = [
+      makeEmail({ id: 'e1', receivedAt: subDays(NOW, 50) }),
+      makeEmail({ id: 'e2', receivedAt: subDays(NOW, 50) }),
+      makeEmail({ id: 'e3', receivedAt: subDays(NOW, 50) }),
+    ]
+    mockGetEmails.mockResolvedValue(emails)
+    mockMetaOnly.mockResolvedValueOnce({
+      succeeded: 2,
+      failed: [{ id: 'e2', error: 'fk constraint' }],
+    })
+
+    const result = await executeRetention('user-1', 'cron')
+    expect(result.emailsMetaOnly).toBe(2)
+    expect(result.errorCount).toBe(1)
+  })
+
+  it('runs deleteEmailRows + dismissStaleReviewEmails + cleanupTasksForUser per cron pass', async () => {
+    mockDeleteRows.mockResolvedValueOnce(3)
+    mockDismissStale.mockResolvedValueOnce(2)
+    mockCleanupTasks.mockResolvedValueOnce({ hardDeleted: 4, softArchived: 5, purgedFromArchive: 1 })
+
+    const result = await executeRetention('user-1', 'cron')
+
+    expect(mockDeleteRows).toHaveBeenCalledWith('user-1', 90)
+    expect(mockDismissStale).toHaveBeenCalledWith('user-1', 15)
+    expect(mockCleanupTasks).toHaveBeenCalledWith('user-1', 30)
+
+    expect(result.emailsDeleted).toBe(3)
+    expect(result.staleReviewsDismissed).toBe(2)
+    expect(result.tasksHardDeleted).toBe(4)
+    expect(result.tasksSoftArchived).toBe(5)
+    expect(result.tasksPurgedFromArchive).toBe(1)
+  })
+
+  it('counts new pipeline failures into errorCount but still completes', async () => {
+    mockDeleteRows.mockRejectedValueOnce(new Error('oops'))
+    mockDismissStale.mockRejectedValueOnce(new Error('oops'))
+    mockCleanupTasks.mockRejectedValueOnce(new Error('oops'))
+
+    const result = await executeRetention('user-1', 'cron')
+    expect(result.errorCount).toBe(3)
+    expect(mockCompleteLog).toHaveBeenCalled()
   })
 
   it('returns the job log id in the result', async () => {

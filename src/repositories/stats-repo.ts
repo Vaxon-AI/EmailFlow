@@ -37,7 +37,7 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     }),
     prisma.task.groupBy({
       by: ['status'],
-      where: { userId },
+      where: { userId, archivedAt: null },
       _count: { id: true },
     }),
     prisma.user.findUnique({

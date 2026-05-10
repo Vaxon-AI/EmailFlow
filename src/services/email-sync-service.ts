@@ -26,7 +26,7 @@ import { getClassifyRemaining, incrementClassifyUsed } from '@/lib/quota'
 const RETRY_BATCH_SIZE = 10
 
 // Internal type alias for emails returned by storeEmail, passed from phase1 to phase2.
-type StoredEmail = Awaited<ReturnType<typeof emailRepo.storeEmail>>['email']
+type StoredEmail = NonNullable<Awaited<ReturnType<typeof emailRepo.storeEmail>>['email']>
 
 export interface Phase1Result {
   totalFetched: number
@@ -162,17 +162,18 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
 
   for (const message of messages) {
     try {
-      const { email, wasCreated } = await emailRepo.storeEmail({ userId, message, syncBatchId })
-      if (wasCreated) {
+      const result = await emailRepo.storeEmail({ userId, message, syncBatchId })
+      if (result.wasCreated) {
         // Only newly inserted emails feed Phase 2. Already-stored emails were
         // either classified by a previous sync (no need to redo) or are stuck
         // 'pending' from a crashed prior run (handled by fixStuckEmails). Re-running
         // the AI pipeline on them wastes quota and can cause the same email to
         // be re-classified multiple times.
-        storedEmails.push(email)
+        storedEmails.push(result.email)
         syncedCount++
-        newEmailIds.push(email.id)
+        newEmailIds.push(result.email.id)
       } else {
+        // skipped: existing duplicate OR tombstoned (previously deleted by retention)
         skippedCount++
       }
     } catch (err) {

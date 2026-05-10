@@ -616,6 +616,7 @@ async function findSimilarActiveTask(
   const tasks = await prisma.task.findMany({
     where: {
       userId,
+      archivedAt: null,
       status: { in: ['pending', 'confirmed'] },
       OR: [
         ...(primaryTaskId ? [{ id: primaryTaskId }] : []),

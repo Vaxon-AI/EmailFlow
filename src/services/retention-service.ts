@@ -15,6 +15,8 @@ import { getRetentionAction } from '@/lib/retention-engine'
 import type { EmailSnapshot, PolicySnapshot } from '@/lib/retention-engine'
 import * as retentionRepo from '@/repositories/retention-repo'
 import * as attachmentRepo from '@/repositories/attachment-repo'
+import * as emailRepo from '@/repositories/email-repo'
+import { cleanupTasksForUser } from '@/services/task-cleanup-service'
 import { fetchGmailMessageBody } from '@/integrations/gmail/client'
 import { prisma } from '@/lib/prisma'
 
@@ -38,7 +40,12 @@ export type RetentionResult = {
   emailsArchived: number
   emailsMetaOnly: number
   emailsPurged: number
+  emailsDeleted: number
   attachmentsPurged: number
+  staleReviewsDismissed: number
+  tasksHardDeleted: number
+  tasksSoftArchived: number
+  tasksPurgedFromArchive: number
   bytesFreed: bigint
   errorCount: number
 }
@@ -138,7 +145,12 @@ export async function executeRetention(
   let emailsArchived = 0
   let emailsMetaOnly = 0
   let emailsPurged = 0
+  let emailsDeleted = 0
   let attachmentsPurged = 0
+  let staleReviewsDismissed = 0
+  let tasksHardDeleted = 0
+  let tasksSoftArchived = 0
+  let tasksPurgedFromArchive = 0
   let bytesFreed = BigInt(0)
   let errorCount = 0
   const errors: string[] = []
@@ -186,10 +198,15 @@ export async function executeRetention(
     }
 
     // Apply: metadata-only (clears bodyFull)
+    // Per-email errors don't abort the batch — setMetadataOnly returns counts.
     for (const batch of chunk(toMetaOnly, BATCH_SIZE)) {
       try {
-        await retentionRepo.setMetadataOnly(batch, 'retention policy')
-        emailsMetaOnly += batch.length
+        const { succeeded, failed } = await retentionRepo.setMetadataOnly(batch, 'retention policy')
+        emailsMetaOnly += succeeded
+        if (failed.length > 0) {
+          errorCount += failed.length
+          for (const f of failed) errors.push(`metadataOnly ${f.id}: ${f.error}`)
+        }
       } catch (err) {
         errorCount++
         errors.push(`metadataOnly batch failed: ${errorMessage(err)}`)
@@ -227,6 +244,37 @@ export async function executeRetention(
         bytesFreed += BigInt(totalSize)
       }
     }
+
+    // Permanently DELETE PURGED rows past the grace period (writes tombstones first)
+    try {
+      emailsDeleted = await retentionRepo.deleteEmailRows(userId, policy.purgeGracePeriodDays)
+    } catch (err) {
+      errorCount++
+      errors.push(`delete email rows failed: ${errorMessage(err)}`)
+    }
+
+    // Auto-dismiss pending review emails older than the user's threshold
+    try {
+      staleReviewsDismissed = await emailRepo.dismissStaleReviewEmails(
+        userId,
+        policy.staleReviewDismissAfterDays
+      )
+    } catch (err) {
+      errorCount++
+      errors.push(`stale review dismiss failed: ${errorMessage(err)}`)
+    }
+
+    // Task cleanup: hard-delete standalone, soft-archive email-linked,
+    // and hard-delete previously-archived tasks whose source emails are gone.
+    try {
+      const taskResult = await cleanupTasksForUser(userId, policy.taskRetainAfterDays)
+      tasksHardDeleted = taskResult.hardDeleted
+      tasksSoftArchived = taskResult.softArchived
+      tasksPurgedFromArchive = taskResult.purgedFromArchive
+    } catch (err) {
+      errorCount++
+      errors.push(`task cleanup failed: ${errorMessage(err)}`)
+    }
   } catch (err) {
     errorCount++
     errors.push(`retention run failed: ${errorMessage(err)}`)
@@ -236,7 +284,12 @@ export async function executeRetention(
     emailsArchived,
     emailsMetaOnly,
     emailsPurged,
+    emailsDeleted,
     attachmentsPurged,
+    staleReviewsDismissed,
+    tasksHardDeleted,
+    tasksSoftArchived,
+    tasksPurgedFromArchive,
     bytesFreed,
     errorCount,
     errors: errors.length > 0 ? errors : undefined,
@@ -247,7 +300,12 @@ export async function executeRetention(
     emailsArchived,
     emailsMetaOnly,
     emailsPurged,
+    emailsDeleted,
     attachmentsPurged,
+    staleReviewsDismissed,
+    tasksHardDeleted,
+    tasksSoftArchived,
+    tasksPurgedFromArchive,
     bytesFreed,
     errorCount,
   }

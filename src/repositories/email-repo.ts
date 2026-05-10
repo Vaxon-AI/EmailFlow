@@ -12,7 +12,30 @@ export interface StoreEmailData {
   syncBatchId?: string
 }
 
-export async function storeEmail(data: StoreEmailData) {
+type StoredEmailRow = NonNullable<Awaited<ReturnType<typeof prisma.email.findFirst>>>
+
+export type StoreEmailResult =
+  | { email: StoredEmailRow; wasCreated: true; tombstoned?: false }
+  | { email: StoredEmailRow; wasCreated: false; tombstoned?: false }
+  | { email: null; wasCreated: false; tombstoned: true }
+
+export async function storeEmail(data: StoreEmailData): Promise<StoreEmailResult> {
+  // Tombstone check: if this message was previously deleted by retention,
+  // do not re-create the row. Sync paths should treat this as a skip.
+  // findFirst (not findUnique) so the nullable accountId comparison works
+  // — Prisma's compound unique-key generator types accountId as non-null.
+  const tombstone = await prisma.deletedEmailMarker.findFirst({
+    where: {
+      userId: data.userId,
+      accountId: data.message.accountId ?? null,
+      gmailMessageId: data.message.providerMessageId,
+    },
+    select: { id: true },
+  })
+  if (tombstone) {
+    return { email: null, wasCreated: false, tombstoned: true }
+  }
+
   const fields = {
     userId: data.userId,
     accountId: data.message.accountId ?? undefined,
@@ -224,11 +247,15 @@ export async function findPendingReviewEmails(userId: string) {
 
 // Auto-dismisses review emails that have been sitting in the queue too long.
 // Same collapse-into-ignore semantics as user-driven dismiss.
-export async function dismissStaleReviewEmails(olderThanDays = 15) {
+// Scoped per-user so each user's RetentionPolicy threshold applies independently;
+// classification='action' filter matches getStaleReviewEmails above.
+export async function dismissStaleReviewEmails(userId: string, olderThanDays: number) {
   const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000)
   const { count } = await prisma.email.updateMany({
     where: {
+      userId,
       awaitingReview: true,
+      classification: 'action',
       receivedAt: { lt: cutoff },
     },
     data: {
@@ -446,6 +473,7 @@ export async function findEmailById(userId: string, emailId: string) {
               checkedActionItems: true,
               status: true,
               completedAt: true,
+              archivedAt: true,
               priorityScore: true,
               startDate: true,
               explicitDeadline: true,

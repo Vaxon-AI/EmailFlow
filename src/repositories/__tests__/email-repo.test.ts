@@ -14,6 +14,9 @@ vi.mock('@/lib/prisma', () => ({
       updateMany: vi.fn(),
       count: vi.fn(),
     },
+    deletedEmailMarker: {
+      findFirst: vi.fn(),
+    },
   },
 }))
 
@@ -41,6 +44,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const mockPrismaEmail = vi.mocked(prisma.email)
+const mockTombstone = vi.mocked(prisma.deletedEmailMarker.findFirst)
 
 function makeMessage(id = 'gmail-msg-1') {
   return {
@@ -75,6 +79,8 @@ const CREATED_EMAIL = { id: 'email-new', gmailMessageId: 'gmail-msg-2' }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Default: no tombstone found (storeEmail proceeds normally)
+  mockTombstone.mockResolvedValue(null)
 })
 
 describe('storeEmail — dedup logic', () => {
@@ -142,6 +148,19 @@ describe('storeEmail — dedup logic', () => {
     await storeEmail({ userId: 'user-1', message: makeMessage() })
     await storeEmail({ userId: 'user-1', message: makeMessage() })
 
+    expect(mockPrismaEmail.create).not.toHaveBeenCalled()
+  })
+
+  it('skips creation and returns tombstoned: true when a DeletedEmailMarker exists for this message', async () => {
+    mockTombstone.mockResolvedValue({ id: 'marker-1' } as any)
+
+    const result = await storeEmail({ userId: 'user-1', message: makeMessage('msg-deleted') })
+
+    expect(result.tombstoned).toBe(true)
+    expect(result.email).toBeNull()
+    expect(result.wasCreated).toBe(false)
+    // No findFirst lookup or create attempt — tombstone short-circuits
+    expect(mockPrismaEmail.findFirst).not.toHaveBeenCalled()
     expect(mockPrismaEmail.create).not.toHaveBeenCalled()
   })
 

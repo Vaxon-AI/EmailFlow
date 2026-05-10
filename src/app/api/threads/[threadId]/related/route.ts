@@ -14,6 +14,7 @@ export async function GET(
       prisma.task.findMany({
         where: {
           userId: user.id,
+          archivedAt: null,
           emailLinks: { some: { email: { threadId } } },
         },
         select: {

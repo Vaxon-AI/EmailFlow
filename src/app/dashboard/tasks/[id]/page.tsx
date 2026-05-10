@@ -671,6 +671,11 @@ export default function TaskDetailPage() {
                   <StsIcon className="h-3 w-3" />
                   {sts.label}
                 </Badge>
+                {task.archivedAt && (
+                  <Badge variant="outline" className="gap-1 bg-gray-100 text-gray-600 border-gray-200">
+                    Archived
+                  </Badge>
+                )}
                 <Badge variant="outline" className={`gap-1 ${getPriorityColor(band)}`}>
                   <TrendingUp className="h-3 w-3" />
                   {getPriorityLabel(band)} — {task.priorityScore}
@@ -682,6 +687,14 @@ export default function TaskDetailPage() {
                   </Badge>
                 )}
               </div>
+              {task.archivedAt ? (
+                <InlineNotice variant="info">
+                  <span className="text-xs">
+                    This task was auto-archived on {new Date(task.archivedAt as string).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}.
+                    It stays accessible from the linked email until the source emails are also fully removed.
+                  </span>
+                </InlineNotice>
+              ) : null}
 
               {/* Quick actions for pending */}
               {task.status === 'pending' && (

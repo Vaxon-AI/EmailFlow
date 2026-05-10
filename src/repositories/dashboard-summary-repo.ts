@@ -307,7 +307,8 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
 }
 
 function buildTaskWhere(userId: string, filters: DashboardFilters): Prisma.TaskWhereInput {
-  const where: Prisma.TaskWhereInput = { userId }
+  // Hide soft-archived tasks from all dashboard summaries.
+  const where: Prisma.TaskWhereInput = { userId, archivedAt: null }
 
   if (filters.projectIds?.length) {
     const projectIds = filters.projectIds.filter((id) => id !== UNCATEGORIZED)

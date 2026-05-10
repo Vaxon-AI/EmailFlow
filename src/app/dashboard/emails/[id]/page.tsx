@@ -56,6 +56,7 @@ type EmailTaskLink = {
     checkedActionItems?: string | null
     status: string
     completedAt?: string | null
+    archivedAt?: string | null
     priorityScore?: number | null
     startDate?: string | null
     explicitDeadline?: string | null
@@ -838,6 +839,7 @@ export default function EmailDetailPage() {
                   taskLinks.map((link) => {
                   const band = getPriorityBand(link.task.priorityScore || 0)
                   const isDone = link.task.status === 'completed' || link.task.status === 'dismissed'
+                  const isArchived = !!link.task.archivedAt
                   const isUnlinking = unlinkingTaskId === link.task.id
                   return (
                     <div
@@ -869,6 +871,11 @@ export default function EmailDetailPage() {
                             }`}>
                               {getTaskStatusLabel(link.task.status)}
                             </span>
+                            {isArchived && (
+                              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500" title="This task was auto-archived. It remains accessible until the source emails are also removed.">
+                                Archived
+                              </span>
+                            )}
                             <Badge variant="outline" className={`text-[9px] ${getPriorityColor(band)}`}>
                               {getPriorityLabel(band)}
                             </Badge>

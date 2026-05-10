@@ -51,6 +51,12 @@ export type PolicySnapshot = {
   taskDoneRestoreWindowDays: number
   /** Days from receivedAt before attachment tracking records are cleared (default 60) */
   attachmentPurgeAfterDays: number
+  /** Days after PURGED before the row is permanently DELETEd (default 90) */
+  purgeGracePeriodDays: number
+  /** Days a pending-review email can wait before being auto-dismissed to ignored (default 15) */
+  staleReviewDismissAfterDays: number
+  /** Days after task.completedAt to clean up the task (default 30; allowed: 7/14/30/60) */
+  taskRetainAfterDays: number
 }
 
 export type ProtectionRuleSnapshot = {
@@ -330,4 +336,7 @@ export const DEFAULT_RETENTION_POLICY: PolicySnapshot = {
   taskDoneMetadataOnlyAfterDays: 30,
   taskDoneRestoreWindowDays: 30,
   attachmentPurgeAfterDays: 60,
+  purgeGracePeriodDays: 90,
+  staleReviewDismissAfterDays: 15,
+  taskRetainAfterDays: 30,
 }

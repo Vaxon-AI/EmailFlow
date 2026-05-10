@@ -32,7 +32,7 @@ import {
 import {
   Check, X, Calendar, List, GanttChart, ChevronLeft, ChevronRight,
   Mail, Clock, ThumbsUp, Plus, FolderOpen, Trash2,
-  ChevronDown, UserRound, Sparkles,
+  ChevronDown, UserRound, Sparkles, MoreHorizontal,
 } from 'lucide-react'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -290,6 +290,32 @@ function TasksContent() {
     queryFn: () => fetch('/api/emails?page=1&limit=50').then((r) => r.json()),
     staleTime: CACHE_TIME.list,
     enabled: showCreateModal,
+  })
+
+  // Cleanup retention shared with settings page — same query key, same cache.
+  const { data: retentionPolicyRes } = useQuery({
+    queryKey: ['retention-policy'],
+    queryFn: () => fetch('/api/settings/retention-policy').then((r) => r.json()),
+    staleTime: CACHE_TIME.list,
+  })
+  const taskRetainAfterDays: number =
+    retentionPolicyRes?.data?.taskRetainAfterDays ?? 30
+  const updateTaskRetainMutation = useMutation({
+    mutationFn: async (days: number) => {
+      const res = await fetch('/api/settings/retention-policy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskRetainAfterDays: days }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error?.message || 'Failed to update auto-cleanup')
+      return json
+    },
+    onSuccess: () => {
+      toast.success('Auto-cleanup updated')
+      queryClient.invalidateQueries({ queryKey: ['retention-policy'] })
+    },
+    onError: (err: Error) => showError(err.message),
   })
   const recentEmails = useMemo<{
     id: string
@@ -920,6 +946,39 @@ function TasksContent() {
               onChange={handleStatusFilterChange}
               options={STATUS_OPTIONS}
             />
+            {/* Cleanup options live next to the Completed tab — only relevant there. */}
+            {statusFilter === 'completed' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200"
+                  title="Cleanup options for completed tasks"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-60">
+                  <div className="px-2 py-1.5 space-y-1.5">
+                    <p className="text-xs font-semibold text-gray-500">Auto-clean completed</p>
+                    <Select
+                      value={String(taskRetainAfterDays)}
+                      onValueChange={(v) => updateTaskRetainMutation.mutate(Number(v))}
+                    >
+                      <SelectTrigger size="sm" className="w-full bg-white">
+                        <SelectValue>{taskRetainAfterDays} days</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7">7 days</SelectItem>
+                        <SelectItem value="14">14 days</SelectItem>
+                        <SelectItem value="30">30 days</SelectItem>
+                        <SelectItem value="60">60 days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-gray-400 leading-snug">
+                      Standalone tasks deleted; tasks linked to emails are archived until the source emails are also removed.
+                    </p>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
           <div className="flex min-h-7 justify-start sm:min-w-[180px] sm:justify-end">
