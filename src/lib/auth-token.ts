@@ -32,7 +32,10 @@ export async function setSessionCookie(token: string, remember = false) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    ...(remember ? { maxAge: SESSION_MAX_AGE_REMEMBER_SECONDS } : {}),
+    ...(remember ? {
+      maxAge: SESSION_MAX_AGE_REMEMBER_SECONDS,
+      expires: new Date(Date.now() + SESSION_MAX_AGE_REMEMBER_SECONDS * 1000),
+    } : {}),
     path: '/',
   })
 }

@@ -279,10 +279,11 @@ export async function GET(req: NextRequest) {
     const { rawToken } = await createUserSession({
       userId: targetUserId,
       userEmail: gmailEmail,
+      remember: true,
       request: req,
       sendNewDeviceAlert: false,
     })
-    await setSessionCookie(rawToken)
+    await setSessionCookie(rawToken, true)
 
     return NextResponse.redirect(await dashboardRedirectFor(targetUserId))
   } catch (err) {
