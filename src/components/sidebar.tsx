@@ -11,11 +11,13 @@ import {
   FileText,
   Settings,
   Zap,
+  HelpCircle,
 } from 'lucide-react'
 import { useAuth } from '@/lib/use-auth'
 import { useQuery } from '@tanstack/react-query'
 import { CACHE_TIME } from '@/lib/query-cache'
 import { UpgradeModal } from '@/components/upgrade-modal'
+import { FeedbackModal } from '@/components/feedback-modal'
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -35,6 +37,7 @@ export function Sidebar({
   const pathname = usePathname()
   const { user } = useAuth()
   const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
 
   const { data: quotaRes } = useQuery({
     queryKey: ['quota'],
@@ -106,7 +109,18 @@ export function Sidebar({
           })}
         </nav>
 
-        <div className="border-t border-gray-200/80 px-4 py-4">
+        <div className="border-t border-gray-200/80 px-4 py-4 space-y-3">
+          <button
+            type="button"
+            onClick={() => setFeedbackOpen(true)}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-white hover:text-gray-900 hover:shadow-sm active:scale-[0.99]"
+          >
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+              <HelpCircle className="h-4 w-4" />
+            </div>
+            <span className="flex-1">Help & feedback</span>
+          </button>
+
           {user?.plan === 'pro' ? (
             <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2.5">
               <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-600">
@@ -157,6 +171,7 @@ export function Sidebar({
         </div>
 
         <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} />
+        <FeedbackModal open={feedbackOpen} onOpenChange={setFeedbackOpen} />
       </aside>
     </>
   )

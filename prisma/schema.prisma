@@ -55,6 +55,7 @@ model User {
   stepUpTokens                StepUpToken[]
   tasks                       Task[]
   identities                  UserIdentity[]
+  feedbacks                   Feedback[]
 }
 
 model Account {
@@ -463,6 +464,19 @@ model DeletedEmailMarker {
 
   @@unique([userId, accountId, gmailMessageId])
   @@index([userId, gmailMessageId])
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String
+  category  String
+  message   String
+  email     String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([category, createdAt])
 }
 
 enum RetentionStatus {
