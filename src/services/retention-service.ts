@@ -16,6 +16,7 @@ import type { EmailSnapshot, PolicySnapshot } from '@/lib/retention-engine'
 import * as retentionRepo from '@/repositories/retention-repo'
 import * as attachmentRepo from '@/repositories/attachment-repo'
 import * as emailRepo from '@/repositories/email-repo'
+import * as digestRepo from '@/repositories/digest-repo'
 import { cleanupTasksForUser } from '@/services/task-cleanup-service'
 import { fetchGmailMessageBody } from '@/integrations/gmail/client'
 import { prisma } from '@/lib/prisma'
@@ -55,6 +56,9 @@ export type RetentionResult = {
 // ---------------------------------------------------------------------------
 
 const BATCH_SIZE = 100
+
+const DIGEST_DAILY_RETENTION_DAYS = 30
+const DIGEST_WEEKLY_RETENTION_DAYS = 90
 
 // ---------------------------------------------------------------------------
 // Preview (read-only)
@@ -274,6 +278,24 @@ export async function executeRetention(
     } catch (err) {
       errorCount++
       errors.push(`task cleanup failed: ${errorMessage(err)}`)
+    }
+
+    // Digest cleanup: hard-delete daily digests older than 30 days
+    // and weekly digests older than 90 days (based on periodEnd).
+    try {
+      const { dailyDeleted, weeklyDeleted } = await digestRepo.deleteExpiredDigests(
+        userId,
+        DIGEST_DAILY_RETENTION_DAYS,
+        DIGEST_WEEKLY_RETENTION_DAYS
+      )
+      if (dailyDeleted > 0 || weeklyDeleted > 0) {
+        console.log(
+          `[retention] user=${userId} digests deleted: daily=${dailyDeleted} weekly=${weeklyDeleted}`
+        )
+      }
+    } catch (err) {
+      errorCount++
+      errors.push(`digest cleanup failed: ${errorMessage(err)}`)
     }
   } catch (err) {
     errorCount++

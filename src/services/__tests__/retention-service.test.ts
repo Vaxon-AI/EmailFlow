@@ -33,6 +33,10 @@ vi.mock('@/services/task-cleanup-service', () => ({
   cleanupTasksForUser: vi.fn(),
 }))
 
+vi.mock('@/repositories/digest-repo', () => ({
+  deleteExpiredDigests: vi.fn(),
+}))
+
 vi.mock('@/integrations/gmail/client', () => ({
   fetchGmailMessageBody: vi.fn(),
 }))
@@ -54,6 +58,7 @@ import * as attachmentRepo from '@/repositories/attachment-repo'
 import * as emailRepo from '@/repositories/email-repo'
 import { cleanupTasksForUser } from '@/services/task-cleanup-service'
 import { fetchGmailMessageBody } from '@/integrations/gmail/client'
+import * as digestRepo from '@/repositories/digest-repo'
 import { prisma } from '@/lib/prisma'
 import {
   previewRetention,
@@ -118,6 +123,7 @@ const mockPurgeAttachments = attachmentRepo.markAttachmentsPurged as ReturnType<
 
 const mockDismissStale = emailRepo.dismissStaleReviewEmails as ReturnType<typeof vi.fn>
 const mockCleanupTasks = cleanupTasksForUser as ReturnType<typeof vi.fn>
+const mockDeleteDigests = digestRepo.deleteExpiredDigests as ReturnType<typeof vi.fn>
 
 const mockFetchGmail = fetchGmailMessageBody as ReturnType<typeof vi.fn>
 const mockEmailFindFirst = (prisma.email.findFirst as ReturnType<typeof vi.fn>)
@@ -142,6 +148,7 @@ function setupDefaultMocks() {
   mockPurgeAttachments.mockResolvedValue(undefined)
   mockDismissStale.mockResolvedValue(0)
   mockCleanupTasks.mockResolvedValue({ hardDeleted: 0, softArchived: 0, purgedFromArchive: 0 })
+  mockDeleteDigests.mockResolvedValue({ dailyDeleted: 0, weeklyDeleted: 0 })
 }
 
 beforeEach(() => {

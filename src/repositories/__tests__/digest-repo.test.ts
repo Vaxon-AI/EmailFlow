@@ -14,7 +14,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 import { prisma } from '@/lib/prisma'
-import { createDigest } from '../digest-repo'
+import { createDigest, deleteExpiredDigests } from '../digest-repo'
 
 const mockDigest = vi.mocked(prisma.digest)
 const mockTransaction = vi.mocked(prisma.$transaction)
@@ -96,5 +96,38 @@ describe('createDigest', () => {
     expect(mockDigest.deleteMany).toHaveBeenCalledWith({
       where: { id: { in: ['weekly-duplicate-1', 'weekly-duplicate-2'] } },
     })
+  })
+})
+
+describe('deleteExpiredDigests', () => {
+  it('issues per-period deleteMany calls with the correct cutoffs and returns counts', async () => {
+    const now = new Date('2026-05-11T00:00:00Z')
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+
+    mockDigest.deleteMany
+      .mockResolvedValueOnce({ count: 3 } as never)
+      .mockResolvedValueOnce({ count: 2 } as never)
+
+    const result = await deleteExpiredDigests('user-1', 30, 90)
+
+    expect(result).toEqual({ dailyDeleted: 3, weeklyDeleted: 2 })
+    expect(mockDigest.deleteMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        userId: 'user-1',
+        period: 'daily',
+        periodEnd: { lt: new Date('2026-04-11T00:00:00Z') },
+      },
+    })
+    expect(mockDigest.deleteMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        userId: 'user-1',
+        period: 'weekly',
+        periodEnd: { lt: new Date('2026-02-10T00:00:00Z') },
+      },
+    })
+    expect(mockTransaction).toHaveBeenCalledOnce()
+
+    vi.useRealTimers()
   })
 })

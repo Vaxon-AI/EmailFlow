@@ -84,3 +84,25 @@ export async function findDigestsPaginated(
 
   return { digests, total }
 }
+
+export async function deleteExpiredDigests(
+  userId: string,
+  dailyRetentionDays: number,
+  weeklyRetentionDays: number
+): Promise<{ dailyDeleted: number; weeklyDeleted: number }> {
+  const now = Date.now()
+  const dayMs = 24 * 60 * 60 * 1000
+  const dailyCutoff = new Date(now - dailyRetentionDays * dayMs)
+  const weeklyCutoff = new Date(now - weeklyRetentionDays * dayMs)
+
+  const [daily, weekly] = await prisma.$transaction([
+    prisma.digest.deleteMany({
+      where: { userId, period: 'daily', periodEnd: { lt: dailyCutoff } },
+    }),
+    prisma.digest.deleteMany({
+      where: { userId, period: 'weekly', periodEnd: { lt: weeklyCutoff } },
+    }),
+  ])
+
+  return { dailyDeleted: daily.count, weeklyDeleted: weekly.count }
+}
