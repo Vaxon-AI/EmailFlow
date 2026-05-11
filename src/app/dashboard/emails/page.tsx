@@ -568,6 +568,16 @@ function EmailsContent() {
     placeholderData: (previous) => previous,
   })
 
+  // Authoritative unclassified count, shared with the Header chip. Driving the
+  // Unclassified tab off this (instead of a client-side filter over the
+  // current page) keeps the two consistent even if some matching email isn't
+  // in the fetched page.
+  const { data: unclassifiedRes } = useQuery<{ data: { count: number } }>({
+    queryKey: ['emails', 'unclassified-count'],
+    queryFn: () => fetch('/api/emails/unclassified-count').then((r) => r.json()),
+    staleTime: 0,
+  })
+
   const emails = useMemo(() => (res?.data || []) as EmailItem[], [res?.data])
   const meta = (res as QueryResponse<EmailItem[]>)?.meta
 
@@ -594,7 +604,7 @@ function EmailsContent() {
   const trackedCount = emails.filter(isTrackedEmail).length
   const infoCount = emails.filter(isFyiEmail).length
   const ignoredCount = emails.filter(isIgnoredEmail).length
-  const unclassifiedCount = emails.filter(isUnclassifiedEmail).length
+  const unclassifiedCount = unclassifiedRes?.data?.count ?? 0
   const pendingCount = emails.filter((e) => e.processingStatus === 'pending').length
 
   const tabs: { key: Tab; label: string; count: number }[] = [

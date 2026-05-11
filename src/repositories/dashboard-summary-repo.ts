@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { getPriorityBand } from '@/types/task'
 import { Prisma } from '@prisma/client'
+import { countAwaitingReview } from '@/repositories/email-repo'
 
 type PriorityCounts = {
   critical: number
@@ -86,6 +87,7 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     userInfo,
     tasks,
     attentionEmails,
+    awaitingReviewCount,
     allTimeAttentionEmailsRaw,
     allTimeAttentionEmailCountRaw,
     completedMomentumTasks,
@@ -179,6 +181,10 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       take: 5,
       select: { id: true, subject: true, sender: true, classification: true },
     }),
+    // Global "awaiting review" count — ignores dashboard project/identity/time
+    // filters so the dashboard agrees with the global Header chip and the
+    // Inbox's Unclassified tab.
+    countAwaitingReview(userId),
     isAllView
       ? Promise.resolve(null)
       : prisma.email.findMany({
@@ -260,7 +266,7 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
   const allTimeAttentionEmails = allTimeAttentionEmailsRaw ?? attentionEmails
   const allTimeAttentionEmailCount = allTimeAttentionEmailCountRaw ?? attentionEmails.length
 
-  const stats = buildStats(emailGroups, linkedActionEmails, needsReviewCount, trackedCount, taskGroups, userInfo)
+  const stats = buildStats(emailGroups, linkedActionEmails, needsReviewCount, trackedCount, awaitingReviewCount, taskGroups, userInfo)
   const taskSummary = {
     ...buildTaskSummary(tasks, stats.tasks, aiTaskGroups, period, now),
     upcomingCount: dueOrOverdueCount,
@@ -278,6 +284,7 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     allTimeLinkedActionEmails,
     allTimeNeedsReviewCount,
     allTimeTrackedCount,
+    awaitingReviewCount,
     allTimeTaskGroups,
     userInfo,
   )
@@ -399,6 +406,7 @@ function buildStats(
   linkedActionEmails: number,
   needsReviewCount: number,
   trackedCount: number,
+  awaitingReviewCount: number,
   taskGroups: Array<{ status: string; _count: { id: number } }>,
   userInfo: {
     lastSyncAt: Date | null
@@ -416,15 +424,9 @@ function buildStats(
   const taskCount = (status: string) =>
     taskGroups.find((group) => group.status === status)?._count.id ?? 0
 
-  // "Needs Review" = quota_skipped (AI couldn't run) + uncertain (AI ran but
-  // wasn't confident). Both groups need user attention and now live in the
-  // same tab. We can't perfectly compute "uncertain not actioned" from
-  // emailGroups alone (groupBy is by classification only), but the dashboard
-  // bar chart never shows uncertain in its own bar — that was a gap pre-merge.
-  // For the headline count the approximation `emailCount('uncertain')` is
-  // close enough (small false-positive: uncertain+actioned counted both here
-  // and in Tracked).
-  const unclassifiedTotal = emailCount(null) + emailCount('uncertain')
+  // Authoritative unclassified count from countAwaitingReview — matches the
+  // Header chip and Inbox's Unclassified tab exactly.
+  const unclassifiedTotal = awaitingReviewCount
   // Classified emails (action / awareness / ignore) are visible in the inbox
   // tabs; unclassified + uncertain sit in the Needs Review tab. Keep them
   // out of the headline "total" so it matches what's visible in the bars.

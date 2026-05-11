@@ -13,7 +13,7 @@ import {
 import { RefreshCw, User, LogOut, ChevronRight, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Menu } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { CACHE_TIME, isWorkspaceQueryKey } from '@/lib/query-cache'
+import { isWorkspaceQueryKey } from '@/lib/query-cache'
 import {
   Dialog,
   DialogContent,
@@ -63,7 +63,7 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const { data: unclassifiedRes } = useQuery<{ data: { count: number } }>({
     queryKey: ['emails', 'unclassified-count'],
     queryFn: () => fetch('/api/emails/unclassified-count').then((r) => r.json()),
-    staleTime: CACHE_TIME.stats,
+    staleTime: 0,
   })
   const unclassifiedCount = unclassifiedRes?.data?.count ?? 0
 
