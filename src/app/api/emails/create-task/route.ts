@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
+import * as emailRepo from '@/repositories/email-repo'
 import { getExtractRemaining, incrementExtractUsed, FREE_EXTRACT_LIMIT } from '@/lib/quota'
 
 export async function POST(req: NextRequest) {
@@ -76,6 +77,17 @@ export async function POST(req: NextRequest) {
           },
         }).catch(() => {
           // Ignore if email doesn't exist or already linked
+        })
+      )
+    )
+
+    // Manually creating a task is an explicit "I'm handling this" signal —
+    // move every linked email into the Tracked bucket so it stops showing up
+    // in Needs Action. Per-email catch so one bad row doesn't fail the request.
+    await Promise.all(
+      emailIds.map((emailId: string) =>
+        emailRepo.setEmailBucket(emailId, 'tracked').catch((err: unknown) => {
+          console.error('[create-task] failed to move email to tracked', emailId, err)
         })
       )
     )

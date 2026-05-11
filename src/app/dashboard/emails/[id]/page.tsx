@@ -28,10 +28,10 @@ import {
   ArrowLeft, Mail, Paperclip, Clock, ArrowUpRight,
   CheckSquare, Sparkles, Shield, Plus, Tag, X,
   UserRound, ChevronRight, FolderOpen, Pencil, Loader2, Trash2,
-  Copy, RefreshCw, Save, CheckCircle2, TriangleAlert, EyeOff,
+  Copy, RefreshCw, Save, CheckCircle2, EyeOff,
 } from 'lucide-react'
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import {
@@ -122,10 +122,6 @@ export default function EmailDetailPage() {
   const [generatingReply, setGeneratingReply] = useState(false)
   const [savingReply, setSavingReply] = useState(false)
   const [extracting, setExtracting] = useState(false)
-  const [pollingForTask, setPollingForTask] = useState(false)
-  const [taskJustCreated, setTaskJustCreated] = useState(false)
-  const [extractionTimedOut, setExtractionTimedOut] = useState(false)
-  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const goBack = useCallback(() => {
     if (window.history.length > 1) {
@@ -140,7 +136,6 @@ export default function EmailDetailPage() {
     queryFn: () => fetch(`/api/emails/${emailId}`).then((r) => r.json()),
     staleTime: CACHE_TIME.detail,
     placeholderData: (previous) => previous,
-    refetchInterval: pollingForTask ? 2500 : false,
   })
 
   const email = res?.data
@@ -150,20 +145,6 @@ export default function EmailDetailPage() {
   useEffect(() => {
     setReplyDraft(email?.aiReplyDraft ?? '')
   }, [email?.id, email?.aiReplyDraft])
-
-  useEffect(() => {
-    if (!pollingForTask) return
-    const taskCount = (email?.taskLinks?.length ?? 0) as number
-    if (taskCount === 0) return
-    setPollingForTask(false)
-    if (pollTimeoutRef.current) { clearTimeout(pollTimeoutRef.current); pollTimeoutRef.current = null }
-    setTaskJustCreated(true)
-    setTimeout(() => setTaskJustCreated(false), 5000)
-  }, [pollingForTask, email])
-
-  useEffect(() => {
-    return () => { if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current) }
-  }, [])
 
   async function readErrorMessage(response: Response, fallback: string) {
     try {
@@ -330,23 +311,32 @@ export default function EmailDetailPage() {
       return
     }
     setExtracting(true)
-    setExtractionTimedOut(false)
     try {
       const res = await fetch(`/api/emails/${emailId}/extract-task`, { method: 'POST' })
+      const json = await res.json()
       if (!res.ok) {
-        const json = await res.json()
         showError(json?.error?.message || 'Failed to extract task')
         return
       }
-      setPollingForTask(true)
+      const created = (json?.data?.created ?? 0) as number
+      const deduped = (json?.data?.deduped ?? 0) as number
+      const noCandidates = Boolean(json?.data?.noCandidates)
+
+      if (created > 0 && deduped > 0) {
+        toast.success(`Created ${created} new task${created > 1 ? 's' : ''}; ${deduped} already covered.`)
+      } else if (created > 0) {
+        toast.success(`Created ${created} task${created > 1 ? 's' : ''}.`)
+      } else if (deduped > 0) {
+        toast.info('This email is already covered by existing tasks.')
+      } else if (noCandidates) {
+        toast.info('No actionable items found in this email.')
+      } else {
+        toast.success('Email moved to Tracked.')
+      }
+
       queryClient.invalidateQueries({ queryKey: ['email', emailId] })
       queryClient.invalidateQueries({ queryKey: ['emails'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
-      pollTimeoutRef.current = setTimeout(() => {
-        setPollingForTask(false)
-        setExtractionTimedOut(true)
-        setTimeout(() => setExtractionTimedOut(false), 10000)
-      }, 45000)
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
     } catch {
@@ -496,7 +486,8 @@ export default function EmailDetailPage() {
   const isCompletedTrackedEmail = displayState === 'tracked' && linkedTaskState === 'completed'
   const canShowReplyDraft = email.classification === 'action' || email.classification === 'uncertain' || taskLinks.length > 0 || !!email.aiReplyDraft
   const canGenerateReply = email.retentionStatus !== 'PURGED'
-  const canExtractTask = (email.classification === 'action' || email.classification === 'uncertain') && taskLinks.length === 0
+  const canExtractTask = email.classification === 'action' || email.classification === 'uncertain'
+  const hasLinkedTasks = taskLinks.length > 0
   const hasAiAnalysis = Boolean(
     email.classReasoning &&
     typeof email.classConfidence === 'number' &&
@@ -801,7 +792,7 @@ export default function EmailDetailPage() {
                         {extracting
                           ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           : <Sparkles className="h-3.5 w-3.5" />}
-                        Extract to Task
+                        {hasLinkedTasks ? 'Extract more tasks' : 'Extract to Task'}
                       </Button>
                     )}
                     <Button
@@ -817,22 +808,10 @@ export default function EmailDetailPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {pollingForTask && (
+                {extracting && (
                   <div className="flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-3 text-sm text-brand-700">
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
                     <span>Generating an AI suggestion - this may take a moment...</span>
-                  </div>
-                )}
-                {taskJustCreated && taskLinks.length > 0 && (
-                  <div className="flex items-center gap-2 rounded-xl border border-success-100 bg-success-50/80 px-4 py-3 text-sm text-success">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-                    <span>Task created successfully.</span>
-                  </div>
-                )}
-                {extractionTimedOut && (
-                  <div className="flex items-center gap-2 rounded-xl border border-warning-200 bg-warning-100/70 px-4 py-3 text-sm text-warning-700">
-                    <TriangleAlert className="h-4 w-4 shrink-0" />
-                    <span>Task extraction is taking longer than expected — try refreshing the page.</span>
                   </div>
                 )}
                 {taskLinks.length ? (
@@ -898,7 +877,7 @@ export default function EmailDetailPage() {
                     </div>
                   )
                   })
-                ) : !pollingForTask && !extractionTimedOut && (
+                ) : !extracting && (
                   <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4">
                     <p className="text-sm font-medium text-slate-700">No linked tasks yet</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">

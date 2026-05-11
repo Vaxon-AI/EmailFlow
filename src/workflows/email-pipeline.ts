@@ -58,6 +58,9 @@ export interface PipelineResult {
   taskCreated: boolean
   taskId?: string
   taskIds?: string[]
+  createdTaskIds?: string[]
+  dedupedTaskIds?: string[]
+  noCandidates?: boolean
   skippedByRule: boolean
   reviewCandidate?: PipelineReviewCandidate
 }
@@ -609,9 +612,10 @@ async function findSimilarActiveTask(
   candidate: TaskCandidate,
   matterId: string | null | undefined,
   threadId: string | null,
-  primaryTaskId?: string | null
+  primaryTaskId?: string | null,
+  emailId?: string | null
 ) {
-  if (!matterId && !threadId && !primaryTaskId) return null
+  if (!matterId && !threadId && !primaryTaskId && !emailId) return null
 
   const tasks = await prisma.task.findMany({
     where: {
@@ -622,6 +626,7 @@ async function findSimilarActiveTask(
         ...(primaryTaskId ? [{ id: primaryTaskId }] : []),
         ...(matterId ? [{ matterId }] : []),
         ...(threadId ? [{ emailLinks: { some: { email: { threadId } } } }] : []),
+        ...(emailId ? [{ emailLinks: { some: { emailId } } }] : []),
       ],
     },
     select: { id: true, title: true, summary: true },
@@ -863,7 +868,20 @@ export async function processEmail(
   const candidates = normalizeTaskCandidates(extractionResult)
 
   if (candidates.length === 0) {
-    throw new Error('No task candidates extracted')
+    // Return structurally so callers (e.g. manual Extract-to-Task) can
+    // distinguish "AI found nothing" from a real failure and toast accordingly.
+    return {
+      emailId: email.id,
+      classification: classification.category,
+      confidence: classification.confidence,
+      taskCreated: false,
+      taskIds: [],
+      createdTaskIds: [],
+      dedupedTaskIds: [],
+      noCandidates: true,
+      skippedByRule: false,
+      reviewCandidate,
+    }
   }
 
   if (candidates.length === 1 && currentMatterMemory?.linkedPrimaryTaskId) {
@@ -878,6 +896,8 @@ export async function processEmail(
       taskCreated: false,
       taskId: existingTaskId,
       taskIds: [existingTaskId],
+      createdTaskIds: [],
+      dedupedTaskIds: [existingTaskId],
       skippedByRule: false,
       reviewCandidate,
     }
@@ -896,6 +916,8 @@ export async function processEmail(
       taskCreated: false,
       taskId: existingTaskId,
       taskIds: [existingTaskId],
+      createdTaskIds: [],
+      dedupedTaskIds: [existingTaskId],
       skippedByRule: false,
       reviewCandidate,
     }
@@ -905,6 +927,7 @@ export async function processEmail(
   // ── 11. Score priority ─────────────────────────────────────
   const taskIds: string[] = []
   const createdTaskIds: string[] = []
+  const dedupedTaskIds: string[] = []
   const targetStatus = email.taskStatus ?? 'pending'
 
   for (const candidate of candidates) {
@@ -913,12 +936,14 @@ export async function processEmail(
       candidate,
       currentMatterMemory?.id,
       threadId,
-      currentMatterMemory?.linkedPrimaryTaskId ?? currentThreadMemory?.linkedTaskId
+      currentMatterMemory?.linkedPrimaryTaskId ?? currentThreadMemory?.linkedTaskId,
+      email.id
     )
 
     if (similarTask) {
       await linkEmailToTask(similarTask.id, email.id)
       taskIds.push(similarTask.id)
+      dedupedTaskIds.push(similarTask.id)
       continue
     }
 
@@ -963,6 +988,8 @@ export async function processEmail(
     taskCreated: createdTaskIds.length > 0,
     taskId: primaryTaskId,
     taskIds,
+    createdTaskIds,
+    dedupedTaskIds,
     skippedByRule: false,
     reviewCandidate,
   }
