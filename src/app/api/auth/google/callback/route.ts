@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-session'
 import { createUserSession } from '@/lib/auth-sessions'
@@ -28,6 +29,11 @@ async function dashboardRedirectFor(userId: string): Promise<URL> {
 
 export async function GET(req: NextRequest) {
   try {
+    const cookieStore = await cookies()
+    const rememberCookie = cookieStore.get('google_oauth_remember')
+    const remember = rememberCookie?.value !== '0'
+    cookieStore.set('google_oauth_remember', '', { maxAge: 0, path: '/api/auth/google/callback' })
+
     const [user, searchParams] = [await getCurrentUser(), req.nextUrl.searchParams]
     const code = searchParams.get('code')
     const error = searchParams.get('error')
@@ -279,11 +285,11 @@ export async function GET(req: NextRequest) {
     const { rawToken } = await createUserSession({
       userId: targetUserId,
       userEmail: gmailEmail,
-      remember: true,
+      remember,
       request: req,
       sendNewDeviceAlert: false,
     })
-    await setSessionCookie(rawToken, true)
+    await setSessionCookie(rawToken, remember)
 
     return NextResponse.redirect(await dashboardRedirectFor(targetUserId))
   } catch (err) {
