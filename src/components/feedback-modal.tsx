@@ -20,7 +20,7 @@ import { useAuth } from '@/lib/use-auth'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 
-type Category = 'bug' | 'idea' | 'other'
+type Category = 'Bug' | 'Idea' | 'Other'
 
 const MAX_MESSAGE = 2000
 
@@ -32,7 +32,7 @@ export function FeedbackModal({
   onOpenChange: (open: boolean) => void
 }) {
   const { user } = useAuth()
-  const [category, setCategory] = useState<Category>('idea')
+  const [category, setCategory] = useState<Category>('Idea')
   const [message, setMessage] = useState('')
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -41,7 +41,7 @@ export function FeedbackModal({
     if (open) {
       setEmail(user?.email ?? '')
     } else {
-      setCategory('idea')
+      setCategory('Idea')
       setMessage('')
       setEmail('')
     }
@@ -90,13 +90,23 @@ export function FeedbackModal({
           <div className="space-y-2">
             <Label>Category</Label>
             <Select value={category} onValueChange={(v) => v && setCategory(v as Category)}>
-              <SelectTrigger className="h-9 w-full text-sm">
+              <SelectTrigger size="sm" className="w-full bg-white">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="bug">Bug</SelectItem>
-                <SelectItem value="idea">Idea</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                {(['Bug', 'Idea', 'Other'] as const).map((value) => (
+                  <SelectItem
+                    key={value}
+                    value={value}
+                    className={`cursor-pointer rounded-lg py-1.5 pl-2 text-xs transition-[background-color,color,transform] duration-150 hover:translate-x-0.5 ${
+                      category === value
+                        ? 'bg-brand-50 text-brand-700 focus:bg-brand-50 focus:text-brand-700'
+                        : 'text-slate-600 focus:bg-slate-50 focus:text-slate-800'
+                    }`}
+                  >
+                    {value}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
