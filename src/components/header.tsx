@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/use-auth'
 import { ApiClientError, isSessionFailureCode } from '@/lib/api-client'
@@ -49,7 +49,6 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const queryClient = useQueryClient()
   const pathname = usePathname()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [syncResult, setSyncResult] = useState<SyncResultData | null>(null)
   const [syncResultOpen, setSyncResultOpen] = useState(false)
   const [checkingSyncState, setCheckingSyncState] = useState(false)
@@ -177,22 +176,16 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
     },
   })
 
-  // Dashboard's first-login / "set sync range" modal redirects here with
-  // ?run_sync=1 after the user picks a date range. Strip the param first
-  // (so any re-render of this effect can't double-fire) then kick off sync.
-  useEffect(() => {
-    if (searchParams.get('run_sync') !== '1') return
-    if (syncMutation.isPending) return
-    const params = new URLSearchParams(searchParams.toString())
-    params.delete('run_sync')
-    const query = params.toString()
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
-    syncMutation.mutate()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
-
   return (
     <>
+      <Suspense fallback={null}>
+        <RunSyncOnQueryParam
+          pathname={pathname}
+          router={router}
+          pending={syncMutation.isPending}
+          onTrigger={() => syncMutation.mutate()}
+        />
+      </Suspense>
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-gray-200/80 bg-white/85 px-4 backdrop-blur lg:px-6">
         <div className="flex min-w-0 items-center gap-2 text-sm text-gray-500">
           <button
@@ -279,6 +272,37 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
       />
     </>
   )
+}
+
+// Dashboard's first-login / "set sync range" modal redirects to a dashboard
+// route with ?run_sync=1 after the user picks a date range. We isolate the
+// useSearchParams() call here so the Header itself can be statically
+// prerendered; a Suspense boundary in Header bails out only this subtree.
+function RunSyncOnQueryParam({
+  pathname,
+  router,
+  onTrigger,
+  pending,
+}: {
+  pathname: string
+  router: ReturnType<typeof useRouter>
+  onTrigger: () => void
+  pending: boolean
+}) {
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    if (searchParams.get('run_sync') !== '1') return
+    if (pending) return
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('run_sync')
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+    onTrigger()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  return null
 }
 
 // ============================================================
