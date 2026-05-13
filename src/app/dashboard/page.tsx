@@ -216,34 +216,38 @@ function DashboardContent() {
 
   const handleSyncSetup = useCallback(async (days: number) => {
     setSyncSetupLoading(days)
+    let saved = false
     try {
-      await fetch('/api/settings/sync-range', {
+      const res = await fetch('/api/settings/sync-range', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ days }),
       })
+      saved = res.ok
       markSyncSetupSeen()
     } finally {
       setSyncSetupLoading(null)
       setShowSyncModal(false)
-      router.replace('/dashboard', { scroll: false })
+      router.replace(saved ? '/dashboard?run_sync=1' : '/dashboard', { scroll: false })
     }
   }, [router, markSyncSetupSeen])
 
   const handleCustomConfirm = useCallback(async () => {
     if (!customStartDate) return
     setSyncSetupLoading(-1)
+    let saved = false
     try {
-      await fetch('/api/settings/sync-range', {
+      const res = await fetch('/api/settings/sync-range', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customDate: customStartDate.toISOString() }),
       })
+      saved = res.ok
       markSyncSetupSeen()
     } finally {
       setSyncSetupLoading(null)
       setShowSyncModal(false)
-      router.replace('/dashboard', { scroll: false })
+      router.replace(saved ? '/dashboard?run_sync=1' : '/dashboard', { scroll: false })
     }
   }, [customStartDate, router, markSyncSetupSeen])
 
@@ -257,17 +261,19 @@ function DashboardContent() {
   // pick up exactly the gap (no double-fetch, no over-fetch).
   const handleSyncToLastSync = useCallback(async (lastSyncIso: string) => {
     setSyncSetupLoading(-2)
+    let saved = false
     try {
-      await fetch('/api/settings/sync-range', {
+      const res = await fetch('/api/settings/sync-range', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customDate: lastSyncIso }),
       })
+      saved = res.ok
       markSyncSetupSeen()
     } finally {
       setSyncSetupLoading(null)
       setShowSyncModal(false)
-      router.replace('/dashboard', { scroll: false })
+      router.replace(saved ? '/dashboard?run_sync=1' : '/dashboard', { scroll: false })
     }
   }, [router, markSyncSetupSeen])
 

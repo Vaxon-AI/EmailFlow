@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/use-auth'
 import { ApiClientError, isSessionFailureCode } from '@/lib/api-client'
 import {
@@ -49,6 +49,7 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const queryClient = useQueryClient()
   const pathname = usePathname()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [syncResult, setSyncResult] = useState<SyncResultData | null>(null)
   const [syncResultOpen, setSyncResultOpen] = useState(false)
   const [checkingSyncState, setCheckingSyncState] = useState(false)
@@ -175,6 +176,20 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
       setSyncResultOpen(true)
     },
   })
+
+  // Dashboard's first-login / "set sync range" modal redirects here with
+  // ?run_sync=1 after the user picks a date range. Strip the param first
+  // (so any re-render of this effect can't double-fire) then kick off sync.
+  useEffect(() => {
+    if (searchParams.get('run_sync') !== '1') return
+    if (syncMutation.isPending) return
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('run_sync')
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+    syncMutation.mutate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   return (
     <>
