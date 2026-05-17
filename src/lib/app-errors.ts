@@ -11,6 +11,7 @@ export type AppErrorCode =
   | 'VALIDATION_ERROR'
   | 'SYNC_TEMPORARY_ERROR'
   | 'SYNC_FAILED'
+  | 'EMAIL_SEND_FAILED'
 
 export class AppError extends Error {
   readonly code: AppErrorCode
