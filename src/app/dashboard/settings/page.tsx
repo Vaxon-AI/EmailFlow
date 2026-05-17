@@ -1360,36 +1360,32 @@ function TwoFactorCard({ totpEnabled, onDisabled }: { totpEnabled: boolean; onDi
 // DangerZoneCard
 // ---------------------------------------------------------------------------
 
+const DELETE_CONFIRMATION_PHRASE = 'delete my account'
+
 function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [method, setMethod] = useState<'totp' | 'email'>('email')
+  const [confirmText, setConfirmText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  async function handleRequestDelete() {
-    setConfirmOpen(false)
+  const phraseMatches =
+    confirmText.trim().toLowerCase() === DELETE_CONFIRMATION_PHRASE
+
+  function openConfirm() {
     setError('')
-    setLoading(true)
-    try {
-      const { method: m } = await requestStepUp('delete_account')
-      setMethod(m)
-      setDialogOpen(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start verification')
-    } finally {
-      setLoading(false)
-    }
+    setConfirmText('')
+    setConfirmOpen(true)
   }
 
-  async function handleVerified(token: string) {
-    setDialogOpen(false)
+  async function handleDelete() {
+    if (!phraseMatches) return
+    setConfirmOpen(false)
     setLoading(true)
     try {
       const res = await fetch('/api/auth/account', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stepUpToken: token }),
+        body: JSON.stringify({ confirmation: confirmText }),
       })
       const data = await res.json()
       if (!data.success) {
@@ -1429,7 +1425,7 @@ function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setConfirmOpen(true)}
+              onClick={openConfirm}
               disabled={loading}
               className="gap-2 self-end border-critical-100 text-critical-700 hover:bg-critical-50 hover:text-critical-700 sm:self-auto"
             >
@@ -1440,7 +1436,7 @@ function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
         </CardContent>
       </Card>
 
-      {/* Confirmation dialog before step-up */}
+      {/* Typed-confirmation dialog */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -1453,16 +1449,32 @@ function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
             This will permanently delete your account, all emails, tasks, and connected data.
             There is <strong>no way to undo this</strong>.
           </p>
+          <div className="space-y-2 pt-1">
+            <p className="text-sm text-gray-600">
+              Type <strong>delete my account</strong> to confirm.
+            </p>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="delete my account"
+              autoComplete="off"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && phraseMatches) handleDelete()
+              }}
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => setConfirmOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleRequestDelete} disabled={loading}>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={loading || !phraseMatches}
+            >
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Yes, delete my account'}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
-
-      <StepUpDialog open={dialogOpen} action="delete_account" method={method} onClose={() => setDialogOpen(false)} onVerified={handleVerified} />
     </>
   )
 }

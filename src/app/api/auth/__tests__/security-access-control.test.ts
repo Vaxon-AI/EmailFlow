@@ -84,13 +84,11 @@ describe('IDOR: session revocation', () => {
 
 describe('IDOR: account deletion', () => {
   it('deletes the authenticated user\'s account even if body contains a different userId', async () => {
-    mockConsumeStepUpToken.mockResolvedValue(undefined as never)
     vi.mocked(prisma.user.delete).mockResolvedValue({} as never)
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(null as never)
 
     const req = new Request('http://localhost', {
       method: 'DELETE',
-      body: JSON.stringify({ stepUpToken: 'valid-token', userId: 'victim-user-id' }),
+      body: JSON.stringify({ confirmation: 'delete my account', userId: 'victim-user-id' }),
       headers: { 'content-type': 'application/json' },
     })
 
@@ -100,18 +98,32 @@ describe('IDOR: account deletion', () => {
     expect(prisma.user.delete).not.toHaveBeenCalledWith({ where: { id: 'victim-user-id' } })
   })
 
-  it('step-up token is consumed for the authenticated user, not a body-supplied userId', async () => {
-    mockConsumeStepUpToken.mockResolvedValue(undefined as never)
+  it('rejects deletion with 400 and does not delete when the confirmation phrase is wrong', async () => {
     vi.mocked(prisma.user.delete).mockResolvedValue({} as never)
 
     const req = new Request('http://localhost', {
       method: 'DELETE',
-      body: JSON.stringify({ stepUpToken: 'tok', userId: 'victim-user-id' }),
+      body: JSON.stringify({ confirmation: 'oops', userId: 'user-attacker' }),
       headers: { 'content-type': 'application/json' },
     })
 
-    await deleteAccount(req)
-    expect(mockConsumeStepUpToken).toHaveBeenCalledWith('user-attacker', 'tok', 'delete_account')
+    const res = await deleteAccount(req)
+    expect(res.status).toBe(400)
+    expect(prisma.user.delete).not.toHaveBeenCalled()
+  })
+
+  it('rejects deletion with 400 when the confirmation phrase is missing', async () => {
+    vi.mocked(prisma.user.delete).mockResolvedValue({} as never)
+
+    const req = new Request('http://localhost', {
+      method: 'DELETE',
+      body: JSON.stringify({}),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await deleteAccount(req)
+    expect(res.status).toBe(400)
+    expect(prisma.user.delete).not.toHaveBeenCalled()
   })
 })
 
@@ -169,7 +181,7 @@ describe('Unauthenticated access to protected endpoints', () => {
   it('rejects unauthenticated account deletion with 401', async () => {
     const req = new Request('http://localhost', {
       method: 'DELETE',
-      body: JSON.stringify({ stepUpToken: 'x' }),
+      body: JSON.stringify({ confirmation: 'delete my account' }),
       headers: { 'content-type': 'application/json' },
     })
     const res = await deleteAccount(req)

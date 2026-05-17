@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server'
 import { requireCurrentSessionContext } from '@/lib/auth-session'
-import { errorFromException } from '@/lib/api-helpers'
+import { errorFromException, error as apiError } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
-import { consumeStepUpToken } from '@/lib/step-up-auth'
 import { clearSessionCookie } from '@/lib/auth-token'
+
+const CONFIRMATION_PHRASE = 'delete my account'
 
 /**
  * DELETE /api/auth/account
- * Body: { stepUpToken: string }
+ * Body: { confirmation: string }
  *
  * Permanently deletes the authenticated user's account and all associated data.
- * Requires a step-up token with action='delete_account'.
+ * The caller must type the exact phrase "delete my account" to confirm — this is
+ * a destructive-action confirmation, not re-authentication. The session itself is
+ * the auth boundary (requireCurrentSessionContext); userId is taken from the
+ * session and the body userId is ignored (IDOR-safe).
  *
  * Cascade deletes are configured on the User model in the Prisma schema,
- * so all related records (sessions, emails, tasks, etc.) are removed automatically.
+ * so all related records (sessions, emails, tasks, memories, etc.) are removed
+ * automatically.
  */
 export async function DELETE(req: Request) {
   try {
@@ -21,15 +26,21 @@ export async function DELETE(req: Request) {
 
     const { userId } = context.session
     const body = await req.json()
-    const { stepUpToken } = body as { stepUpToken?: string }
+    const { confirmation } = body as { confirmation?: string }
 
-    if (!stepUpToken) {
-      return NextResponse.json({ success: false, error: 'stepUpToken is required' }, { status: 400 })
+    if (
+      typeof confirmation !== 'string' ||
+      confirmation.trim().toLowerCase() !== CONFIRMATION_PHRASE
+    ) {
+      return apiError(
+        'VALIDATION_ERROR',
+        'Please type "delete my account" to confirm.',
+        400,
+      )
     }
 
-    await consumeStepUpToken(userId, stepUpToken, 'delete_account')
-
-    // Delete the user — cascade will remove sessions, emails, tasks, digests, etc.
+    // Delete the user — cascade will remove sessions, emails, tasks, digests,
+    // and the per-user memory tables (see schema onDelete: Cascade).
     await prisma.user.delete({ where: { id: userId } })
 
     // Clear the session cookie so the browser doesn't hold a dangling token
