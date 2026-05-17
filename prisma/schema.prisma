@@ -56,6 +56,9 @@ model User {
   tasks                       Task[]
   identities                  UserIdentity[]
   feedbacks                   Feedback[]
+  senderMemories              SenderMemory[]
+  matterMemories              MatterMemory[]
+  threadMemories              ThreadMemory[]
 }
 
 model Account {
@@ -272,6 +275,7 @@ model SenderMemory {
   awarenessCount Int      @default(0)
   ignoreCount    Int      @default(0)
   lastUpdated    DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, sender])
 }
@@ -298,6 +302,7 @@ model MatterMemory {
   projectContext      ProjectContext? @relation(fields: [projectContextId], references: [id])
   threads             ThreadMemory[]
   tasks               Task[]
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, lastMessageAt(sort: Desc)])
   @@index([userId, status, lastMessageAt(sort: Desc)])
@@ -382,6 +387,7 @@ model ThreadMemory {
   updatedAt          DateTime      @updatedAt
   matterId           String?
   matter             MatterMemory? @relation(fields: [matterId], references: [id])
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, threadId])
   @@index([matterId])
