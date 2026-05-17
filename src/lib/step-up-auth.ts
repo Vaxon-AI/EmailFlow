@@ -87,7 +87,18 @@ export async function requestStepUp(
     },
   })
 
-  await sendStepUpOtpEmail({ to: user.email, otp, action })
+  try {
+    await sendStepUpOtpEmail({ to: user.email, otp, action })
+  } catch (err) {
+    // Surface a clear, actionable message instead of a generic 500.
+    // The underlying error is logged by the calling route.
+    console.error('[step-up] failed to send OTP email', err)
+    throw new AppError(
+      'EMAIL_SEND_FAILED',
+      'Could not send the verification email. Please try again later.',
+      502,
+    )
+  }
 
   return { method: 'email' }
 }

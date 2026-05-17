@@ -1392,7 +1392,13 @@ function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
         body: JSON.stringify({ stepUpToken: token }),
       })
       const data = await res.json()
-      if (!data.success) throw new Error(data.error?.message ?? data.error ?? 'Failed to delete account')
+      if (!data.success) {
+        const msg =
+          typeof data.error === 'string'
+            ? data.error
+            : data.error?.message ?? data.error?.code ?? 'Failed to delete account'
+        throw new Error(msg)
+      }
       toast.success('Account deleted')
       onDeleted()
     } catch (err) {

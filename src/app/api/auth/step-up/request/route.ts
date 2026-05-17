@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { errorFromException } from '@/lib/api-helpers'
+import { errorFromException, error as apiError } from '@/lib/api-helpers'
 import { requireCurrentUser } from '@/lib/auth-session'
 import { requestStepUp, type StepUpAction } from '@/lib/step-up-auth'
 
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     const action = body?.action as StepUpAction
 
     if (!action || !VALID_ACTIONS.includes(action)) {
-      return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 })
+      return apiError('VALIDATION_ERROR', 'Invalid action', 400)
     }
 
     const { method } = await requestStepUp(user.id, action)

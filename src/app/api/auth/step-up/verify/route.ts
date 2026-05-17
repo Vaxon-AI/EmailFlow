@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireCurrentUser } from '@/lib/auth-session'
-import { errorFromException } from '@/lib/api-helpers'
+import { errorFromException, error as apiError } from '@/lib/api-helpers'
 import { verifyStepUp, type StepUpAction } from '@/lib/step-up-auth'
 
 const VALID_ACTIONS: StepUpAction[] = ['change_password', 'disable_totp', 'delete_account']
@@ -20,11 +20,11 @@ export async function POST(req: Request) {
     const { action, code } = body as { action: StepUpAction; code: string }
 
     if (!action || !VALID_ACTIONS.includes(action)) {
-      return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 })
+      return apiError('VALIDATION_ERROR', 'Invalid action', 400)
     }
 
     if (!code || typeof code !== 'string') {
-      return NextResponse.json({ success: false, error: 'Verification code is required' }, { status: 400 })
+      return apiError('VALIDATION_ERROR', 'Verification code is required', 400)
     }
 
     const stepUpToken = await verifyStepUp(user.id, code.trim(), action)
