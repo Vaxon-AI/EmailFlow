@@ -166,9 +166,7 @@ function DashboardContent() {
   const selectedProjectIds = useMemo(() => parseContextParam(searchParams, 'project'), [searchParams])
   const selectedView = parseDashboardView(searchParams.get('view'))
   const timezoneOffset = useMemo(() => new Date().getTimezoneOffset(), [])
-  const [showSyncModal, setShowSyncModal] = useState(() =>
-    searchParams.get('gmail_connected') === '1' || searchParams.get('show_sync') === 'stale'
-  )
+  const [showSyncModal, setShowSyncModal] = useState(false)
   // syncSetupLoading uses days as the value for preset buttons; -1 is the
   // sentinel for the custom-date confirm action; -2 is the sentinel for
   // "to last sync" (stale-aware preset). No real preset uses negative days.
@@ -194,19 +192,25 @@ function DashboardContent() {
     router.replace('/dashboard', { scroll: false })
   }, [searchParams, router])
 
-  // Strip ?gmail_connected=1 / ?show_sync=stale from the URL on mount once
-  // they've been read into showSyncModal state. Without this, the param
-  // lingers and any future remount (e.g. navigating back from another route
-  // in the same SPA session) re-opens the modal — what the user reported
-  // as "弹窗反复弹".
+  // Open the sync modal when ?gmail_connected=1 / ?show_sync=stale appears,
+  // then immediately strip the param from the URL.
+  //
+  // This must watch searchParams (not just run on mount): the header sync
+  // button does router.push('/dashboard?show_sync=stale') for never/stale
+  // users. When the user is already on /dashboard that push does NOT remount
+  // this component, so a mount-only read would never see the param and the
+  // modal would never open — the "click sync, nothing happens" bug.
+  //
+  // Stripping the param right after opening keeps the modal state in
+  // showSyncModal, so the follow-up searchParams change (param gone) fails
+  // the condition and is a no-op — the modal does not re-open on its own
+  // (avoids the earlier "弹窗反复弹" regression).
   useEffect(() => {
     if (searchParams.get('gmail_connected') === '1' || searchParams.get('show_sync') === 'stale') {
+      setShowSyncModal(true)
       router.replace('/dashboard', { scroll: false })
     }
-    // Run once per mount; deps intentionally empty so a later searchParams
-    // change (e.g. setting view filter) doesn't fire this again.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [searchParams, router])
 
   const markSyncSetupSeen = useCallback(() => {
     // Fire-and-forget — failures here only mean the user might see the dialog
