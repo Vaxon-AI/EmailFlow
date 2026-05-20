@@ -201,8 +201,16 @@ function DashboardContent() {
   const [syncSelection, setSyncSelection] = useState<SyncSelection>({ type: 'preset', days: 7 })
 
   useEffect(() => {
+    console.log('[sync-debug] DashboardContent mounted, initial searchParams=', searchParams.toString())
+    return () => console.log('[sync-debug] DashboardContent unmounted')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     const gmailError = searchParams.get('gmail_error')
+    console.log('[sync-debug] dashboard gmail_error effect:', { gmail_error: gmailError, allParams: searchParams.toString() })
     if (!gmailError) return
+    console.log('[sync-debug] dashboard stripping params due to gmail_error')
     const messages: Record<string, string> = {
       google_account_already_bound: 'This Google account is already linked to another user.',
       token_exchange_failed: 'Google sign-in failed. Please try again.',
@@ -231,7 +239,13 @@ function DashboardContent() {
   // the condition and is a no-op — the modal does not re-open on its own
   // (avoids the earlier "弹窗反复弹" regression).
   useEffect(() => {
+    console.log('[sync-debug] dashboard show_sync effect:', {
+      gmail_connected: searchParams.get('gmail_connected'),
+      show_sync: searchParams.get('show_sync'),
+      allParams: searchParams.toString(),
+    })
     if (searchParams.get('gmail_connected') === '1' || searchParams.get('show_sync') === 'stale') {
+      console.log('[sync-debug] dashboard setShowSyncModal(true) + replace /dashboard')
       setShowSyncModal(true)
       router.replace('/dashboard', { scroll: false })
     }
