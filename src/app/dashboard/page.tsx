@@ -150,6 +150,68 @@ type SyncPreview = {
   wouldExceedQuota: boolean
 }
 
+// Personalisation step — onboarding profile. Frontend-only for now: persisted
+// to localStorage so the user can revisit it in Settings later without losing
+// state across reloads. Backend wiring will follow.
+const ONBOARDING_PROFILE_STORAGE_KEY = 'emailflow.onboarding.profile'
+
+const ONBOARDING_ROLE_OPTIONS = [
+  'Student',
+  'Professional',
+  'Manager',
+  'Business Owner',
+  'Freelancer',
+  'Job Seeker',
+  'Researcher',
+  'Academic',
+] as const
+
+const ONBOARDING_PURPOSE_OPTIONS = [
+  'Work',
+  'Study',
+  'Job Search',
+  'Personal Admin',
+  'Research',
+  'Side Project',
+  'Client Work',
+  'Mixed Use',
+] as const
+
+const ONBOARDING_FOCUS_OPTIONS = [
+  'Deadlines',
+  'Follow-ups',
+  'Meetings',
+  'Applications',
+  'Forms',
+  'Approvals',
+  'Decisions',
+  'Invoices',
+  'Payments',
+  'Client Requests',
+  'Reports',
+  'Documents',
+  'Study Tasks',
+  'Admin Tasks',
+  'Important Replies',
+  'Events',
+] as const
+
+const ONBOARDING_ROLE_LIMIT = 2
+const ONBOARDING_PURPOSE_LIMIT = 2
+const ONBOARDING_FOCUS_LIMIT = 5
+
+type OnboardingProfile = {
+  role: string[]
+  purpose: string[]
+  focusAreas: string[]
+  savedAt: string
+}
+
+type SyncSelection =
+  | { type: 'preset'; days: 7 | 15 | 30 }
+  | { type: 'custom' }
+  | { type: 'last-sync' }
+
 export default function DashboardPage() {
   return (
     <Suspense fallback={<DashboardPageFallback />}>
@@ -174,6 +236,14 @@ function DashboardContent() {
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined)
   const [customCalendarOpen, setCustomCalendarOpen] = useState(false)
   const [quotaUpgradeOpen, setQuotaUpgradeOpen] = useState(false)
+
+  // Onboarding step state — two-step modal: personalisation → sync range.
+  const [onboardingStep, setOnboardingStep] = useState<'personalisation' | 'sync-range'>('personalisation')
+  const [onboardingRole, setOnboardingRole] = useState<string[]>([])
+  const [onboardingPurpose, setOnboardingPurpose] = useState<string[]>([])
+  const [onboardingFocus, setOnboardingFocus] = useState<string[]>([])
+  // Defaults to the 7-day preset to match the mockup's pre-highlighted card.
+  const [syncSelection, setSyncSelection] = useState<SyncSelection>({ type: 'preset', days: 7 })
 
   useEffect(() => {
     const gmailError = searchParams.get('gmail_error')
@@ -218,6 +288,35 @@ function DashboardContent() {
     fetch('/api/settings/sync-setup-seen', { method: 'POST' }).catch(() => {})
   }, [])
 
+  // Toggle a value in/out of a multi-select chip group, capped at `limit`.
+  // Returning unchanged state when at capacity (rather than dropping the
+  // earliest pick) keeps the user's prior selections stable — they have to
+  // deselect deliberately before adding a new one.
+  const toggleOnboardingChip = useCallback(
+    (current: string[], value: string, limit: number): string[] => {
+      if (current.includes(value)) return current.filter((v) => v !== value)
+      if (current.length >= limit) return current
+      return [...current, value]
+    },
+    []
+  )
+
+  const persistOnboardingProfile = useCallback(() => {
+    if (typeof window === 'undefined') return
+    if (onboardingRole.length === 0 && onboardingPurpose.length === 0 && onboardingFocus.length === 0) return
+    try {
+      const profile: OnboardingProfile = {
+        role: onboardingRole,
+        purpose: onboardingPurpose,
+        focusAreas: onboardingFocus,
+        savedAt: new Date().toISOString(),
+      }
+      window.localStorage.setItem(ONBOARDING_PROFILE_STORAGE_KEY, JSON.stringify(profile))
+    } catch {
+      // localStorage can throw in private mode / quota-full — non-fatal here.
+    }
+  }, [onboardingRole, onboardingPurpose, onboardingFocus])
+
   const handleSyncSetup = useCallback(async (days: number) => {
     setSyncSetupLoading(days)
     let saved = false
@@ -255,11 +354,23 @@ function DashboardContent() {
     }
   }, [customStartDate, router, markSyncSetupSeen])
 
-  const handleSyncSkip = useCallback(() => {
-    markSyncSetupSeen()
-    setShowSyncModal(false)
-    router.replace('/dashboard', { scroll: false })
-  }, [router, markSyncSetupSeen])
+  // Step-1 actions: Continue (save preferences + advance) and Skip
+  // (advance without saving). Both land on the sync-range step.
+  const handlePersonalisationContinue = useCallback(() => {
+    persistOnboardingProfile()
+    if (onboardingRole.length > 0 || onboardingPurpose.length > 0 || onboardingFocus.length > 0) {
+      toast.success('Your preferences have been saved. You can update them later in Settings.')
+    }
+    setOnboardingStep('sync-range')
+  }, [persistOnboardingProfile, onboardingRole, onboardingPurpose, onboardingFocus])
+
+  const handlePersonalisationSkip = useCallback(() => {
+    setOnboardingStep('sync-range')
+  }, [])
+
+  const handleSyncBack = useCallback(() => {
+    setOnboardingStep('personalisation')
+  }, [])
 
   // Stale-aware preset: set sync window to the user's last sync moment, so we
   // pick up exactly the gap (no double-fetch, no over-fetch).
@@ -323,6 +434,47 @@ function DashboardContent() {
   const lastSyncAtIso = syncState?.kind === 'fresh' || syncState?.kind === 'stale' ? syncState.lastSyncAt : undefined
   const daysSinceLastSync = isStale && typeof syncState?.daysSince === 'number' ? syncState.daysSince : 0
   const staleAnchor: 7 | 15 | 30 = daysSinceLastSync < 15 ? 7 : daysSinceLastSync < 30 ? 15 : 30
+
+  // Step-2 action — Start Sync. Dispatches to the existing preset / custom /
+  // last-sync handlers based on which card the user picked. Persists the
+  // onboarding profile too in case the user landed here via Skip and then
+  // came Back to fill it in.
+  const handleStartSync = useCallback(() => {
+    persistOnboardingProfile()
+    if (syncSelection.type === 'preset') {
+      handleSyncSetup(syncSelection.days)
+      return
+    }
+    if (syncSelection.type === 'custom') {
+      if (!customStartDate) return
+      handleCustomConfirm()
+      return
+    }
+    if (syncSelection.type === 'last-sync') {
+      if (!lastSyncAtIso) return
+      handleSyncToLastSync(lastSyncAtIso)
+    }
+  }, [
+    syncSelection,
+    customStartDate,
+    lastSyncAtIso,
+    handleSyncSetup,
+    handleCustomConfirm,
+    handleSyncToLastSync,
+    persistOnboardingProfile,
+  ])
+
+  // Default the highlighted sync card to the stale anchor (15/30) instead of
+  // the recommended 7 — for stale users that's the "main" card shown.
+  // Only runs once per syncState transition to avoid clobbering the user's pick.
+  useEffect(() => {
+    if (!isStale) return
+    setSyncSelection((prev) =>
+      prev.type === 'preset' && prev.days === 7 && staleAnchor !== 7
+        ? { type: 'preset', days: staleAnchor }
+        : prev
+    )
+  }, [isStale, staleAnchor])
 
   // For stale users, fetch a preview of "from your last sync to now" alongside the anchor preset.
   const { data: lastSyncPreview, isFetching: lastSyncPreviewLoading } = useQuery<SyncPreview | null>({
@@ -819,7 +971,7 @@ function DashboardContent() {
           )}
         </CardContent>
       </Card>
-      {/* First-login sync setup modal */}
+      {/* First-login sync setup modal — two steps: personalisation → sync range. */}
       <Dialog
         open={showSyncModal}
         onOpenChange={(v) => {
@@ -827,154 +979,216 @@ function DashboardContent() {
           // Mark seen on ANY close (Escape, click-outside, etc.) so we don't
           // re-pester the user on next login. The handlers below also call
           // markSyncSetupSeen — that's fine, the API is idempotent.
-          if (!v) markSyncSetupSeen()
+          if (!v) {
+            markSyncSetupSeen()
+            // Reset to step 1 so re-opening starts fresh (e.g. via the header
+            // sync button) — otherwise the user lands on step 2 with stale state.
+            setOnboardingStep('personalisation')
+          }
         }}
       >
-        <DialogContent showCloseButton={false} className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{isStale ? 'Welcome back' : 'Set your sync range'}</DialogTitle>
-            <DialogDescription>
-              {isStale
-                ? `It’s been ${daysSinceLastSync} days since your last sync. Pick a window to catch up.`
-                : 'How far back should EmailFlow pull your email? You can change this anytime in Settings.'}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          showCloseButton={false}
+          className={onboardingStep === 'personalisation' ? 'max-w-2xl sm:max-w-2xl' : 'max-w-md sm:max-w-md'}
+        >
+          {onboardingStep === 'personalisation' ? (
+            <PersonalisationStep
+              role={onboardingRole}
+              purpose={onboardingPurpose}
+              focusAreas={onboardingFocus}
+              onToggleRole={(value) =>
+                setOnboardingRole((cur) => toggleOnboardingChip(cur, value, ONBOARDING_ROLE_LIMIT))
+              }
+              onTogglePurpose={(value) =>
+                setOnboardingPurpose((cur) => toggleOnboardingChip(cur, value, ONBOARDING_PURPOSE_LIMIT))
+              }
+              onToggleFocus={(value) =>
+                setOnboardingFocus((cur) => toggleOnboardingChip(cur, value, ONBOARDING_FOCUS_LIMIT))
+              }
+              onContinue={handlePersonalisationContinue}
+              onSkip={handlePersonalisationSkip}
+            />
+          ) : (
+            <>
+              <DialogHeader>
+                <p className="text-xs font-medium tracking-wide text-brand-600">Step 2 of 2</p>
+                <DialogTitle>{isStale ? 'Welcome back' : 'Choose your email sync range'}</DialogTitle>
+                <DialogDescription>
+                  {isStale
+                    ? `It’s been ${daysSinceLastSync} days since your last sync. Pick a window to catch up.`
+                    : 'EmailFlow will scan this range and use your preferences to identify important emails and tasks.'}
+                </DialogDescription>
+              </DialogHeader>
 
-          <div className="rounded-xl border border-warning-200 bg-warning-100/60 px-4 py-3 text-xs text-warning-700">
-            <p className="font-semibold">Free plan limit</p>
-            <p className="mt-0.5 text-warning">
-              EmailFlow classifies up to <strong>100 emails per month</strong> on the free plan. If your inbox is busy,
-              pick a smaller window so you don&apos;t hit the cap on day one.
-            </p>
-          </div>
+              <div className="rounded-xl border border-warning-200 bg-warning-100/60 px-4 py-3 text-xs text-warning-700">
+                <p className="font-semibold">Free plan limit</p>
+                <p className="mt-0.5 text-warning">
+                  EmailFlow classifies up to <strong>100 emails per month</strong> on the free plan. If your inbox is busy,
+                  pick a smaller window so you don&apos;t hit the cap on day one.
+                </p>
+              </div>
 
-          <div className="grid gap-2">
-            {isStale ? (
-              <>
-                {/* Anchor preset (7/15/30 days, picked by daysSince) */}
-                <SyncWindowOption
-                  key={staleAnchor}
-                  title={`Last ${staleAnchor} days`}
-                  fromDate={new Date(Date.now() - staleAnchor * 86400000)}
-                  preview={presetPreviews?.find((p) => p.days === staleAnchor)}
-                  loading={!presetPreviews?.find((p) => p.days === staleAnchor) && presetPreviewsLoading}
-                  busy={syncSetupLoading === staleAnchor}
-                  disabled={syncSetupLoading !== null}
-                  onClick={() => handleSyncSetup(staleAnchor)}
-                />
-                {/* "To your last sync" — fills the exact gap */}
-                {lastSyncAtIso && (
-                  <SyncWindowOption
-                    key="last-sync"
-                    title={`To your last sync (${daysSinceLastSync} days ago)`}
-                    fromDate={new Date(lastSyncAtIso)}
-                    preview={lastSyncPreview ?? undefined}
-                    loading={lastSyncPreviewLoading}
-                    busy={syncSetupLoading === -2}
-                    disabled={syncSetupLoading !== null}
-                    onClick={() => handleSyncToLastSync(lastSyncAtIso)}
-                  />
+              <div className="grid gap-2">
+                {isStale ? (
+                  <>
+                    {/* Anchor preset (7/15/30 days, picked by daysSince) */}
+                    <SyncWindowOption
+                      key={staleAnchor}
+                      title={`Last ${staleAnchor} days`}
+                      fromDate={new Date(Date.now() - staleAnchor * 86400000)}
+                      preview={presetPreviews?.find((p) => p.days === staleAnchor)}
+                      loading={!presetPreviews?.find((p) => p.days === staleAnchor) && presetPreviewsLoading}
+                      busy={syncSetupLoading === staleAnchor}
+                      disabled={syncSetupLoading !== null}
+                      onClick={() => setSyncSelection({ type: 'preset', days: staleAnchor })}
+                      selected={syncSelection.type === 'preset' && syncSelection.days === staleAnchor}
+                    />
+                    {/* "To your last sync" — fills the exact gap */}
+                    {lastSyncAtIso && (
+                      <SyncWindowOption
+                        key="last-sync"
+                        title={`To your last sync (${daysSinceLastSync} days ago)`}
+                        fromDate={new Date(lastSyncAtIso)}
+                        preview={lastSyncPreview ?? undefined}
+                        loading={lastSyncPreviewLoading}
+                        busy={syncSetupLoading === -2}
+                        disabled={syncSetupLoading !== null}
+                        onClick={() => setSyncSelection({ type: 'last-sync' })}
+                        selected={syncSelection.type === 'last-sync'}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* Recommended: 7 days fits the 100/month free quota for most inboxes */}
+                    {(() => {
+                      const days = 7
+                      const from = new Date(Date.now() - days * 86400000)
+                      const preview = presetPreviews?.find((p) => p.days === days)
+                      return (
+                        <SyncWindowOption
+                          key={days}
+                          title="Last 7 days"
+                          fromDate={from}
+                          preview={preview}
+                          loading={!preview && presetPreviewsLoading}
+                          busy={syncSetupLoading === days}
+                          disabled={syncSetupLoading !== null}
+                          onClick={() => setSyncSelection({ type: 'preset', days })}
+                          recommended
+                          selected={syncSelection.type === 'preset' && syncSelection.days === days}
+                        />
+                      )
+                    })()}
+
+                    {/* Secondary: dimmed so users notice but aren't visually pushed toward longer windows */}
+                    <p className="mt-1 text-[11px] text-gray-400">Or sync more history</p>
+                    {([15, 30] as const).map((days) => {
+                      const from = new Date(Date.now() - days * 86400000)
+                      const preview = presetPreviews?.find((p) => p.days === days)
+                      return (
+                        <SyncWindowOption
+                          key={days}
+                          title={`Last ${days} days`}
+                          fromDate={from}
+                          preview={preview}
+                          loading={!preview && presetPreviewsLoading}
+                          busy={syncSetupLoading === days}
+                          disabled={syncSetupLoading !== null}
+                          onClick={() => setSyncSelection({ type: 'preset', days })}
+                          dim
+                          selected={syncSelection.type === 'preset' && syncSelection.days === days}
+                        />
+                      )
+                    })}
+                  </>
                 )}
-              </>
-            ) : (
-              <>
-                {/* Recommended: 7 days fits the 100/month free quota for most inboxes */}
-                {(() => {
-                  const days = 7
-                  const from = new Date(Date.now() - days * 86400000)
-                  const preview = presetPreviews?.find((p) => p.days === days)
-                  return (
-                    <SyncWindowOption
-                      key={days}
-                      title="Last 7 days"
-                      fromDate={from}
-                      preview={preview}
-                      loading={!preview && presetPreviewsLoading}
-                      busy={syncSetupLoading === days}
-                      disabled={syncSetupLoading !== null}
-                      onClick={() => handleSyncSetup(days)}
-                      recommended
-                    />
-                  )
-                })()}
 
-                {/* Secondary: dimmed so users notice but aren't visually pushed toward longer windows */}
-                <p className="mt-1 text-[11px] text-gray-400">Or sync more history</p>
-                {[15, 30].map((days) => {
-                  const from = new Date(Date.now() - days * 86400000)
-                  const preview = presetPreviews?.find((p) => p.days === days)
-                  return (
-                    <SyncWindowOption
-                      key={days}
-                      title={`Last ${days} days`}
-                      fromDate={from}
-                      preview={preview}
-                      loading={!preview && presetPreviewsLoading}
-                      busy={syncSetupLoading === days}
-                      disabled={syncSetupLoading !== null}
-                      onClick={() => handleSyncSetup(days)}
-                      dim
-                    />
-                  )
-                })}
-              </>
-            )}
-
-            {/* Custom date picker — let users pick a start date instead of a preset */}
-            {customStartDate ? (
-              <SyncWindowOption
-                title={`From ${format(customStartDate, 'MMM d, yyyy')}`}
-                fromDate={customStartDate}
-                preview={customPreview ?? undefined}
-                loading={customPreviewLoading}
-                busy={syncSetupLoading === -1}
-                disabled={syncSetupLoading !== null}
-                onClick={handleCustomConfirm}
-                variant="custom"
-                onClear={() => setCustomStartDate(undefined)}
-              />
-            ) : (
-              <Popover open={customCalendarOpen} onOpenChange={setCustomCalendarOpen}>
-                <PopoverTrigger
-                  disabled={syncSetupLoading !== null}
-                  className="flex w-full items-center justify-between rounded-xl border border-dashed border-gray-300 bg-white p-4 text-left text-sm font-semibold text-gray-900 transition-colors hover:border-brand-300 hover:bg-brand-50/40 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span className="flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4 text-gray-500" />
-                    Pick a start date
-                  </span>
-                  <span className="text-xs font-normal text-gray-500">Custom</span>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="start"
-                  className="w-auto overflow-hidden rounded-2xl border border-gray-200 p-0 shadow-lg"
-                >
-                  <Calendar
-                    mode="single"
-                    captionLayout="dropdown"
-                    selected={customStartDate}
-                    onSelect={(d) => {
-                      if (d) {
-                        setCustomStartDate(d)
-                        setCustomCalendarOpen(false)
+                {/* Custom date picker — let users pick a start date instead of a preset */}
+                {customStartDate ? (
+                  <SyncWindowOption
+                    title={`From ${format(customStartDate, 'MMM d, yyyy')}`}
+                    fromDate={customStartDate}
+                    preview={customPreview ?? undefined}
+                    loading={customPreviewLoading}
+                    busy={syncSetupLoading === -1}
+                    disabled={syncSetupLoading !== null}
+                    onClick={() => setSyncSelection({ type: 'custom' })}
+                    variant="custom"
+                    onClear={() => {
+                      setCustomStartDate(undefined)
+                      // If the user clears the date while it's selected, fall back
+                      // to the recommended preset so Start Sync stays enabled.
+                      if (syncSelection.type === 'custom') {
+                        setSyncSelection({ type: 'preset', days: isStale ? staleAnchor : 7 })
                       }
                     }}
-                    numberOfMonths={1}
-                    disabled={{ after: new Date() }}
-                    startMonth={new Date(2024, 0)}
-                    endMonth={new Date()}
+                    selected={syncSelection.type === 'custom'}
                   />
-                </PopoverContent>
-              </Popover>
-            )}
-          </div>
+                ) : (
+                  <Popover open={customCalendarOpen} onOpenChange={setCustomCalendarOpen}>
+                    <PopoverTrigger
+                      disabled={syncSetupLoading !== null}
+                      className="flex w-full items-center justify-between rounded-xl border border-dashed border-gray-300 bg-white p-4 text-left text-sm font-semibold text-gray-900 transition-colors hover:border-brand-300 hover:bg-brand-50/40 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <span className="flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4 text-gray-500" />
+                        Pick a start date
+                      </span>
+                      <span className="text-xs font-normal text-gray-500">Custom</span>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="start"
+                      className="w-auto overflow-hidden rounded-2xl border border-gray-200 p-0 shadow-lg"
+                    >
+                      <Calendar
+                        mode="single"
+                        captionLayout="dropdown"
+                        selected={customStartDate}
+                        onSelect={(d) => {
+                          if (d) {
+                            setCustomStartDate(d)
+                            setSyncSelection({ type: 'custom' })
+                            setCustomCalendarOpen(false)
+                          }
+                        }}
+                        numberOfMonths={1}
+                        disabled={{ after: new Date() }}
+                        startMonth={new Date(2024, 0)}
+                        endMonth={new Date()}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
 
-          <button
-            onClick={handleSyncSkip}
-            className="text-center text-xs text-gray-400 transition-colors hover:text-gray-600"
-          >
-            Skip — use default (7 days)
-          </button>
+              <div className="flex items-center justify-between gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={handleSyncBack}
+                  disabled={syncSetupLoading !== null}
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleStartSync}
+                  disabled={
+                    syncSetupLoading !== null ||
+                    (syncSelection.type === 'custom' && !customStartDate)
+                  }
+                >
+                  {syncSetupLoading !== null ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Starting…
+                    </>
+                  ) : (
+                    'Start Sync'
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1403,6 +1617,127 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   )
 }
 
+function PersonalisationStep({
+  role,
+  purpose,
+  focusAreas,
+  onToggleRole,
+  onTogglePurpose,
+  onToggleFocus,
+  onContinue,
+  onSkip,
+}: {
+  role: string[]
+  purpose: string[]
+  focusAreas: string[]
+  onToggleRole: (value: string) => void
+  onTogglePurpose: (value: string) => void
+  onToggleFocus: (value: string) => void
+  onContinue: () => void
+  onSkip: () => void
+}) {
+  return (
+    <>
+      <DialogHeader>
+        <h1 className="text-xl font-semibold text-gray-900">Let's set up your workspace!</h1>
+        <p className="text-xs font-medium tracking-wide text-brand-600">Step 1 of 2</p>
+        <DialogTitle>Help EmailFlow understand your priorities</DialogTitle>
+        <DialogDescription>
+          These choices help AI classify emails and generate more relevant tasks.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="max-h-[60vh] space-y-5 overflow-y-auto pr-1">
+        <PersonalisationGroup
+          title="What best describes your current context?"
+          hint={`Choose up to ${ONBOARDING_ROLE_LIMIT} if you use EmailFlow across different roles.`}
+          options={ONBOARDING_ROLE_OPTIONS}
+          selected={role}
+          limit={ONBOARDING_ROLE_LIMIT}
+          onToggle={onToggleRole}
+        />
+        <PersonalisationGroup
+          title="What will you mainly use EmailFlow for?"
+          hint={`Choose up to ${ONBOARDING_PURPOSE_LIMIT}.`}
+          options={ONBOARDING_PURPOSE_OPTIONS}
+          selected={purpose}
+          limit={ONBOARDING_PURPOSE_LIMIT}
+          onToggle={onTogglePurpose}
+        />
+        <PersonalisationGroup
+          title="What should EmailFlow pay attention to?"
+          hint={`Choose up to ${ONBOARDING_FOCUS_LIMIT}.`}
+          options={ONBOARDING_FOCUS_OPTIONS}
+          selected={focusAreas}
+          limit={ONBOARDING_FOCUS_LIMIT}
+          onToggle={onToggleFocus}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 pt-2">
+        <button
+          type="button"
+          onClick={onSkip}
+          className="text-xs text-gray-500 underline-offset-2 transition-colors hover:text-gray-800 hover:underline"
+        >
+          Skip for now
+        </button>
+        <Button onClick={onContinue}>Continue</Button>
+      </div>
+    </>
+  )
+}
+
+function PersonalisationGroup({
+  title,
+  hint,
+  options,
+  selected,
+  limit,
+  onToggle,
+}: {
+  title: string
+  hint: string
+  options: readonly string[]
+  selected: string[]
+  limit: number
+  onToggle: (value: string) => void
+}) {
+  const atCap = selected.length >= limit
+  return (
+    <section className="space-y-2">
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+        <p className="text-xs text-gray-500">{hint}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const isSelected = selected.includes(option)
+          const disabled = !isSelected && atCap
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onToggle(option)}
+              disabled={disabled}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+                'disabled:cursor-not-allowed disabled:opacity-50',
+                isSelected
+                  ? 'border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-200'
+                  : 'border-gray-200 bg-white text-gray-700 hover:border-brand-300 hover:bg-brand-50/40'
+              )}
+              aria-pressed={isSelected}
+            >
+              {option}
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function SyncWindowOption({
   title,
   fromDate,
@@ -1415,6 +1750,7 @@ function SyncWindowOption({
   onClear,
   recommended,
   dim,
+  selected,
 }: {
   title: string
   fromDate: Date
@@ -1427,6 +1763,7 @@ function SyncWindowOption({
   onClear?: () => void
   recommended?: boolean
   dim?: boolean
+  selected?: boolean
 }) {
   const exceeds = preview?.wouldExceedQuota ?? false
 
@@ -1439,17 +1776,20 @@ function SyncWindowOption({
       ? `From ${format(fromDate, 'MMM d')} · ${countLabel}`
       : `From ${format(fromDate, 'MMM d')}`
 
-  // Visual hierarchy: exceeds > recommended > dim > default. Exceeds always wins
-  // because it's a hard warning the user needs to see regardless of emphasis.
-  const containerClass = exceeds
-    ? 'border-warning-100 bg-warning-50/50 hover:border-warning-100 hover:bg-warning-100/60 p-4'
-    : recommended
-      ? 'border-brand-300 bg-brand-50/40 hover:border-brand-400 hover:bg-brand-50/70 p-4 shadow-sm'
-      : dim
-        ? 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50/60 p-3'
-        : 'border-gray-200 bg-white hover:border-brand-200 hover:bg-brand-50/60 p-4'
+  // Visual hierarchy: selected > exceeds > recommended > dim > default. The
+  // active selection always wins so the user can see which card the
+  // "Start Sync" button will act on.
+  const containerClass = selected
+    ? 'border-brand-500 bg-brand-50 hover:border-brand-500 hover:bg-brand-50 p-4 ring-2 ring-brand-100'
+    : exceeds
+      ? 'border-warning-100 bg-warning-50/50 hover:border-warning-100 hover:bg-warning-100/60 p-4'
+      : recommended
+        ? 'border-brand-300 bg-brand-50/40 hover:border-brand-400 hover:bg-brand-50/70 p-4 shadow-sm'
+        : dim
+          ? 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50/60 p-3'
+          : 'border-gray-200 bg-white hover:border-brand-200 hover:bg-brand-50/60 p-4'
 
-  const titleClass = dim && !exceeds
+  const titleClass = dim && !exceeds && !selected
     ? 'flex items-center gap-2 text-[13px] font-medium text-gray-700'
     : 'flex items-center gap-2 text-sm font-semibold text-gray-900'
 
@@ -1463,7 +1803,7 @@ function SyncWindowOption({
         <div className="min-w-0 flex-1">
           <p className={titleClass}>
             {title}
-            {recommended && !exceeds ? (
+            {recommended && !exceeds && !selected ? (
               <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                 Recommended
               </span>
@@ -1478,10 +1818,14 @@ function SyncWindowOption({
           ) : null}
         </div>
         <div className="ml-3 flex shrink-0 items-center gap-2">
-          {variant === 'custom' && !busy ? (
-            <Check className="h-4 w-4 text-brand-600" />
-          ) : busy ? (
+          {busy ? (
             <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
+          ) : selected ? (
+            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-600">
+              <Check className="h-3 w-3 text-white" strokeWidth={3} />
+            </div>
+          ) : variant === 'custom' ? (
+            <Check className="h-4 w-4 text-brand-600" />
           ) : (
             <div className={`h-4 w-4 rounded-full border-2 ${recommended && !exceeds ? 'border-brand-300' : 'border-gray-200'}`} />
           )}
