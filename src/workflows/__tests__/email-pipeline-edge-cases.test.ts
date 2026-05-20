@@ -72,6 +72,9 @@ vi.mock('@/lib/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    userPreference: {
+      findUnique: vi.fn(),
+    },
     taskEmail: {
       create: vi.fn(),
     },
@@ -206,6 +209,7 @@ beforeEach(() => {
   vi.mocked(prisma.senderMemory.findUnique).mockResolvedValue(null)
   vi.mocked(prisma.senderMemory.create).mockResolvedValue({} as any)
   vi.mocked(prisma.senderMemory.update).mockResolvedValue({} as any)
+  vi.mocked(prisma.userPreference.findUnique).mockResolvedValue(null)
   vi.mocked(prisma.taskEmail.create).mockResolvedValue({} as any)
   vi.mocked(prisma.task.findMany).mockResolvedValue([])
 })

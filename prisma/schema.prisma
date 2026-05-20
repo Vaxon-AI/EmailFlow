@@ -59,6 +59,7 @@ model User {
   senderMemories              SenderMemory[]
   matterMemories              MatterMemory[]
   threadMemories              ThreadMemory[]
+  preference                  UserPreference?
 }
 
 model Account {
@@ -483,6 +484,17 @@ model Feedback {
 
   @@index([userId, createdAt])
   @@index([category, createdAt])
+}
+
+model UserPreference {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  roles      Json     @default("[]")
+  purposes   Json     @default("[]")
+  focusAreas Json     @default("[]")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum RetentionStatus {

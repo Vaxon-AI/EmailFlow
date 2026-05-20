@@ -1,6 +1,7 @@
 // Shared definitions for the onboarding personalisation profile.
-// Consumed by the first-login modal (dashboard) and the Settings → Account
-// card (where users can fill in or update preferences after skipping).
+// Persisted server-side via /api/settings/onboarding-profile; this file holds
+// the option catalogues, limits, and a one-shot migration helper for legacy
+// localStorage data written before the backend existed.
 
 export const ONBOARDING_PROFILE_STORAGE_KEY = 'emailflow.onboarding.profile'
 
@@ -53,7 +54,6 @@ export type OnboardingProfile = {
   role: string[]
   purpose: string[]
   focusAreas: string[]
-  savedAt: string
 }
 
 // Toggle a value in/out of a multi-select chip group, capped at `limit`.
@@ -66,85 +66,31 @@ export function toggleChipValue(current: string[], value: string, limit: number)
   return [...current, value]
 }
 
-export function loadOnboardingProfile(): OnboardingProfile | null {
+// One-shot migration: when the dashboard first loads against the server-backed
+// profile API, callers should check legacy localStorage and POST it up if the
+// server returns null. We only READ here — the caller decides when to delete
+// the localStorage entry (after a successful POST).
+export function migrateLocalStorageIfPresent(): OnboardingProfile | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = window.localStorage.getItem(ONBOARDING_PROFILE_STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<OnboardingProfile>
-    return {
-      role: Array.isArray(parsed.role) ? parsed.role : [],
-      purpose: Array.isArray(parsed.purpose) ? parsed.purpose : [],
-      focusAreas: Array.isArray(parsed.focusAreas) ? parsed.focusAreas : [],
-      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : new Date().toISOString(),
-    }
+    const role = Array.isArray(parsed.role) ? parsed.role.filter((v): v is string => typeof v === 'string') : []
+    const purpose = Array.isArray(parsed.purpose) ? parsed.purpose.filter((v): v is string => typeof v === 'string') : []
+    const focusAreas = Array.isArray(parsed.focusAreas) ? parsed.focusAreas.filter((v): v is string => typeof v === 'string') : []
+    if (role.length === 0 && purpose.length === 0 && focusAreas.length === 0) return null
+    return { role, purpose, focusAreas }
   } catch {
     return null
   }
 }
 
-export function saveOnboardingProfile(profile: Omit<OnboardingProfile, 'savedAt'>): OnboardingProfile | null {
-  if (typeof window === 'undefined') return null
-  const stamped: OnboardingProfile = { ...profile, savedAt: new Date().toISOString() }
+export function clearLocalStorageProfile(): void {
+  if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(ONBOARDING_PROFILE_STORAGE_KEY, JSON.stringify(stamped))
-    cachedSnapshot = stamped
-    notifyOnboardingProfileChanged()
-    return stamped
+    window.localStorage.removeItem(ONBOARDING_PROFILE_STORAGE_KEY)
   } catch {
-    return null
+    // ignore — storage may be unavailable
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// useSyncExternalStore plumbing
-//
-// React's useSyncExternalStore demands two stable functions: a subscribe()
-// that wires in a change listener, and a snapshot getter that must return a
-// referentially-stable value while nothing has changed. We back the snapshot
-// with a module-level cache so repeated reads during a render don't allocate
-// fresh objects (which would cause infinite render loops).
-// ─────────────────────────────────────────────────────────────────────────────
-
-let cachedSnapshot: OnboardingProfile | null = null
-let cacheInitialized = false
-const listeners = new Set<() => void>()
-
-export function subscribeOnboardingProfile(listener: () => void): () => void {
-  listeners.add(listener)
-  // Reflect cross-tab edits — `storage` only fires in OTHER tabs, so the
-  // local save path triggers notify() directly above.
-  const onStorage = (event: StorageEvent) => {
-    if (event.key && event.key !== ONBOARDING_PROFILE_STORAGE_KEY) return
-    cacheInitialized = false
-    listener()
-  }
-  if (typeof window !== 'undefined') {
-    window.addEventListener('storage', onStorage)
-  }
-  return () => {
-    listeners.delete(listener)
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('storage', onStorage)
-    }
-  }
-}
-
-export function getOnboardingProfileSnapshot(): OnboardingProfile | null {
-  if (!cacheInitialized) {
-    cachedSnapshot = loadOnboardingProfile()
-    cacheInitialized = true
-  }
-  return cachedSnapshot
-}
-
-// Server snapshot is always null — no localStorage on the server, so the
-// initial SSR render shows the empty state, and the client swaps in the real
-// profile once it hydrates.
-export function getServerOnboardingProfileSnapshot(): OnboardingProfile | null {
-  return null
-}
-
-export function notifyOnboardingProfileChanged() {
-  for (const listener of listeners) listener()
 }

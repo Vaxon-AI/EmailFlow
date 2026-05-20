@@ -112,6 +112,22 @@ async function buildMemoryContext(
     '- Promotional, newsletter, discount, sale, and generic marketing emails are usually low value unless they contain a clear required action.',
   ]
 
+  // User profile from onboarding (Personalisation Setup) — stable user picture,
+  // weight relevance toward declared roles/uses/focus areas.
+  const userPref = await prisma.userPreference.findUnique({ where: { userId } })
+  if (userPref) {
+    const roles = Array.isArray(userPref.roles) ? (userPref.roles as unknown[]).filter((v): v is string => typeof v === 'string') : []
+    const purposes = Array.isArray(userPref.purposes) ? (userPref.purposes as unknown[]).filter((v): v is string => typeof v === 'string') : []
+    const focus = Array.isArray(userPref.focusAreas) ? (userPref.focusAreas as unknown[]).filter((v): v is string => typeof v === 'string') : []
+    if (roles.length || purposes.length || focus.length) {
+      lines.push('')
+      lines.push('User profile (use to weight relevance, not as hard rules):')
+      if (roles.length) lines.push(`- Roles: ${roles.join(', ')}`)
+      if (purposes.length) lines.push(`- Primary uses: ${purposes.join(', ')}`)
+      if (focus.length) lines.push(`- Focus areas: ${focus.join(', ')}`)
+    }
+  }
+
   // Learned sender behavior
   const senderMemory = await prisma.senderMemory.findUnique({
     where: { userId_sender: { userId, sender } },

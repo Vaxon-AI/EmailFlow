@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useMemo, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { useAuth } from '@/lib/use-auth'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -44,13 +44,7 @@ import {
   ONBOARDING_PURPOSE_OPTIONS,
   ONBOARDING_ROLE_LIMIT,
   ONBOARDING_ROLE_OPTIONS,
-  getOnboardingProfileSnapshot,
-  getServerOnboardingProfileSnapshot,
-  notifyOnboardingProfileChanged,
-  saveOnboardingProfile,
-  subscribeOnboardingProfile,
   toggleChipValue,
-  type OnboardingProfile,
 } from '@/lib/onboarding-profile'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -1054,31 +1048,62 @@ type PreferencesDraft = {
 
 const EMPTY_DRAFT: PreferencesDraft = { role: [], purpose: [], focusAreas: [] }
 
-function PreferencesCard() {
-  // `stored` is the persisted profile snapshot. Read via useSyncExternalStore
-  // so SSR returns null deterministically and the client picks up the real
-  // localStorage value after hydration — without needing a setState-in-effect
-  // dance to copy it into local state.
-  const stored = useSyncExternalStore(
-    subscribeOnboardingProfile,
-    getOnboardingProfileSnapshot,
-    getServerOnboardingProfileSnapshot
-  )
-  const persisted: PreferencesDraft = stored
-    ? { role: stored.role, purpose: stored.purpose, focusAreas: stored.focusAreas }
-    : EMPTY_DRAFT
-  const savedAt = stored?.savedAt ?? null
+type ServerProfile = {
+  roles: string[]
+  purposes: string[]
+  focusAreas: string[]
+  updatedAt: string
+}
 
-  // Local edit buffer. We seed it from the snapshot the first time we observe
-  // a non-null snapshot (and again whenever the snapshot reference changes,
-  // e.g. after a save). The store-as-source-of-truth pattern from
-  // https://react.dev/reference/react/useState#storing-information-from-previous-renders.
+function PreferencesCard() {
+  const queryClient = useQueryClient()
+
+  // Persisted profile fetched from the server. Returns null when the user
+  // hasn't completed onboarding yet (skipped or new account).
+  const { data: profileRes } = useQuery<{ data: ServerProfile | null }>({
+    queryKey: ['onboarding-profile'],
+    queryFn: () => fetch('/api/settings/onboarding-profile').then((r) => r.json()),
+    staleTime: CACHE_TIME.stats,
+  })
+  const persisted: PreferencesDraft = profileRes?.data
+    ? { role: profileRes.data.roles, purpose: profileRes.data.purposes, focusAreas: profileRes.data.focusAreas }
+    : EMPTY_DRAFT
+  const savedAt = profileRes?.data?.updatedAt ?? null
+
+  // Local edit buffer, seeded from the server snapshot the first time we see
+  // it and re-seeded whenever the snapshot reference changes (e.g. after a
+  // save invalidation). Mirrors the store-as-source-of-truth pattern.
   const [draft, setDraft] = useState<PreferencesDraft>(EMPTY_DRAFT)
-  const [seenSnapshot, setSeenSnapshot] = useState<OnboardingProfile | null>(null)
-  if (seenSnapshot !== stored) {
-    setSeenSnapshot(stored)
+  const [seenSnapshot, setSeenSnapshot] = useState<ServerProfile | null | undefined>(undefined)
+  const currentSnapshot = profileRes?.data ?? null
+  if (profileRes !== undefined && seenSnapshot !== currentSnapshot) {
+    setSeenSnapshot(currentSnapshot)
     setDraft(persisted)
   }
+
+  const saveMutation = useMutation({
+    mutationFn: async (draftToSave: PreferencesDraft) => {
+      const res = await fetch('/api/settings/onboarding-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: draftToSave.role,
+          purpose: draftToSave.purpose,
+          focusAreas: draftToSave.focusAreas,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error?.message ?? 'Failed to save preferences')
+      return json
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['onboarding-profile'] })
+      toast.success('Preferences updated')
+    },
+    onError: (err: Error) => {
+      toast.error(err.message)
+    },
+  })
 
   const dirty =
     !sameStringSet(draft.role, persisted.role) ||
@@ -1086,13 +1111,7 @@ function PreferencesCard() {
     !sameStringSet(draft.focusAreas, persisted.focusAreas)
 
   function handleSave() {
-    const stamped: OnboardingProfile | null = saveOnboardingProfile(draft)
-    if (!stamped) {
-      toast.error('Could not save preferences. Check that local storage is available.')
-      return
-    }
-    notifyOnboardingProfileChanged()
-    toast.success('Preferences updated')
+    saveMutation.mutate(draft)
   }
 
   function handleReset() {
@@ -1153,11 +1172,18 @@ function PreferencesCard() {
         />
 
         <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
-          <Button variant="outline" size="sm" onClick={handleReset} disabled={!dirty}>
+          <Button variant="outline" size="sm" onClick={handleReset} disabled={!dirty || saveMutation.isPending}>
             Reset
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={!dirty}>
-            Save preferences
+          <Button size="sm" onClick={handleSave} disabled={!dirty || saveMutation.isPending}>
+            {saveMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              'Save preferences'
+            )}
           </Button>
         </div>
       </CardContent>

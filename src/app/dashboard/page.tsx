@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -42,7 +42,8 @@ import {
   ONBOARDING_PURPOSE_OPTIONS,
   ONBOARDING_ROLE_LIMIT,
   ONBOARDING_ROLE_OPTIONS,
-  saveOnboardingProfile,
+  clearLocalStorageProfile,
+  migrateLocalStorageIfPresent,
   toggleChipValue,
 } from '@/lib/onboarding-profile'
 import { cn } from '@/lib/utils'
@@ -178,6 +179,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const { user } = useAuth()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const searchParams = useSearchParams()
   const selectedIdentityIds = useMemo(() => parseContextParam(searchParams, 'identity'), [searchParams])
   const selectedProjectIds = useMemo(() => parseContextParam(searchParams, 'project'), [searchParams])
@@ -197,6 +199,10 @@ function DashboardContent() {
   const [onboardingRole, setOnboardingRole] = useState<string[]>([])
   const [onboardingPurpose, setOnboardingPurpose] = useState<string[]>([])
   const [onboardingFocus, setOnboardingFocus] = useState<string[]>([])
+  // Tracks whether we've seeded the modal state from the server profile already,
+  // so subsequent re-renders / refetches don't clobber the user's mid-edit picks.
+  const onboardingHydratedRef = useRef(false)
+  const localStorageMigrationAttemptedRef = useRef(false)
   // Defaults to the 7-day preset to match the mockup's pre-highlighted card.
   const [syncSelection, setSyncSelection] = useState<SyncSelection>({ type: 'preset', days: 7 })
 
@@ -247,22 +253,87 @@ function DashboardContent() {
     }
   }, [searchParams, router])
 
+  // Server-backed onboarding profile. Pre-fills the modal so users see their
+  // prior picks when they re-open it (e.g. via the header sync button).
+  type ServerOnboardingProfile = {
+    roles: string[]
+    purposes: string[]
+    focusAreas: string[]
+    updatedAt: string
+  }
+  const { data: onboardingProfileRes } = useQuery<{ data: ServerOnboardingProfile | null }>({
+    queryKey: ['onboarding-profile'],
+    queryFn: () => fetch('/api/settings/onboarding-profile').then((r) => r.json()),
+    enabled: !!user,
+    staleTime: CACHE_TIME.stats,
+  })
+  const serverOnboardingProfile = onboardingProfileRes?.data ?? null
+
+  // Seed modal state from server data exactly once; ignore later refetches so
+  // we don't reset the user's mid-edit picks.
+  useEffect(() => {
+    if (onboardingHydratedRef.current) return
+    if (onboardingProfileRes === undefined) return
+    onboardingHydratedRef.current = true
+    if (serverOnboardingProfile) {
+      setOnboardingRole(serverOnboardingProfile.roles)
+      setOnboardingPurpose(serverOnboardingProfile.purposes)
+      setOnboardingFocus(serverOnboardingProfile.focusAreas)
+    }
+  }, [onboardingProfileRes, serverOnboardingProfile])
+
+  // One-shot localStorage migration: when the server has no profile yet but the
+  // browser still holds the legacy key, POST it up then clear the legacy key.
+  useEffect(() => {
+    if (!user) return
+    if (localStorageMigrationAttemptedRef.current) return
+    if (onboardingProfileRes === undefined) return
+    if (serverOnboardingProfile) return
+    const legacy = migrateLocalStorageIfPresent()
+    if (!legacy) return
+    localStorageMigrationAttemptedRef.current = true
+    void (async () => {
+      const res = await fetch('/api/settings/onboarding-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(legacy),
+      }).catch(() => null)
+      if (res && res.ok) {
+        clearLocalStorageProfile()
+        queryClient.invalidateQueries({ queryKey: ['onboarding-profile'] })
+      }
+    })()
+  }, [user, onboardingProfileRes, serverOnboardingProfile, queryClient])
+
   const markSyncSetupSeen = useCallback(() => {
     // Fire-and-forget — failures here only mean the user might see the dialog
     // one more time on next login, which is acceptable.
     fetch('/api/settings/sync-setup-seen', { method: 'POST' }).catch(() => {})
   }, [])
 
-  const persistOnboardingProfile = useCallback(() => {
+  const persistOnboardingProfile = useCallback(async () => {
     // Only persist when the user actually made selections — otherwise (Skip
     // path) leave any previously saved profile alone.
     if (onboardingRole.length === 0 && onboardingPurpose.length === 0 && onboardingFocus.length === 0) return
-    saveOnboardingProfile({
-      role: onboardingRole,
-      purpose: onboardingPurpose,
-      focusAreas: onboardingFocus,
-    })
-  }, [onboardingRole, onboardingPurpose, onboardingFocus])
+    try {
+      const res = await fetch('/api/settings/onboarding-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: onboardingRole,
+          purpose: onboardingPurpose,
+          focusAreas: onboardingFocus,
+        }),
+      })
+      if (!res.ok) {
+        toast.error('Could not save preferences. They will not affect classification yet.')
+        return
+      }
+      queryClient.invalidateQueries({ queryKey: ['onboarding-profile'] })
+    } catch {
+      toast.error('Could not save preferences. They will not affect classification yet.')
+    }
+  }, [onboardingRole, onboardingPurpose, onboardingFocus, queryClient])
 
   const handleSyncSetup = useCallback(async (days: number) => {
     setSyncSetupLoading(days)
@@ -304,7 +375,7 @@ function DashboardContent() {
   // Step-1 actions: Continue (save preferences + advance) and Skip
   // (advance without saving). Both land on the sync-range step.
   const handlePersonalisationContinue = useCallback(() => {
-    persistOnboardingProfile()
+    void persistOnboardingProfile()
     if (onboardingRole.length > 0 || onboardingPurpose.length > 0 || onboardingFocus.length > 0) {
       toast.success('Your preferences have been saved. You can update them later in Settings.')
     }
@@ -387,7 +458,7 @@ function DashboardContent() {
   // onboarding profile too in case the user landed here via Skip and then
   // came Back to fill it in.
   const handleStartSync = useCallback(() => {
-    persistOnboardingProfile()
+    void persistOnboardingProfile()
     if (syncSelection.type === 'preset') {
       handleSyncSetup(syncSelection.days)
       return
