@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { useAuth } from '@/lib/use-auth'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -28,6 +28,7 @@ import {
   Mail,
   Shield,
   ShieldOff,
+  Sparkles,
   Trash2,
   Unplug,
   User,
@@ -35,6 +36,22 @@ import {
   BarChart2,
 } from 'lucide-react'
 import { UpgradeModal } from '@/components/upgrade-modal'
+import { PersonalisationChipGroup } from '@/components/personalisation-chips'
+import {
+  ONBOARDING_FOCUS_LIMIT,
+  ONBOARDING_FOCUS_OPTIONS,
+  ONBOARDING_PURPOSE_LIMIT,
+  ONBOARDING_PURPOSE_OPTIONS,
+  ONBOARDING_ROLE_LIMIT,
+  ONBOARDING_ROLE_OPTIONS,
+  getOnboardingProfileSnapshot,
+  getServerOnboardingProfileSnapshot,
+  notifyOnboardingProfileChanged,
+  saveOnboardingProfile,
+  subscribeOnboardingProfile,
+  toggleChipValue,
+  type OnboardingProfile,
+} from '@/lib/onboarding-profile'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
@@ -322,6 +339,7 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
             <PasswordCard />
+            <PreferencesCard />
 
             {/* Plan & Usage */}
             <Card className="border-white/80 bg-white/95 shadow-sm">
@@ -1026,6 +1044,136 @@ function PasswordCard() {
       </CardContent>
     </Card>
   )
+}
+
+type PreferencesDraft = {
+  role: string[]
+  purpose: string[]
+  focusAreas: string[]
+}
+
+const EMPTY_DRAFT: PreferencesDraft = { role: [], purpose: [], focusAreas: [] }
+
+function PreferencesCard() {
+  // `stored` is the persisted profile snapshot. Read via useSyncExternalStore
+  // so SSR returns null deterministically and the client picks up the real
+  // localStorage value after hydration — without needing a setState-in-effect
+  // dance to copy it into local state.
+  const stored = useSyncExternalStore(
+    subscribeOnboardingProfile,
+    getOnboardingProfileSnapshot,
+    getServerOnboardingProfileSnapshot
+  )
+  const persisted: PreferencesDraft = stored
+    ? { role: stored.role, purpose: stored.purpose, focusAreas: stored.focusAreas }
+    : EMPTY_DRAFT
+  const savedAt = stored?.savedAt ?? null
+
+  // Local edit buffer. We seed it from the snapshot the first time we observe
+  // a non-null snapshot (and again whenever the snapshot reference changes,
+  // e.g. after a save). The store-as-source-of-truth pattern from
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders.
+  const [draft, setDraft] = useState<PreferencesDraft>(EMPTY_DRAFT)
+  const [seenSnapshot, setSeenSnapshot] = useState<OnboardingProfile | null>(null)
+  if (seenSnapshot !== stored) {
+    setSeenSnapshot(stored)
+    setDraft(persisted)
+  }
+
+  const dirty =
+    !sameStringSet(draft.role, persisted.role) ||
+    !sameStringSet(draft.purpose, persisted.purpose) ||
+    !sameStringSet(draft.focusAreas, persisted.focusAreas)
+
+  function handleSave() {
+    const stamped: OnboardingProfile | null = saveOnboardingProfile(draft)
+    if (!stamped) {
+      toast.error('Could not save preferences. Check that local storage is available.')
+      return
+    }
+    notifyOnboardingProfileChanged()
+    toast.success('Preferences updated')
+  }
+
+  function handleReset() {
+    setDraft(persisted)
+  }
+
+  const { role, purpose, focusAreas } = draft
+
+  return (
+    <Card className="border-white/80 bg-white/95 shadow-sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="h-4 w-4 text-brand-700" />
+          Personalisation Preferences
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="rounded-2xl border border-gray-200/80 bg-gray-50/70 p-4 text-sm text-gray-600">
+          These choices help AI classify emails and generate more relevant tasks. You can change them anytime.
+          {savedAt ? (
+            <p className="mt-1 text-xs text-gray-400">
+              Last updated {formatDistanceToNow(new Date(savedAt), { addSuffix: true })}.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-gray-400">Not set yet — pick what fits and click Save.</p>
+          )}
+        </div>
+
+        <PersonalisationChipGroup
+          title="What best describes your current context?"
+          hint={`Choose up to ${ONBOARDING_ROLE_LIMIT} if you use EmailFlow across different roles.`}
+          options={ONBOARDING_ROLE_OPTIONS}
+          selected={role}
+          limit={ONBOARDING_ROLE_LIMIT}
+          onToggle={(value) =>
+            setDraft((cur) => ({ ...cur, role: toggleChipValue(cur.role, value, ONBOARDING_ROLE_LIMIT) }))
+          }
+        />
+        <PersonalisationChipGroup
+          title="What will you mainly use EmailFlow for?"
+          hint={`Choose up to ${ONBOARDING_PURPOSE_LIMIT}.`}
+          options={ONBOARDING_PURPOSE_OPTIONS}
+          selected={purpose}
+          limit={ONBOARDING_PURPOSE_LIMIT}
+          onToggle={(value) =>
+            setDraft((cur) => ({ ...cur, purpose: toggleChipValue(cur.purpose, value, ONBOARDING_PURPOSE_LIMIT) }))
+          }
+        />
+        <PersonalisationChipGroup
+          title="What should EmailFlow pay attention to?"
+          hint={`Choose up to ${ONBOARDING_FOCUS_LIMIT}.`}
+          options={ONBOARDING_FOCUS_OPTIONS}
+          selected={focusAreas}
+          limit={ONBOARDING_FOCUS_LIMIT}
+          onToggle={(value) =>
+            setDraft((cur) => ({ ...cur, focusAreas: toggleChipValue(cur.focusAreas, value, ONBOARDING_FOCUS_LIMIT) }))
+          }
+        />
+
+        <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+          <Button variant="outline" size="sm" onClick={handleReset} disabled={!dirty}>
+            Reset
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={!dirty}>
+            Save preferences
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Order-insensitive equality for string arrays — chip selections are
+// effectively sets, so toggling order shouldn't make the form "dirty".
+function sameStringSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  const set = new Set(a)
+  for (const value of b) {
+    if (!set.has(value)) return false
+  }
+  return true
 }
 
 function DeviceSessionsCard({

@@ -32,11 +32,23 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { UpgradeModal } from '@/components/upgrade-modal'
+import { PersonalisationChipGroup } from '@/components/personalisation-chips'
 import { getPriorityBand, getPriorityColor, getPriorityLabel } from '@/types'
 import { useAuth } from '@/lib/use-auth'
+import {
+  ONBOARDING_FOCUS_LIMIT,
+  ONBOARDING_FOCUS_OPTIONS,
+  ONBOARDING_PURPOSE_LIMIT,
+  ONBOARDING_PURPOSE_OPTIONS,
+  ONBOARDING_ROLE_LIMIT,
+  ONBOARDING_ROLE_OPTIONS,
+  saveOnboardingProfile,
+  toggleChipValue,
+} from '@/lib/onboarding-profile'
 import { cn } from '@/lib/utils'
 import { CACHE_TIME } from '@/lib/query-cache'
 import { toast } from 'sonner'
+import { tr } from 'date-fns/locale'
 
 type DashboardTask = {
   id: string
@@ -150,63 +162,6 @@ type SyncPreview = {
   wouldExceedQuota: boolean
 }
 
-// Personalisation step — onboarding profile. Frontend-only for now: persisted
-// to localStorage so the user can revisit it in Settings later without losing
-// state across reloads. Backend wiring will follow.
-const ONBOARDING_PROFILE_STORAGE_KEY = 'emailflow.onboarding.profile'
-
-const ONBOARDING_ROLE_OPTIONS = [
-  'Student',
-  'Professional',
-  'Manager',
-  'Business Owner',
-  'Freelancer',
-  'Job Seeker',
-  'Researcher',
-  'Academic',
-] as const
-
-const ONBOARDING_PURPOSE_OPTIONS = [
-  'Work',
-  'Study',
-  'Job Search',
-  'Personal Admin',
-  'Research',
-  'Side Project',
-  'Client Work',
-  'Mixed Use',
-] as const
-
-const ONBOARDING_FOCUS_OPTIONS = [
-  'Deadlines',
-  'Follow-ups',
-  'Meetings',
-  'Applications',
-  'Forms',
-  'Approvals',
-  'Decisions',
-  'Invoices',
-  'Payments',
-  'Client Requests',
-  'Reports',
-  'Documents',
-  'Study Tasks',
-  'Admin Tasks',
-  'Important Replies',
-  'Events',
-] as const
-
-const ONBOARDING_ROLE_LIMIT = 2
-const ONBOARDING_PURPOSE_LIMIT = 2
-const ONBOARDING_FOCUS_LIMIT = 5
-
-type OnboardingProfile = {
-  role: string[]
-  purpose: string[]
-  focusAreas: string[]
-  savedAt: string
-}
-
 type SyncSelection =
   | { type: 'preset'; days: 7 | 15 | 30 }
   | { type: 'custom' }
@@ -288,33 +243,15 @@ function DashboardContent() {
     fetch('/api/settings/sync-setup-seen', { method: 'POST' }).catch(() => {})
   }, [])
 
-  // Toggle a value in/out of a multi-select chip group, capped at `limit`.
-  // Returning unchanged state when at capacity (rather than dropping the
-  // earliest pick) keeps the user's prior selections stable — they have to
-  // deselect deliberately before adding a new one.
-  const toggleOnboardingChip = useCallback(
-    (current: string[], value: string, limit: number): string[] => {
-      if (current.includes(value)) return current.filter((v) => v !== value)
-      if (current.length >= limit) return current
-      return [...current, value]
-    },
-    []
-  )
-
   const persistOnboardingProfile = useCallback(() => {
-    if (typeof window === 'undefined') return
+    // Only persist when the user actually made selections — otherwise (Skip
+    // path) leave any previously saved profile alone.
     if (onboardingRole.length === 0 && onboardingPurpose.length === 0 && onboardingFocus.length === 0) return
-    try {
-      const profile: OnboardingProfile = {
-        role: onboardingRole,
-        purpose: onboardingPurpose,
-        focusAreas: onboardingFocus,
-        savedAt: new Date().toISOString(),
-      }
-      window.localStorage.setItem(ONBOARDING_PROFILE_STORAGE_KEY, JSON.stringify(profile))
-    } catch {
-      // localStorage can throw in private mode / quota-full — non-fatal here.
-    }
+    saveOnboardingProfile({
+      role: onboardingRole,
+      purpose: onboardingPurpose,
+      focusAreas: onboardingFocus,
+    })
   }, [onboardingRole, onboardingPurpose, onboardingFocus])
 
   const handleSyncSetup = useCallback(async (days: number) => {
@@ -997,13 +934,13 @@ function DashboardContent() {
               purpose={onboardingPurpose}
               focusAreas={onboardingFocus}
               onToggleRole={(value) =>
-                setOnboardingRole((cur) => toggleOnboardingChip(cur, value, ONBOARDING_ROLE_LIMIT))
+                setOnboardingRole((cur) => toggleChipValue(cur, value, ONBOARDING_ROLE_LIMIT))
               }
               onTogglePurpose={(value) =>
-                setOnboardingPurpose((cur) => toggleOnboardingChip(cur, value, ONBOARDING_PURPOSE_LIMIT))
+                setOnboardingPurpose((cur) => toggleChipValue(cur, value, ONBOARDING_PURPOSE_LIMIT))
               }
               onToggleFocus={(value) =>
-                setOnboardingFocus((cur) => toggleOnboardingChip(cur, value, ONBOARDING_FOCUS_LIMIT))
+                setOnboardingFocus((cur) => toggleChipValue(cur, value, ONBOARDING_FOCUS_LIMIT))
               }
               onContinue={handlePersonalisationContinue}
               onSkip={handlePersonalisationSkip}
@@ -1639,7 +1576,7 @@ function PersonalisationStep({
   return (
     <>
       <DialogHeader>
-        <h1 className="text-xl font-semibold text-gray-900">Let's set up your workspace!</h1>
+        <h1 className="text-xl font-semibold text-gray-900">Let&apos;s set up your workspace!</h1>
         <p className="text-xs font-medium tracking-wide text-brand-600">Step 1 of 2</p>
         <DialogTitle>Help EmailFlow understand your priorities</DialogTitle>
         <DialogDescription>
@@ -1648,7 +1585,7 @@ function PersonalisationStep({
       </DialogHeader>
 
       <div className="max-h-[60vh] space-y-5 overflow-y-auto pr-1">
-        <PersonalisationGroup
+        <PersonalisationChipGroup
           title="What best describes your current context?"
           hint={`Choose up to ${ONBOARDING_ROLE_LIMIT} if you use EmailFlow across different roles.`}
           options={ONBOARDING_ROLE_OPTIONS}
@@ -1656,7 +1593,7 @@ function PersonalisationStep({
           limit={ONBOARDING_ROLE_LIMIT}
           onToggle={onToggleRole}
         />
-        <PersonalisationGroup
+        <PersonalisationChipGroup
           title="What will you mainly use EmailFlow for?"
           hint={`Choose up to ${ONBOARDING_PURPOSE_LIMIT}.`}
           options={ONBOARDING_PURPOSE_OPTIONS}
@@ -1664,7 +1601,7 @@ function PersonalisationStep({
           limit={ONBOARDING_PURPOSE_LIMIT}
           onToggle={onTogglePurpose}
         />
-        <PersonalisationGroup
+        <PersonalisationChipGroup
           title="What should EmailFlow pay attention to?"
           hint={`Choose up to ${ONBOARDING_FOCUS_LIMIT}.`}
           options={ONBOARDING_FOCUS_OPTIONS}
@@ -1685,56 +1622,6 @@ function PersonalisationStep({
         <Button onClick={onContinue}>Continue</Button>
       </div>
     </>
-  )
-}
-
-function PersonalisationGroup({
-  title,
-  hint,
-  options,
-  selected,
-  limit,
-  onToggle,
-}: {
-  title: string
-  hint: string
-  options: readonly string[]
-  selected: string[]
-  limit: number
-  onToggle: (value: string) => void
-}) {
-  const atCap = selected.length >= limit
-  return (
-    <section className="space-y-2">
-      <div>
-        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <p className="text-xs text-gray-500">{hint}</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {options.map((option) => {
-          const isSelected = selected.includes(option)
-          const disabled = !isSelected && atCap
-          return (
-            <button
-              key={option}
-              type="button"
-              onClick={() => onToggle(option)}
-              disabled={disabled}
-              className={cn(
-                'rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
-                'disabled:cursor-not-allowed disabled:opacity-50',
-                isSelected
-                  ? 'border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-                  : 'border-gray-200 bg-white text-gray-700 hover:border-brand-300 hover:bg-brand-50/40'
-              )}
-              aria-pressed={isSelected}
-            >
-              {option}
-            </button>
-          )
-        })}
-      </div>
-    </section>
   )
 }
 
