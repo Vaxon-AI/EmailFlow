@@ -34,7 +34,6 @@ export function SignInContent() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
-  const [rememberGoogle, setRememberGoogle] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [deviceLimit, setDeviceLimit] = useState<DeviceLimitState | null>(null)
@@ -187,11 +186,21 @@ export function SignInContent() {
         }
       >
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        
         <div className="mb-4 space-y-2.5">
+          <label className="flex cursor-pointer select-none items-center mb-4 gap-2.5">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-600">Remember me for 30 days</span>
+        </label>
           <div className="space-y-1.5">
             <button
               type="button"
-              onClick={() => { window.location.href = `/api/auth/google?remember=${rememberGoogle ? '1' : '0'}` }}
+              onClick={() => { window.location.href = `/api/auth/google?remember=${rememberMe ? '1' : '0'}` }}
               className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
             >
               <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
@@ -202,15 +211,6 @@ export function SignInContent() {
               </svg>
               <span className="flex-1">Continue with Google</span>
             </button>
-            <label className="flex cursor-pointer select-none items-center gap-2.5 pl-1">
-              <input
-                type="checkbox"
-                checked={rememberGoogle}
-                onChange={(e) => setRememberGoogle(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-600">Remember me for 30 days</span>
-            </label>
           </div>
           <div className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5 text-sm text-gray-400">
             <span className="flex-1">Continue with Microsoft</span>
@@ -271,16 +271,6 @@ export function SignInContent() {
             </button>
           </div>
         </div>
-
-        <label className="flex cursor-pointer select-none items-center gap-2.5">
-          <input
-            type="checkbox"
-            checked={rememberMe}
-            onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-blue-500"
-          />
-          <span className="text-sm text-gray-600">Remember me for 30 days</span>
-        </label>
 
         <Button type="submit" disabled={loading} className="h-10 w-full gap-2">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
