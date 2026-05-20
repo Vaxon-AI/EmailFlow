@@ -695,7 +695,7 @@ export default function SettingsPage() {
           </nav>
         </div>
       </aside>
-      <div className="mx-auto max-w-3xl space-y-5">
+      <div className="mx-auto max-w-3xl space-y-5" style={{background: 'var(--background)', position: 'relative', zIndex: 1}}>
         <PageHeader
           title="Settings"
           description="Manage your account, email connections, and how the pipeline syncs your inbox."
