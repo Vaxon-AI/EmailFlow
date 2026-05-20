@@ -69,10 +69,8 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      console.log('[sync-debug] syncMutation mutationFn: POST /api/sync')
       const res = await fetch('/api/sync', { method: 'POST' })
       const data = await res.json()
-      console.log('[sync-debug] syncMutation /api/sync response:', { status: res.status, ok: res.ok, success: data?.success })
 
       if (!res.ok || !data.success) {
         if (!res.ok) {
@@ -90,7 +88,6 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
     },
 
     onSuccess: (data) => {
-      console.log('[sync-debug] syncMutation onSuccess:', { synced: data?.data?.syncedCount, processing: data?.data?.processing })
       // Invalidate immediately — emails are stored, they'll appear now.
       queryClient.invalidateQueries({
         predicate: (query) => isWorkspaceQueryKey(query.queryKey),
@@ -146,7 +143,6 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
     },
 
     onError: (err) => {
-      console.log('[sync-debug] syncMutation onError:', err)
       if (err instanceof ApiClientError && isSessionFailureCode(err.code)) {
         logout()
         return
@@ -218,34 +214,34 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           )}
           <button
             onClick={async () => {
-              console.log('[sync-debug] header onClick fired:', { pathname, pending: syncMutation.isPending, checking: checkingSyncState })
-              if (syncMutation.isPending || checkingSyncState) {
-                console.log('[sync-debug] header onClick early-return (already pending/checking)')
-                return
-              }
+              if (syncMutation.isPending || checkingSyncState) return
               setCheckingSyncState(true)
               try {
                 const res = await fetch('/api/sync/state')
                 if (!res.ok) {
-                  console.log('[sync-debug] sync-state response NOT OK, falling back to syncMutation.mutate(). status=', res.status)
                   syncMutation.mutate()
                   return
                 }
                 const json = await res.json()
                 const kind: 'never' | 'fresh' | 'stale' = json?.data?.state?.kind ?? 'never'
-                console.log('[sync-debug] sync-state response:', { ok: res.ok, kind, rawState: json?.data?.state })
                 if (kind === 'fresh') {
-                  console.log('[sync-debug] kind=fresh, calling syncMutation.mutate()')
                   syncMutation.mutate()
                 } else {
-                  console.log('[sync-debug] kind=' + kind + ', pushing /dashboard?show_sync=stale')
-                  router.push('/dashboard?show_sync=stale')
+                  // Direct event for the same-route case: router.push to a path
+                  // we just router.replace'd off of doesn't re-fire dashboard's
+                  // searchParams useEffect (Next.js treats it as same state).
+                  // The router.push is still needed for the cross-route case
+                  // where DashboardContent isn't mounted yet — then the mount
+                  // useEffect reads show_sync=stale from the URL.
+                  if (pathname === '/dashboard') {
+                    window.dispatchEvent(new CustomEvent('emailflow:open-sync-setup'))
+                  } else {
+                    router.push('/dashboard?show_sync=stale')
+                  }
                 }
-              } catch (e) {
-                console.log('[sync-debug] state fetch threw, calling syncMutation.mutate(). err=', e)
+              } catch {
                 syncMutation.mutate()
               } finally {
-                console.log('[sync-debug] checkingSyncState reset to false')
                 setCheckingSyncState(false)
               }
             }}
@@ -302,14 +298,12 @@ function RunSyncOnQueryParam({
   const searchParams = useSearchParams()
 
   useEffect(() => {
-    console.log('[sync-debug] RunSyncOnQueryParam effect:', { run_sync: searchParams.get('run_sync'), pending, allParams: searchParams.toString() })
     if (searchParams.get('run_sync') !== '1') return
     if (pending) return
     const params = new URLSearchParams(searchParams.toString())
     params.delete('run_sync')
     const query = params.toString()
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
-    console.log('[sync-debug] RunSyncOnQueryParam triggering syncMutation')
     onTrigger()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])

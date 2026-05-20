@@ -200,17 +200,19 @@ function DashboardContent() {
   // Defaults to the 7-day preset to match the mockup's pre-highlighted card.
   const [syncSelection, setSyncSelection] = useState<SyncSelection>({ type: 'preset', days: 7 })
 
+  // Header dispatches this when the user clicks sync while already on /dashboard.
+  // The URL-param path (?show_sync=stale) below covers the cross-route case; the
+  // event covers the same-route case where router.push of a just-stripped URL
+  // doesn't re-fire the searchParams useEffect in Next.js 16.
   useEffect(() => {
-    console.log('[sync-debug] DashboardContent mounted, initial searchParams=', searchParams.toString())
-    return () => console.log('[sync-debug] DashboardContent unmounted')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const handler = () => setShowSyncModal(true)
+    window.addEventListener('emailflow:open-sync-setup', handler)
+    return () => window.removeEventListener('emailflow:open-sync-setup', handler)
   }, [])
 
   useEffect(() => {
     const gmailError = searchParams.get('gmail_error')
-    console.log('[sync-debug] dashboard gmail_error effect:', { gmail_error: gmailError, allParams: searchParams.toString() })
     if (!gmailError) return
-    console.log('[sync-debug] dashboard stripping params due to gmail_error')
     const messages: Record<string, string> = {
       google_account_already_bound: 'This Google account is already linked to another user.',
       token_exchange_failed: 'Google sign-in failed. Please try again.',
@@ -239,13 +241,7 @@ function DashboardContent() {
   // the condition and is a no-op — the modal does not re-open on its own
   // (avoids the earlier "弹窗反复弹" regression).
   useEffect(() => {
-    console.log('[sync-debug] dashboard show_sync effect:', {
-      gmail_connected: searchParams.get('gmail_connected'),
-      show_sync: searchParams.get('show_sync'),
-      allParams: searchParams.toString(),
-    })
     if (searchParams.get('gmail_connected') === '1' || searchParams.get('show_sync') === 'stale') {
-      console.log('[sync-debug] dashboard setShowSyncModal(true) + replace /dashboard')
       setShowSyncModal(true)
       router.replace('/dashboard', { scroll: false })
     }
