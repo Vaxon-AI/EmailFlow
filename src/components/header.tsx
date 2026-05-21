@@ -51,7 +51,6 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const router = useRouter()
   const [syncResult, setSyncResult] = useState<SyncResultData | null>(null)
   const [syncResultOpen, setSyncResultOpen] = useState(false)
-  const [checkingSyncState, setCheckingSyncState] = useState(false)
 
   const segments = pathname.split('/').filter(Boolean)
   const currentSection = segments[1] ? segments[1].replace(/-/g, ' ') : 'dashboard'
@@ -213,45 +212,17 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
             </button>
           )}
           <button
-            onClick={async () => {
-              if (syncMutation.isPending || checkingSyncState) return
-              setCheckingSyncState(true)
-              try {
-                const res = await fetch('/api/sync/state')
-                if (!res.ok) {
-                  syncMutation.mutate()
-                  return
-                }
-                const json = await res.json()
-                const kind: 'never' | 'fresh' | 'stale' = json?.data?.state?.kind ?? 'never'
-                if (kind === 'fresh') {
-                  syncMutation.mutate()
-                } else {
-                  // Direct event for the same-route case: router.push to a path
-                  // we just router.replace'd off of doesn't re-fire dashboard's
-                  // searchParams useEffect (Next.js treats it as same state).
-                  // The router.push is still needed for the cross-route case
-                  // where DashboardContent isn't mounted yet — then the mount
-                  // useEffect reads show_sync=stale from the URL.
-                  if (pathname === '/dashboard') {
-                    window.dispatchEvent(new CustomEvent('emailflow:open-sync-setup'))
-                  } else {
-                    router.push('/dashboard?show_sync=stale')
-                  }
-                }
-              } catch {
-                syncMutation.mutate()
-              } finally {
-                setCheckingSyncState(false)
-              }
+            onClick={() => {
+              if (syncMutation.isPending) return
+              syncMutation.mutate()
             }}
-            disabled={syncMutation.isPending || checkingSyncState}
+            disabled={syncMutation.isPending}
             title={syncMutation.isPending ? 'Syncing...' : 'Sync emails'}
             className={cn(
               'rounded-full border border-transparent p-2 text-gray-400 transition-colors hover:border-brand-100 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-40'
             )}
           >
-            <RefreshCw className={cn('h-4 w-4', (syncMutation.isPending || checkingSyncState) && 'animate-spin')} />
+            <RefreshCw className={cn('h-4 w-4', syncMutation.isPending && 'animate-spin')} />
           </button>
 
           <DropdownMenu>

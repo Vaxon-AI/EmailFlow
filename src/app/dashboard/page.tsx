@@ -206,16 +206,6 @@ function DashboardContent() {
   // Defaults to the 7-day preset to match the mockup's pre-highlighted card.
   const [syncSelection, setSyncSelection] = useState<SyncSelection>({ type: 'preset', days: 7 })
 
-  // Header dispatches this when the user clicks sync while already on /dashboard.
-  // The URL-param path (?show_sync=stale) below covers the cross-route case; the
-  // event covers the same-route case where router.push of a just-stripped URL
-  // doesn't re-fire the searchParams useEffect in Next.js 16.
-  useEffect(() => {
-    const handler = () => setShowSyncModal(true)
-    window.addEventListener('emailflow:open-sync-setup', handler)
-    return () => window.removeEventListener('emailflow:open-sync-setup', handler)
-  }, [])
-
   useEffect(() => {
     const gmailError = searchParams.get('gmail_error')
     if (!gmailError) return
@@ -233,21 +223,10 @@ function DashboardContent() {
     router.replace('/dashboard', { scroll: false })
   }, [searchParams, router])
 
-  // Open the sync modal when ?gmail_connected=1 / ?show_sync=stale appears,
-  // then immediately strip the param from the URL.
-  //
-  // This must watch searchParams (not just run on mount): the header sync
-  // button does router.push('/dashboard?show_sync=stale') for never/stale
-  // users. When the user is already on /dashboard that push does NOT remount
-  // this component, so a mount-only read would never see the param and the
-  // modal would never open — the "click sync, nothing happens" bug.
-  //
-  // Stripping the param right after opening keeps the modal state in
-  // showSyncModal, so the follow-up searchParams change (param gone) fails
-  // the condition and is a no-op — the modal does not re-open on its own
-  // (avoids the earlier "弹窗反复弹" regression).
+  // Open the sync setup modal only for first-time users — OAuth callback
+  // redirects them with ?gmail_connected=1 after the initial Gmail link.
   useEffect(() => {
-    if (searchParams.get('gmail_connected') === '1' || searchParams.get('show_sync') === 'stale') {
+    if (searchParams.get('gmail_connected') === '1') {
       setShowSyncModal(true)
       router.replace('/dashboard', { scroll: false })
     }
