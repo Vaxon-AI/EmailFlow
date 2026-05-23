@@ -14,6 +14,7 @@ import { RefreshCw, User, LogOut, ChevronRight, CheckCircle2, AlertCircle, Alert
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { isWorkspaceQueryKey } from '@/lib/query-cache'
+import { shouldShowQuotaWarning } from '@/lib/sync-quota-warning'
 import {
   Dialog,
   DialogContent,
@@ -34,14 +35,28 @@ interface SyncResultData {
   skippedCount: number
   failedCount: number
   pendingFailedCount: number
+  syncBatchId?: string
   // True when new emails were stored — AI pipeline is running in the background
   processing: boolean
   // True when this sync hit the free-plan classify quota cap
   quotaLimited?: boolean
   // Remaining classify quota (null for paid plans)
   quotaRemaining?: number | null
+  quotaLimit?: number | null
   errorMessage?: string
   recoveryHint?: string
+}
+
+type SyncBatchStatus = {
+  isComplete: boolean
+  totalEmails: number
+  pendingEmails: number
+  needsActionCount?: number
+  fyiCount?: number
+  ignoredCount?: number
+  uncertainCount?: number
+  uncertainEmails?: number
+  quotaSkippedEmails?: number
 }
 
 export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
@@ -105,6 +120,7 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         processing: boolean
         quotaLimited?: boolean
         quotaRemaining?: number | null
+        quotaLimit?: number | null
       } | undefined
 
       const processing = syncData?.processing ?? false
@@ -120,9 +136,11 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         skippedCount: syncData?.skippedCount ?? 0,
         failedCount: syncData?.failedCount ?? 0,
         pendingFailedCount: syncData?.pendingFailedCount ?? 0,
+        syncBatchId: syncData?.syncBatchId,
         processing,
         quotaLimited: syncData?.quotaLimited,
         quotaRemaining: syncData?.quotaRemaining,
+        quotaLimit: syncData?.quotaLimit,
       })
       setSyncResultOpen(true)
 
@@ -245,6 +263,10 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
       <SyncResultDialog
         open={syncResultOpen}
         onClose={() => setSyncResultOpen(false)}
+        onViewUnclassified={() => {
+          setSyncResultOpen(false)
+          router.push('/dashboard/emails?tab=unclassified')
+        }}
         result={syncResult}
       />
     </>
@@ -289,18 +311,41 @@ function RunSyncOnQueryParam({
 interface SyncResultDialogProps {
   open: boolean
   onClose: () => void
+  onViewUnclassified: () => void
   result: SyncResultData | null
 }
 
-function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
+function SyncResultDialog({ open, onClose, onViewUnclassified, result }: SyncResultDialogProps) {
+  const syncBatchId = result?.syncBatchId
+  const { data: batchStatus } = useQuery<SyncBatchStatus>({
+    queryKey: ['syncBatch', syncBatchId, 'dialog'],
+    queryFn: async () => {
+      const res = await fetch(`/api/sync/batch/${syncBatchId}`)
+      const json = await res.json()
+      return json.data as SyncBatchStatus
+    },
+    enabled: open && !!syncBatchId && result?.ok === true && result.processing,
+    refetchInterval: (query) => {
+      const data = query.state.data as SyncBatchStatus | undefined
+      if (!data || data.isComplete) return false
+      return 3000
+    },
+    staleTime: 0,
+  })
+
   if (!result) return null
 
   const {
     ok, code, syncedCount, skippedCount, failedCount, pendingFailedCount,
-    processing, errorMessage, recoveryHint, quotaLimited, quotaRemaining,
+    syncBatchId: resultSyncBatchId, processing, errorMessage, recoveryHint, quotaRemaining, quotaLimit,
   } = result
 
   const isPartial = ok && (failedCount > 0 || pendingFailedCount > 0)
+  const showQuotaWarning = ok && shouldShowQuotaWarning(quotaRemaining, quotaLimit)
+  const quotaExhausted = ok && quotaRemaining === 0
+  const hasNewEmails = syncedCount > 0
+  const isClassifying = processing && (!batchStatus || !batchStatus.isComplete)
+  const showBatchSummary = ok && batchStatus?.isComplete && batchStatus.totalEmails > 0
 
   const statusIcon = !ok
     ? <AlertCircle className="h-5 w-5 text-critical" />
@@ -308,7 +353,13 @@ function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
     ? <AlertTriangle className="h-5 w-5 text-warning" />
     : <CheckCircle2 className="h-5 w-5 text-success" />
 
-  const statusLabel = !ok ? 'Sync failed' : isPartial ? 'Partial success' : 'Success'
+  const statusLabel = !ok
+    ? 'Sync failed'
+    : isPartial
+      ? 'Partial success'
+      : hasNewEmails
+        ? 'Synced'
+        : 'No new emails'
   const statusColor = !ok ? 'text-critical' : isPartial ? 'text-warning' : 'text-success'
 
   return (
@@ -326,7 +377,13 @@ function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
         {ok ? (
           <ul className="space-y-1.5 text-sm text-gray-700">
             {syncedCount > 0 ? (
-              <SyncLine label={`Synced ${syncedCount} email${syncedCount === 1 ? '' : 's'}`} />
+              <SyncLine
+                label={
+                  quotaExhausted
+                    ? `Synced ${syncedCount} email${syncedCount === 1 ? '' : 's'} to Unclassified`
+                    : `Synced ${syncedCount} email${syncedCount === 1 ? '' : 's'}`
+                }
+              />
             ) : skippedCount > 0 ? (
               <SyncLine label="No new emails" muted />
             ) : (
@@ -341,17 +398,35 @@ function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
             {pendingFailedCount > 0 && (
               <SyncLine label={`${pendingFailedCount} failed email${pendingFailedCount === 1 ? '' : 's'} pending retry`} warn />
             )}
-            {processing && (
+            {isClassifying && (
               <li className="flex items-center gap-2 text-brand-600 pt-0.5">
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                <span>Classifying emails and extracting tasks...</span>
+                <span>AI classification is running in the background...</span>
               </li>
             )}
-            {quotaLimited && (
+            {showBatchSummary && (
+              <li className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                <p className="mb-1 font-medium text-gray-900">This sync finished:</p>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                  <span>Needs Action: {batchStatus.needsActionCount ?? 0}</span>
+                  <span>FYI: {batchStatus.fyiCount ?? 0}</span>
+                  <span>Ignored: {batchStatus.ignoredCount ?? 0}</span>
+                  <span>Uncertain: {batchStatus.uncertainCount ?? batchStatus.uncertainEmails ?? 0}</span>
+                </div>
+                {(batchStatus.quotaSkippedEmails ?? 0) > 0 && (
+                  <p className="mt-1 text-warning-700">
+                    Unclassified: {batchStatus.quotaSkippedEmails} not classified due to quota.
+                  </p>
+                )}
+              </li>
+            )}
+            {showQuotaWarning && (
               <li className="mt-2 rounded-lg border border-warning-200 bg-warning-100/70 px-3 py-2 text-xs text-warning-700">
-                <span className="font-medium">Free plan limit reached.</span>{' '}
+                <span className="font-medium">
+                  {quotaExhausted ? 'AI classification paused.' : 'Free plan limit almost reached.'}
+                </span>{' '}
                 {quotaRemaining === 0
-                  ? 'Newly synced emails are sitting in the Unclassified tab — open any of them to classify manually, or '
+                  ? 'Your free plan classification limit is reached. New email is visible in Unclassified, or '
                   : `Only ${quotaRemaining} email${quotaRemaining === 1 ? '' : 's'} left to classify this month. `}
                 <a href="mailto:support@emailflow.ai?subject=Pro plan early access" className="font-semibold underline hover:text-warning">
                   upgrade to Pro
@@ -369,8 +444,13 @@ function SyncResultDialog({ open, onClose, result }: SyncResultDialogProps) {
         )}
 
         <DialogFooter showCloseButton={false}>
+          {ok && resultSyncBatchId && (
+            <Button variant="outline" onClick={onViewUnclassified}>
+              View Unclassified
+            </Button>
+          )}
           <Button onClick={onClose}>
-            {processing ? 'Close (continues in background)' : 'Close'}
+            {isClassifying ? 'Close (continues in background)' : 'Close'}
           </Button>
         </DialogFooter>
       </DialogContent>

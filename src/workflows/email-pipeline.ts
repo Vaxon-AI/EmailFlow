@@ -65,6 +65,20 @@ export interface PipelineResult {
   reviewCandidate?: PipelineReviewCandidate
 }
 
+type ProcessEmailInput = {
+  id: string
+  subject: string
+  sender: string
+  receivedAt: Date
+  bodyPreview: string
+  bodyFull: string | null
+  labels: string
+  threadId?: string | null
+  awaitingReview?: boolean
+  taskStatus?: 'ai_suggestion' | 'active'
+  forceAction?: boolean
+}
+
 // ── Step 0: Rule-based pre-filter ────────────────────────────
 
 function stepPreFilter(email: { sender: string; subject: string; labels: string }) {
@@ -92,6 +106,45 @@ function stepPreFilter(email: { sender: string; subject: string; labels: string 
     subject: email.subject,
     providerCategories,
   })
+}
+
+export async function processEmailRuleOnly(email: ProcessEmailInput): Promise<PipelineResult | null> {
+  if (email.forceAction) return null
+
+  const rawBodyForCheck = email.bodyFull || email.bodyPreview
+  if (rawBodyForCheck.trim().length < 10) {
+    await emailRepo.updateClassification(email.id, {
+      category: 'uncertain',
+      confidence: 0,
+      reasoning: 'Email body too short to classify',
+      isWorkRelated: false,
+    })
+    return {
+      emailId: email.id,
+      classification: 'uncertain',
+      confidence: 0,
+      taskCreated: false,
+      skippedByRule: true,
+    }
+  }
+
+  const preFilter = stepPreFilter(email)
+  if (!preFilter.skipped) return null
+
+  await emailRepo.updateClassification(email.id, {
+    category: preFilter.category!,
+    confidence: preFilter.confidence!,
+    reasoning: preFilter.reasoning!,
+    isWorkRelated: preFilter.isWorkRelated!,
+  })
+
+  return {
+    emailId: email.id,
+    classification: preFilter.category!,
+    confidence: preFilter.confidence!,
+    taskCreated: false,
+    skippedByRule: true,
+  }
 }
 
 // ── Memory context builder ────────────────────────────────────
@@ -697,19 +750,7 @@ async function updateSenderMemory(userId: string, sender: string, category: stri
 
 export async function processEmail(
   userId: string,
-  email: {
-    id: string
-    subject: string
-    sender: string
-    receivedAt: Date
-    bodyPreview: string
-    bodyFull: string | null
-    labels: string
-    threadId?: string | null
-    awaitingReview?: boolean
-    taskStatus?: 'ai_suggestion' | 'active'
-    forceAction?: boolean
-  }
+  email: ProcessEmailInput
 ): Promise<PipelineResult> {
   // Tracks whether classification has been persisted to the DB.
   // Once true, a later step failure must NOT overwrite the saved
@@ -721,42 +762,10 @@ export async function processEmail(
   let savedConfidence = 0
   try {
   // ── 0. Pre-filter (rule-based, no AI) ─────────────────────
-  const rawBodyForCheck = email.bodyFull || email.bodyPreview
-  if (!email.forceAction && rawBodyForCheck.trim().length < 10) {
-    await emailRepo.updateClassification(email.id, {
-      category: 'uncertain',
-      confidence: 0,
-      reasoning: 'Email body too short to classify',
-      isWorkRelated: false,
-    })
+  const ruleResult = await processEmailRuleOnly(email)
+  if (ruleResult) {
     classificationSaved = true
-    return {
-      emailId: email.id,
-      classification: 'uncertain',
-      confidence: 0,
-      taskCreated: false,
-      skippedByRule: true,
-    }
-  }
-
-  const preFilter = email.forceAction ? { skipped: false } : stepPreFilter(email)
-
-  if (preFilter.skipped) {
-    await emailRepo.updateClassification(email.id, {
-      category: preFilter.category!,
-      confidence: preFilter.confidence!,
-      reasoning: preFilter.reasoning!,
-      isWorkRelated: preFilter.isWorkRelated!,
-    })
-    classificationSaved = true
-
-    return {
-      emailId: email.id,
-      classification: preFilter.category!,
-      confidence: preFilter.confidence!,
-      taskCreated: false,
-      skippedByRule: true,
-    }
+    return ruleResult
   }
 
   const threadId = email.threadId ?? null

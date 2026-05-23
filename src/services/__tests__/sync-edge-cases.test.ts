@@ -44,9 +44,11 @@ vi.mock('@/repositories/failed-email-sync-repo', () => ({
 
 vi.mock('@/workflows', () => ({
   processEmail: vi.fn(),
+  processEmailRuleOnly: vi.fn(),
 }))
 
 vi.mock('@/lib/quota', () => ({
+  FREE_CLASSIFY_LIMIT: 100,
   getClassifyRemaining: vi.fn().mockResolvedValue(Infinity),
   incrementClassifyUsed: vi.fn().mockResolvedValue(undefined),
 }))
@@ -317,6 +319,7 @@ describe('Phase1Result — field stability', () => {
     expect(result).toHaveProperty('syncBatchId')
     expect(result).toHaveProperty('quotaLimited')
     expect(result).toHaveProperty('quotaRemaining')
+    expect(result).toHaveProperty('quotaLimit')
     expect(result).toHaveProperty('storedEmails')
   })
 

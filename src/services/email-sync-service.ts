@@ -2,11 +2,11 @@ import { AppError } from '@/lib/app-errors'
 import * as Sentry from '@sentry/nextjs'
 import { getEmailProvider } from '@/integrations/provider-registry'
 import type { EmailMessage } from '@/integrations'
-import { processEmail } from '@/workflows'
+import { processEmail, processEmailRuleOnly } from '@/workflows'
 import * as emailRepo from '@/repositories/email-repo'
 import * as userRepo from '@/repositories/user-repo'
 import * as failedRepo from '@/repositories/failed-email-sync-repo'
-import { getClassifyRemaining, incrementClassifyUsed } from '@/lib/quota'
+import { FREE_CLASSIFY_LIMIT, getClassifyRemaining, incrementClassifyUsed } from '@/lib/quota'
 
 // ============================================================
 // Email Sync Service — two-phase architecture
@@ -24,6 +24,7 @@ import { getClassifyRemaining, incrementClassifyUsed } from '@/lib/quota'
 // ============================================================
 
 const RETRY_BATCH_SIZE = 10
+const PROVIDER_FETCH_CAP = 100
 
 // Internal type alias for emails returned by storeEmail, passed from phase1 to phase2.
 type StoredEmail = NonNullable<Awaited<ReturnType<typeof emailRepo.storeEmail>>['email']>
@@ -35,10 +36,12 @@ export interface Phase1Result {
   failedCount: number
   pendingFailedCount: number
   syncBatchId: string
-  /** True when the Gmail fetch was capped by the user's remaining classify quota. */
+  /** True when AI classification is limited by the user's remaining classify quota. */
   quotaLimited: boolean
   /** Remaining classify quota at the start of this sync (Infinity for paid plans). */
   quotaRemaining: number
+  /** Monthly classify quota limit (null for paid plans). */
+  quotaLimit: number | null
   // Passed to syncEmailsPhase2 — not included in the HTTP response
   storedEmails: StoredEmail[]
 }
@@ -72,30 +75,12 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
     }
   }
 
-  // Cap provider fetch by the user's remaining classify quota. Without this cap,
-  // a free user with quota=6 would still pull 100 messages from the provider; the 94
-  // that Phase 2 can't classify would sit in DB as 'pending' until fixStuckEmails
-  // marks them failed — wasting storage and confusing the user.
+  // Provider fetch is intentionally independent from classify quota. Sync's
+  // promise is to bring new email into the product first; Phase 2 can classify
+  // what quota allows and leave the rest visible in Unclassified.
   const quotaRemaining = await getClassifyRemaining(userId)
-  const fetchCap = quotaRemaining === Infinity ? 100 : Math.min(quotaRemaining, 100)
   const quotaLimited = quotaRemaining !== Infinity && quotaRemaining < 100
-
-  if (fetchCap === 0) {
-    console.log(`[sync] phase1 quota=0, skipping provider fetch entirely`)
-    await userRepo.updateLastSync(userId)
-    const pendingFailedCount = await failedRepo.countPendingFailures(userId)
-    return {
-      totalFetched: 0,
-      syncedCount: 0,
-      skippedCount: 0,
-      failedCount: 0,
-      pendingFailedCount,
-      syncBatchId,
-      quotaLimited: true,
-      quotaRemaining: 0,
-      storedEmails: [],
-    }
-  }
+  const fetchCap = PROVIDER_FETCH_CAP
 
   const emailAccounts = await userRepo.listEnabledEmailAccounts(userId)
   const accountsToSync = emailAccounts.length > 0
@@ -119,9 +104,9 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
       continue
     }
 
-    if (remainingFetchBudget !== Infinity && remainingFetchBudget <= 0) break
+    if (remainingFetchBudget <= 0) break
 
-    const accountCap = remainingFetchBudget === Infinity ? 100 : Math.min(remainingFetchBudget, 100)
+    const accountCap = Math.min(remainingFetchBudget, PROVIDER_FETCH_CAP)
     try {
       const provider = getEmailProvider(account.provider)
       const accountMessages = await provider.fetchNewEmails(userId, {
@@ -133,9 +118,7 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
       if (account.id) {
         await userRepo.updateAccountLastSync(account.id)
       }
-      if (remainingFetchBudget !== Infinity) {
-        remainingFetchBudget = Math.max(0, remainingFetchBudget - accountMessages.length)
-      }
+      remainingFetchBudget = Math.max(0, remainingFetchBudget - accountMessages.length)
     } catch (err) {
       lastFetchError = err
       if (err instanceof AppError && err.code === 'PROVIDER_REAUTH_REQUIRED') {
@@ -224,6 +207,7 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
     syncBatchId,
     quotaLimited,
     quotaRemaining,
+    quotaLimit: quotaRemaining === Infinity ? null : FREE_CLASSIFY_LIMIT,
     storedEmails,
   }
   } catch (err) {
@@ -255,25 +239,13 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
   if (storedEmails.length > 0) {
     const tAI = Date.now()
 
-    const remaining = await getClassifyRemaining(userId)
-    const emailsToProcess = remaining === Infinity
-      ? storedEmails
-      : storedEmails.slice(0, remaining)
+    let remaining = await getClassifyRemaining(userId)
+    const quotaSkippedIds: string[] = []
+    let processedCount = 0
 
-    if (emailsToProcess.length < storedEmails.length) {
-      const skippedIds = storedEmails.slice(emailsToProcess.length).map((e) => e.id)
-      console.log(`[sync] phase2 quota: ${skippedIds.length} email(s) skipped (free plan limit reached)`)
-      // Mark them with a distinct status so:
-      //   1. fixStuckEmails (filters by 'pending') won't sweep them to 'uncertain'
-      //   2. UI can surface them in a dedicated banner / Unclassified tab
-      // classification stays null until the user manually classifies or the
-      // monthly quota frees up.
-      await emailRepo.markQuotaSkipped(skippedIds)
-    }
-
-    for (const email of emailsToProcess) {
+    for (const email of storedEmails) {
       try {
-        const result = await processEmail(userId, {
+        const input = {
           id: email.id,
           subject: email.subject,
           sender: email.sender,
@@ -283,20 +255,46 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
           labels: email.labels,
           threadId: email.threadId,
           awaitingReview: (email as StoredEmail & { awaitingReview?: boolean }).awaitingReview ?? false,
+        }
+
+        if (remaining !== Infinity && remaining <= 0) {
+          const ruleResult = await processEmailRuleOnly(input)
+          if (ruleResult) {
+            processedCount++
+          } else {
+            quotaSkippedIds.push(email.id)
+          }
+          continue
+        }
+
+        const result = await processEmail(userId, {
+          ...input,
         })
+        processedCount++
 
         // Only count emails that actually invoked the AI classifier. Rule-based
         // pre-filter skips (spam / promotions / body-too-short) never call the
         // model, so they shouldn't burn the user's monthly quota.
         if (!result.skippedByRule) {
           await incrementClassifyUsed(userId)
+          if (remaining !== Infinity) remaining = Math.max(0, remaining - 1)
         }
       } catch (err) {
         console.error(`[sync] phase2 failed to process email ${email.id}:`, err)
       }
     }
 
-    console.log(`[sync] phase2 aiPipeline: ${Date.now() - tAI}ms, processed=${storedEmails.length}`)
+    if (quotaSkippedIds.length > 0) {
+      console.log(`[sync] phase2 quota: ${quotaSkippedIds.length} email(s) skipped (free plan limit reached)`)
+      // Mark them with a distinct status so:
+      //   1. fixStuckEmails (filters by 'pending') won't sweep them to 'uncertain'
+      //   2. UI can surface them in a dedicated banner / Unclassified tab
+      // classification stays null until the user manually classifies or the
+      // monthly quota frees up.
+      await emailRepo.markQuotaSkipped(quotaSkippedIds)
+    }
+
+    console.log(`[sync] phase2 aiPipeline: ${Date.now() - tAI}ms, processed=${processedCount}, quotaSkipped=${quotaSkippedIds.length}`)
   }
 
   // 2) Retry previously failed emails (capped at RETRY_BATCH_SIZE per run)

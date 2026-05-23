@@ -97,8 +97,9 @@ export async function updateClassification(
   })
 }
 
-// Saves classification fields without changing processingStatus or awaitingReview.
-// Used when an email is in manual review mode — classified but not yet approved by user.
+// Saves classification fields while keeping awaitingReview untouched.
+// Used when an email is in manual review mode — classified, no longer pending,
+// but still waiting for the user to approve task extraction.
 export async function saveClassificationFields(
   emailId: string,
   classification: {
@@ -115,6 +116,8 @@ export async function saveClassificationFields(
       classConfidence: classification.confidence,
       classReasoning: classification.reasoning,
       isWorkRelated: classification.isWorkRelated,
+      processedAt: new Date(),
+      processingStatus: 'done',
     },
   })
 }
@@ -585,6 +588,15 @@ export async function findBatchStatus(userId: string, batchId: string) {
 
   const totalEmails = emails.length
   const pendingEmails = emails.filter((e) => e.processingStatus === 'pending').length
+  const quotaSkippedEmails = emails.filter((e) => e.processingStatus === 'quota_skipped').length
+  const needsActionCount = emails.filter((e) => e.classification === 'action').length
+  const fyiCount = emails.filter((e) => e.classification === 'awareness').length
+  const ignoredCount = emails.filter((e) => e.classification === 'ignore').length
+  const uncertainCount = emails.filter((e) => e.classification === 'uncertain').length
+  const classifiedEmails = emails.filter((e) =>
+    e.processingStatus !== 'pending' &&
+    (e.classification !== null || e.processingStatus === 'quota_skipped')
+  ).length
   // A batch with 0 emails means all were skipped (already stored) — treat as complete.
   const isComplete = totalEmails === 0 || pendingEmails === 0
   const actionEmails = emails.filter((e) => e.classification === 'action')
@@ -593,6 +605,13 @@ export async function findBatchStatus(userId: string, batchId: string) {
     isComplete,
     totalEmails,
     pendingEmails,
+    classifiedEmails,
+    needsActionCount,
+    fyiCount,
+    ignoredCount,
+    quotaSkippedEmails,
+    uncertainCount,
+    uncertainEmails: uncertainCount,
     actionEmailCount: actionEmails.length,
     // Only include email details when complete so the modal has stable data.
     actionEmails: isComplete ? actionEmails : [],

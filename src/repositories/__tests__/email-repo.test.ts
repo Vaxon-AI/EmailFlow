@@ -28,6 +28,7 @@ import { prisma } from '@/lib/prisma'
 import {
   storeEmail,
   updateClassification,
+  saveClassificationFields,
   markClassificationFailed,
   fixStuckEmails,
   markQuotaSkipped,
@@ -36,6 +37,7 @@ import {
   setEmailBucket,
   bulkSetEmailBucket,
   findEmailsPaginated,
+  findBatchStatus,
   bulkMarkActioned,
 } from '../email-repo'
 
@@ -213,6 +215,32 @@ describe('updateClassification', () => {
   })
 })
 
+describe('saveClassificationFields', () => {
+  it('marks a manual-review classification as done without clearing awaitingReview', async () => {
+    mockPrismaEmail.update.mockResolvedValue({} as any)
+
+    await saveClassificationFields('email-1', {
+      category: 'action',
+      confidence: 0.88,
+      reasoning: 'User should review this action',
+      isWorkRelated: true,
+    })
+
+    expect(mockPrismaEmail.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'email-1' },
+        data: expect.objectContaining({
+          classification: 'action',
+          classConfidence: 0.88,
+          processingStatus: 'done',
+          processedAt: expect.any(Date),
+        }),
+      })
+    )
+    expect((mockPrismaEmail.update as ReturnType<typeof vi.fn>).mock.calls[0][0].data).not.toHaveProperty('awaitingReview')
+  })
+})
+
 describe('markClassificationFailed', () => {
   it('sets processingStatus to "failed" and classification to "uncertain" only on pending emails', async () => {
     mockPrismaEmail.updateMany.mockResolvedValue({ count: 1 })
@@ -381,6 +409,53 @@ describe('findEmailsPaginated', () => {
         },
       }),
     }))
+  })
+})
+
+describe('findBatchStatus', () => {
+  it('returns enhanced batch counters and treats only pending rows as incomplete', async () => {
+    mockPrismaEmail.findMany.mockResolvedValue([
+      { id: 'e1', processingStatus: 'pending', classification: null, taskLinks: [] },
+      { id: 'e2', processingStatus: 'done', classification: 'action', taskLinks: [] },
+      { id: 'e3', processingStatus: 'quota_skipped', classification: null, taskLinks: [] },
+      { id: 'e4', processingStatus: 'failed', classification: 'uncertain', taskLinks: [] },
+      { id: 'e5', processingStatus: 'done', classification: 'awareness', taskLinks: [] },
+      { id: 'e6', processingStatus: 'done', classification: 'ignore', taskLinks: [] },
+    ] as never)
+
+    const result = await findBatchStatus('user-1', 'sync-1')
+
+    expect(result.isComplete).toBe(false)
+    expect(result.totalEmails).toBe(6)
+    expect(result.pendingEmails).toBe(1)
+    expect(result.classifiedEmails).toBe(5)
+    expect(result.needsActionCount).toBe(1)
+    expect(result.fyiCount).toBe(1)
+    expect(result.ignoredCount).toBe(1)
+    expect(result.quotaSkippedEmails).toBe(1)
+    expect(result.uncertainCount).toBe(1)
+    expect(result.uncertainEmails).toBe(1)
+    expect(result.actionEmailCount).toBe(1)
+    expect(result.actionEmails).toEqual([])
+  })
+
+  it('includes action email details after the batch is complete', async () => {
+    mockPrismaEmail.findMany.mockResolvedValue([
+      {
+        id: 'e1',
+        subject: 'Act',
+        sender: 'a@example.com',
+        receivedAt: new Date('2026-05-01T00:00:00Z'),
+        processingStatus: 'done',
+        classification: 'action',
+        taskLinks: [],
+      },
+    ] as never)
+
+    const result = await findBatchStatus('user-1', 'sync-1')
+
+    expect(result.isComplete).toBe(true)
+    expect(result.actionEmails).toHaveLength(1)
   })
 })
 

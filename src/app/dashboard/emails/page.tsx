@@ -56,6 +56,10 @@ type BatchStatus = {
   isComplete: boolean
   totalEmails: number
   pendingEmails: number
+  classifiedEmails?: number
+  quotaSkippedEmails?: number
+  uncertainCount?: number
+  uncertainEmails?: number
   actionEmailCount: number
   actionEmails: BatchActionEmail[]
 }
@@ -532,6 +536,21 @@ function EmailsContent() {
     }
   }, [batchStatus])
 
+  useEffect(() => {
+    if (!batchStatus) return
+    queryClient.invalidateQueries({ queryKey: ['emails'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+  }, [
+    batchStatus,
+    batchStatus?.pendingEmails,
+    batchStatus?.classifiedEmails,
+    batchStatus?.quotaSkippedEmails,
+    batchStatus?.uncertainCount,
+    batchStatus?.uncertainEmails,
+    batchStatus?.isComplete,
+    queryClient,
+  ])
+
   const dismissBatchBanner = () => {
     sessionStorage.removeItem('emailflow:syncBatchId')
     setBatchDismissed(true)
@@ -650,6 +669,16 @@ function EmailsContent() {
           >
             View
           </Button>
+        </div>
+      )}
+
+      {!isLoading && tab === 'unclassified' && pendingCount > 0 && (
+        <div className="animate-soft-enter flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/55 px-4 py-2.5 text-sm text-brand-700 shadow-sm">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
+          <span>
+            <span className="font-medium">AI is classifying {pendingCount} email{pendingCount === 1 ? '' : 's'}...</span>
+            {' '}Classified emails will move out of Unclassified automatically.
+          </span>
         </div>
       )}
 
@@ -904,12 +933,12 @@ function EmailsContent() {
       })()}
 
       {/* Fallback processing banner — shown when no active batch but pending emails exist */}
-      {!isLoading && !batchBannerActive && pendingCount > 0 && (
+      {!isLoading && tab !== 'unclassified' && !batchBannerActive && pendingCount > 0 && (
         <div className="animate-soft-enter flex items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50/55 px-4 py-2.5 text-sm text-brand-700 shadow-sm">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
           <span>
             <span className="font-medium">{pendingCount} email{pendingCount === 1 ? '' : 's'}</span>
-            {' '}being classified — visible once AI finishes, tags appear shortly.
+            {' '}being classified in Unclassified.
           </span>
         </div>
       )}

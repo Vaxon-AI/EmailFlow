@@ -11,6 +11,8 @@ vi.mock('@/integrations/provider-registry', () => ({
 vi.mock('@/repositories/email-repo', () => ({
   storeEmail: vi.fn(),
   fixStuckEmails: vi.fn(),
+  markEmailsAwaitingReview: vi.fn(),
+  markQuotaSkipped: vi.fn(),
 }))
 
 vi.mock('@/repositories/user-repo', () => ({
@@ -30,9 +32,11 @@ vi.mock('@/repositories/failed-email-sync-repo', () => ({
 
 vi.mock('@/workflows', () => ({
   processEmail: vi.fn(),
+  processEmailRuleOnly: vi.fn(),
 }))
 
 vi.mock('@/lib/quota', () => ({
+  FREE_CLASSIFY_LIMIT: 100,
   getClassifyRemaining: vi.fn().mockResolvedValue(Infinity),
   incrementClassifyUsed: vi.fn().mockResolvedValue(undefined),
 }))
@@ -45,9 +49,10 @@ import { getEmailProvider } from '@/integrations/provider-registry'
 import * as emailRepo from '@/repositories/email-repo'
 import * as userRepo from '@/repositories/user-repo'
 import * as failedRepo from '@/repositories/failed-email-sync-repo'
-import { processEmail } from '@/workflows'
+import { processEmail, processEmailRuleOnly } from '@/workflows'
 import { syncEmailsPhase1, syncEmailsPhase2 } from '../email-sync-service'
 import { AppError } from '@/lib/app-errors'
+import { getClassifyRemaining } from '@/lib/quota'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -111,6 +116,9 @@ beforeEach(() => {
   mockProvider.fetchNewEmails.mockResolvedValue([])
   vi.mocked(emailRepo.storeEmail).mockResolvedValue({ email: makeStoredEmail('e1') as any, wasCreated: true })
   vi.mocked(emailRepo.fixStuckEmails).mockResolvedValue(0)
+  vi.mocked(emailRepo.markEmailsAwaitingReview).mockResolvedValue(undefined as any)
+  vi.mocked(emailRepo.markQuotaSkipped).mockResolvedValue(0)
+  vi.mocked(getClassifyRemaining).mockResolvedValue(Infinity)
   vi.mocked(failedRepo.countPendingFailures).mockResolvedValue(0)
   vi.mocked(failedRepo.recordFailedEmail).mockResolvedValue(undefined as any)
   vi.mocked(failedRepo.loadPendingFailures).mockResolvedValue([])
@@ -120,6 +128,7 @@ beforeEach(() => {
     emailId: 'e1', classification: 'action', confidence: 0.9,
     taskCreated: false, skippedByRule: false,
   })
+  vi.mocked(processEmailRuleOnly).mockResolvedValue(null)
 })
 
 it('syncs each enabled email account independently', async () => {
@@ -259,6 +268,21 @@ describe('syncEmailsPhase1 — normal flow', () => {
     expect(result.storedEmails).toHaveLength(1)
     expect(result.storedEmails[0].id).toBe('e1')
   })
+
+  it('still fetches and stores new emails when classify quota is exhausted', async () => {
+    vi.mocked(getClassifyRemaining).mockResolvedValue(0)
+    mockProvider.fetchNewEmails.mockResolvedValue([makeGmailMessage('msg-1')])
+    vi.mocked(emailRepo.storeEmail).mockResolvedValue({ email: makeStoredEmail('e1') as any, wasCreated: true })
+
+    const result = await syncEmailsPhase1('user-1')
+
+    expect(mockProvider.fetchNewEmails).toHaveBeenCalledWith('user-1', { maxResults: 100, accountId: undefined })
+    expect(result.syncedCount).toBe(1)
+    expect(result.quotaLimited).toBe(true)
+    expect(result.quotaRemaining).toBe(0)
+    expect(result.quotaLimit).toBe(100)
+    expect(result.storedEmails).toHaveLength(1)
+  })
 })
 
 describe('syncEmailsPhase1 — per-email failure isolation', () => {
@@ -333,5 +357,47 @@ describe('syncEmailsPhase2 — AI pipeline', () => {
     // Should not throw
     await expect(syncEmailsPhase2('user-1', emails)).resolves.toBeUndefined()
     expect(processEmail).toHaveBeenCalledTimes(3)
+  })
+
+  it('marks only non-rule over-quota emails as quota_skipped', async () => {
+    vi.mocked(getClassifyRemaining).mockResolvedValue(1)
+    const emails = [makeStoredEmail('e1'), makeStoredEmail('e2'), makeStoredEmail('e3')] as any[]
+    vi.mocked(processEmailRuleOnly)
+      .mockResolvedValueOnce({
+        emailId: 'e2',
+        classification: 'ignore',
+        confidence: 0.95,
+        taskCreated: false,
+        skippedByRule: true,
+      })
+      .mockResolvedValueOnce(null)
+
+    await syncEmailsPhase2('user-1', emails)
+
+    expect(processEmail).toHaveBeenCalledTimes(1)
+    expect(processEmail).toHaveBeenCalledWith('user-1', expect.objectContaining({ id: 'e1' }))
+    expect(processEmailRuleOnly).toHaveBeenCalledWith(expect.objectContaining({ id: 'e2' }))
+    expect(processEmailRuleOnly).toHaveBeenCalledWith(expect.objectContaining({ id: 'e3' }))
+    expect(emailRepo.markQuotaSkipped).toHaveBeenCalledWith(['e3'])
+  })
+
+  it('runs rule-based pre-filter even when classify quota is exhausted', async () => {
+    vi.mocked(getClassifyRemaining).mockResolvedValue(0)
+    const emails = [makeStoredEmail('e1'), makeStoredEmail('e2')] as any[]
+    vi.mocked(processEmailRuleOnly)
+      .mockResolvedValueOnce({
+        emailId: 'e1',
+        classification: 'ignore',
+        confidence: 0.95,
+        taskCreated: false,
+        skippedByRule: true,
+      })
+      .mockResolvedValueOnce(null)
+
+    await syncEmailsPhase2('user-1', emails)
+
+    expect(processEmail).not.toHaveBeenCalled()
+    expect(processEmailRuleOnly).toHaveBeenCalledTimes(2)
+    expect(emailRepo.markQuotaSkipped).toHaveBeenCalledWith(['e2'])
   })
 })

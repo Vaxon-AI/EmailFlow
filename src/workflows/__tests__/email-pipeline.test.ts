@@ -92,7 +92,7 @@ import type { MatterMemory } from '@/repositories/matter-memory-repo'
 import type { ProjectContext } from '@/repositories/project-context-repo'
 import type { UserIdentity } from '@/repositories/identity-repo'
 
-import { createTaskFromClassifiedEmail, processEmail } from '../email-pipeline'
+import { createTaskFromClassifiedEmail, processEmail, processEmailRuleOnly } from '../email-pipeline'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -272,6 +272,28 @@ describe('processEmail — provider category pre-filter', () => {
 
     expect(result.skippedByRule).toBe(true)
     expect(result.classification).toBe('ignore')
+  })
+})
+
+describe('processEmailRuleOnly', () => {
+  it('classifies provider category emails without calling AI', async () => {
+    const result = await processEmailRuleOnly(makeEmail({ labels: '["INBOX","CATEGORY_UPDATES"]' }))
+
+    expect(result?.classification).toBe('ignore')
+    expect(result?.skippedByRule).toBe(true)
+    expect(ai.classifyEmail).not.toHaveBeenCalled()
+    expect(emailRepo.updateClassification).toHaveBeenCalledWith(
+      'email-1',
+      expect.objectContaining({ category: 'ignore' })
+    )
+  })
+
+  it('returns null for emails that require AI classification', async () => {
+    const result = await processEmailRuleOnly(makeEmail())
+
+    expect(result).toBeNull()
+    expect(ai.classifyEmail).not.toHaveBeenCalled()
+    expect(emailRepo.updateClassification).not.toHaveBeenCalled()
   })
 })
 
