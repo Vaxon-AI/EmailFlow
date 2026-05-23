@@ -9,6 +9,7 @@ import { Sidebar } from '@/components/sidebar'
 import { Header } from '@/components/header'
 import { SectionFade } from '@/components/page-transition'
 import { StatePanel } from '@/components/state-panel'
+import { SyncSetupProvider } from '@/components/sync-setup/sync-setup-provider'
 import { CACHE_TIME } from '@/lib/query-cache'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -65,14 +66,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-screen bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(255,255,255,1)_240px)]">
-      <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavPath(null)} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Header onOpenMobileNav={() => setMobileNavPath(pathname)} />
-        <main className="min-h-[calc(100vh-3.5rem)] flex-1 px-4 pb-10 pt-6 lg:px-6">
-          <SectionFade>{children}</SectionFade>
-        </main>
+    <SyncSetupProvider>
+      <div className="flex min-h-screen bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(255,255,255,1)_240px)]">
+        <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavPath(null)} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Header onOpenMobileNav={() => setMobileNavPath(pathname)} />
+          <main className="min-h-[calc(100vh-3.5rem)] flex-1 px-4 pb-10 pt-6 lg:px-6">
+            <SectionFade>{children}</SectionFade>
+          </main>
+        </div>
       </div>
-    </div>
+    </SyncSetupProvider>
   )
 }

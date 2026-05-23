@@ -3,69 +3,28 @@
 import { Suspense, useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/use-auth'
-import { ApiClientError, isSessionFailureCode } from '@/lib/api-client'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { RefreshCw, User, LogOut, ChevronRight, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Menu } from 'lucide-react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { RefreshCw, User, LogOut, ChevronRight, AlertTriangle, Loader2, Menu } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { isWorkspaceQueryKey } from '@/lib/query-cache'
-import { shouldShowQuotaWarning } from '@/lib/sync-quota-warning'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { useSyncSetup } from '@/components/sync-setup/sync-setup-provider'
 
-// How long to wait before doing a second refetch to pick up AI-created tasks.
-// AI pipeline typically takes 5–30s depending on email volume.
-const PROCESSING_REFETCH_DELAY_MS = 20_000
-
-interface SyncResultData {
-  ok: boolean
-  code?: string
-  syncedCount: number
-  skippedCount: number
-  failedCount: number
-  pendingFailedCount: number
-  syncBatchId?: string
-  // True when new emails were stored — AI pipeline is running in the background
-  processing: boolean
-  // True when this sync hit the free-plan classify quota cap
-  quotaLimited?: boolean
-  // Remaining classify quota (null for paid plans)
-  quotaRemaining?: number | null
-  quotaLimit?: number | null
-  errorMessage?: string
-  recoveryHint?: string
-}
-
-type SyncBatchStatus = {
-  isComplete: boolean
-  totalEmails: number
-  pendingEmails: number
-  needsActionCount?: number
-  fyiCount?: number
-  ignoredCount?: number
-  uncertainCount?: number
-  uncertainEmails?: number
-  quotaSkippedEmails?: number
+type SyncStateKind = 'fresh' | 'stale' | 'never'
+type SyncStateRes = {
+  data?: { state?: { kind?: string; lastSyncAt?: string; daysSince?: number } }
 }
 
 export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const { user, logout } = useAuth()
-  const queryClient = useQueryClient()
   const pathname = usePathname()
   const router = useRouter()
-  const [syncResult, setSyncResult] = useState<SyncResultData | null>(null)
-  const [syncResultOpen, setSyncResultOpen] = useState(false)
+  const { openSyncSetup, runSync, syncPending } = useSyncSetup()
+  const [gating, setGating] = useState(false)
 
   const segments = pathname.split('/').filter(Boolean)
   const currentSection = segments[1] ? segments[1].replace(/-/g, ' ') : 'dashboard'
@@ -81,117 +40,40 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   })
   const unclassifiedCount = unclassifiedRes?.data?.count ?? 0
 
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/sync', { method: 'POST' })
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
-        if (!res.ok) {
-          throw new ApiClientError(
-            data?.error?.message || 'Sync failed',
-            res.status,
-            data?.error?.code,
-          )
-        }
-
-        throw new Error(data?.error?.message || 'Sync failed')
-      }
-
-      return data
-    },
-
-    onSuccess: (data) => {
-      // Invalidate immediately — emails are stored, they'll appear now.
-      queryClient.invalidateQueries({
-        predicate: (query) => isWorkspaceQueryKey(query.queryKey),
-      })
-      queryClient.refetchQueries({
-        predicate: (query) => isWorkspaceQueryKey(query.queryKey),
-        type: 'active',
-      })
-
-      const syncData = data?.data as {
-        syncedCount: number
-        skippedCount: number
-        failedCount: number
-        pendingFailedCount: number
-        syncBatchId: string
-        processing: boolean
-        quotaLimited?: boolean
-        quotaRemaining?: number | null
-        quotaLimit?: number | null
-      } | undefined
-
-      const processing = syncData?.processing ?? false
-
-      // Store the batch ID so the Emails page can poll for action-email results.
-      if (processing && syncData?.syncBatchId) {
-        sessionStorage.setItem('emailflow:syncBatchId', syncData.syncBatchId)
-      }
-
-      setSyncResult({
-        ok: true,
-        syncedCount: syncData?.syncedCount ?? 0,
-        skippedCount: syncData?.skippedCount ?? 0,
-        failedCount: syncData?.failedCount ?? 0,
-        pendingFailedCount: syncData?.pendingFailedCount ?? 0,
-        syncBatchId: syncData?.syncBatchId,
-        processing,
-        quotaLimited: syncData?.quotaLimited,
-        quotaRemaining: syncData?.quotaRemaining,
-        quotaLimit: syncData?.quotaLimit,
-      })
-      setSyncResultOpen(true)
-
-      // When AI is running in the background, do a second refetch after a delay
-      // to pick up newly created tasks without the user having to manually refresh.
-      if (processing) {
-        setTimeout(() => {
-          queryClient.invalidateQueries({
-            predicate: (query) => isWorkspaceQueryKey(query.queryKey),
-          })
-          queryClient.refetchQueries({
-            predicate: (query) => isWorkspaceQueryKey(query.queryKey),
-            type: 'active',
-          })
-        }, PROCESSING_REFETCH_DELAY_MS)
-      }
-    },
-
-    onError: (err) => {
-      if (err instanceof ApiClientError && isSessionFailureCode(err.code)) {
-        logout()
-        return
-      }
-
-      console.error('Sync failed:', err)
-      queryClient.invalidateQueries({
-        predicate: (query) => isWorkspaceQueryKey(query.queryKey),
-      })
-      queryClient.refetchQueries({
-        predicate: (query) => isWorkspaceQueryKey(query.queryKey),
-        type: 'active',
-      })
-      setSyncResult({
-        ok: false,
-        code: err instanceof ApiClientError ? err.code : undefined,
-        syncedCount: 0,
-        skippedCount: 0,
-        failedCount: 0,
-        pendingFailedCount: 0,
-        processing: false,
-        errorMessage: err instanceof Error ? err.message : 'Sync failed',
-        recoveryHint:
-          err instanceof ApiClientError && err.code === 'PROVIDER_REAUTH_REQUIRED'
-            ? 'Reconnect your email provider in Settings, then run sync again.'
-            : err instanceof ApiClientError && err.code === 'SYNC_TEMPORARY_ERROR'
-              ? 'This looks temporary. Wait a moment and try again.'
-              : undefined,
-      })
-      setSyncResultOpen(true)
-    },
+  // Pre-warm the sync-state cache so the click → modal-or-sync decision feels
+  // instant. Staletime keeps us from hammering /api/sync/state.
+  const { refetch: refetchSyncState } = useQuery<SyncStateRes>({
+    queryKey: ['sync-state'],
+    queryFn: () => fetch('/api/sync/state').then((r) => r.json()),
+    enabled: !!user,
+    staleTime: 60_000,
   })
+
+  const onSyncClick = async () => {
+    if (syncPending || gating) return
+    setGating(true)
+    try {
+      // Force-fresh read — we don't want a stale cached 'fresh' to send us
+      // straight into a full sync if the user actually crossed the 7-day line.
+      const res = await refetchSyncState()
+      const kind = (res.data?.data?.state?.kind ?? 'never') as SyncStateKind
+      if (kind === 'fresh') {
+        runSync()
+      } else {
+        // stale → "Welcome back" + preview; never → first-time setup. Both go
+        // through the same modal, with the modal deciding what to show.
+        openSyncSetup('header-sync')
+      }
+    } catch {
+      // If state lookup fails, fall back to the safe path — open the modal
+      // so the user picks a window instead of triggering a full sync blind.
+      openSyncSetup('header-sync')
+    } finally {
+      setGating(false)
+    }
+  }
+
+  const busy = syncPending || gating
 
   return (
     <>
@@ -199,8 +81,8 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         <RunSyncOnQueryParam
           pathname={pathname}
           router={router}
-          pending={syncMutation.isPending}
-          onTrigger={() => syncMutation.mutate()}
+          pending={busy}
+          onTrigger={runSync}
         />
       </Suspense>
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-gray-200/80 bg-white/85 px-4 backdrop-blur lg:px-6">
@@ -230,17 +112,18 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
             </button>
           )}
           <button
-            onClick={() => {
-              if (syncMutation.isPending) return
-              syncMutation.mutate()
-            }}
-            disabled={syncMutation.isPending}
-            title={syncMutation.isPending ? 'Syncing...' : 'Sync emails'}
+            onClick={onSyncClick}
+            disabled={busy}
+            title={busy ? 'Syncing...' : 'Sync emails'}
             className={cn(
               'rounded-full border border-transparent p-2 text-gray-400 transition-colors hover:border-brand-100 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-40'
             )}
           >
-            <RefreshCw className={cn('h-4 w-4', syncMutation.isPending && 'animate-spin')} />
+            {gating && !syncPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className={cn('h-4 w-4', syncPending && 'animate-spin')} />
+            )}
           </button>
 
           <DropdownMenu>
@@ -259,24 +142,14 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           </DropdownMenu>
         </div>
       </header>
-
-      <SyncResultDialog
-        open={syncResultOpen}
-        onClose={() => setSyncResultOpen(false)}
-        onViewUnclassified={() => {
-          setSyncResultOpen(false)
-          router.push('/dashboard/emails?tab=unclassified')
-        }}
-        result={syncResult}
-      />
     </>
   )
 }
 
-// Dashboard's first-login / "set sync range" modal redirects to a dashboard
-// route with ?run_sync=1 after the user picks a date range. We isolate the
-// useSearchParams() call here so the Header itself can be statically
-// prerendered; a Suspense boundary in Header bails out only this subtree.
+// Legacy deep-link compat: the old dashboard modal used to redirect to
+// /dashboard?run_sync=1 after the user picked a window. The new flow triggers
+// the mutation in-place via the provider, but we keep this handler so any
+// outstanding link / OAuth callback that still sets run_sync=1 keeps working.
 function RunSyncOnQueryParam({
   pathname,
   router,
@@ -302,171 +175,4 @@ function RunSyncOnQueryParam({
   }, [searchParams])
 
   return null
-}
-
-// ============================================================
-// Sync Result Dialog
-// ============================================================
-
-interface SyncResultDialogProps {
-  open: boolean
-  onClose: () => void
-  onViewUnclassified: () => void
-  result: SyncResultData | null
-}
-
-function SyncResultDialog({ open, onClose, onViewUnclassified, result }: SyncResultDialogProps) {
-  const syncBatchId = result?.syncBatchId
-  const { data: batchStatus } = useQuery<SyncBatchStatus>({
-    queryKey: ['syncBatch', syncBatchId, 'dialog'],
-    queryFn: async () => {
-      const res = await fetch(`/api/sync/batch/${syncBatchId}`)
-      const json = await res.json()
-      return json.data as SyncBatchStatus
-    },
-    enabled: open && !!syncBatchId && result?.ok === true && result.processing,
-    refetchInterval: (query) => {
-      const data = query.state.data as SyncBatchStatus | undefined
-      if (!data || data.isComplete) return false
-      return 3000
-    },
-    staleTime: 0,
-  })
-
-  if (!result) return null
-
-  const {
-    ok, code, syncedCount, skippedCount, failedCount, pendingFailedCount,
-    syncBatchId: resultSyncBatchId, processing, errorMessage, recoveryHint, quotaRemaining, quotaLimit,
-  } = result
-
-  const isPartial = ok && (failedCount > 0 || pendingFailedCount > 0)
-  const showQuotaWarning = ok && shouldShowQuotaWarning(quotaRemaining, quotaLimit)
-  const quotaExhausted = ok && quotaRemaining === 0
-  const hasNewEmails = syncedCount > 0
-  const isClassifying = processing && (!batchStatus || !batchStatus.isComplete)
-  const showBatchSummary = ok && batchStatus?.isComplete && batchStatus.totalEmails > 0
-
-  const statusIcon = !ok
-    ? <AlertCircle className="h-5 w-5 text-critical" />
-    : isPartial
-    ? <AlertTriangle className="h-5 w-5 text-warning" />
-    : <CheckCircle2 className="h-5 w-5 text-success" />
-
-  const statusLabel = !ok
-    ? 'Sync failed'
-    : isPartial
-      ? 'Partial success'
-      : hasNewEmails
-        ? 'Synced'
-        : 'No new emails'
-  const statusColor = !ok ? 'text-critical' : isPartial ? 'text-warning' : 'text-success'
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>Sync Result</DialogTitle>
-        </DialogHeader>
-
-        <div className="flex items-center gap-2 rounded-lg border px-3 py-2.5">
-          {statusIcon}
-          <span className={cn('text-sm font-medium', statusColor)}>{statusLabel}</span>
-        </div>
-
-        {ok ? (
-          <ul className="space-y-1.5 text-sm text-gray-700">
-            {syncedCount > 0 ? (
-              <SyncLine
-                label={
-                  quotaExhausted
-                    ? `Synced ${syncedCount} email${syncedCount === 1 ? '' : 's'} to Unclassified`
-                    : `Synced ${syncedCount} email${syncedCount === 1 ? '' : 's'}`
-                }
-              />
-            ) : skippedCount > 0 ? (
-              <SyncLine label="No new emails" muted />
-            ) : (
-              <SyncLine label="No new emails" muted />
-            )}
-            {skippedCount > 0 && (
-              <SyncLine label={`${skippedCount} already stored`} muted />
-            )}
-            {failedCount > 0 && (
-              <SyncLine label={`${failedCount} failed to store`} warn />
-            )}
-            {pendingFailedCount > 0 && (
-              <SyncLine label={`${pendingFailedCount} failed email${pendingFailedCount === 1 ? '' : 's'} pending retry`} warn />
-            )}
-            {isClassifying && (
-              <li className="flex items-center gap-2 text-brand-600 pt-0.5">
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                <span>AI classification is running in the background...</span>
-              </li>
-            )}
-            {showBatchSummary && (
-              <li className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
-                <p className="mb-1 font-medium text-gray-900">This sync finished:</p>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                  <span>Needs Action: {batchStatus.needsActionCount ?? 0}</span>
-                  <span>FYI: {batchStatus.fyiCount ?? 0}</span>
-                  <span>Ignored: {batchStatus.ignoredCount ?? 0}</span>
-                  <span>Uncertain: {batchStatus.uncertainCount ?? batchStatus.uncertainEmails ?? 0}</span>
-                </div>
-                {(batchStatus.quotaSkippedEmails ?? 0) > 0 && (
-                  <p className="mt-1 text-warning-700">
-                    Unclassified: {batchStatus.quotaSkippedEmails} not classified due to quota.
-                  </p>
-                )}
-              </li>
-            )}
-            {showQuotaWarning && (
-              <li className="mt-2 rounded-lg border border-warning-200 bg-warning-100/70 px-3 py-2 text-xs text-warning-700">
-                <span className="font-medium">
-                  {quotaExhausted ? 'AI classification paused.' : 'Free plan limit almost reached.'}
-                </span>{' '}
-                {quotaRemaining === 0
-                  ? 'Your free plan classification limit is reached. New email is visible in Unclassified, or '
-                  : `Only ${quotaRemaining} email${quotaRemaining === 1 ? '' : 's'} left to classify this month. `}
-                <a href="mailto:support@emailflow.ai?subject=Pro plan early access" className="font-semibold underline hover:text-warning">
-                  upgrade to Pro
-                </a>{' '}
-                for unlimited classification.
-              </li>
-            )}
-          </ul>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-sm text-gray-600">{errorMessage}</p>
-            {recoveryHint ? <p className="text-sm text-gray-500">{recoveryHint}</p> : null}
-            {code ? <p className="text-xs uppercase tracking-[0.14em] text-gray-400">{code}</p> : null}
-          </div>
-        )}
-
-        <DialogFooter showCloseButton={false}>
-          {ok && resultSyncBatchId && (
-            <Button variant="outline" onClick={onViewUnclassified}>
-              View Unclassified
-            </Button>
-          )}
-          <Button onClick={onClose}>
-            {isClassifying ? 'Close (continues in background)' : 'Close'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function SyncLine({ label, muted, warn }: { label: string; muted?: boolean; warn?: boolean }) {
-  return (
-    <li className={cn(
-      'flex items-center gap-2',
-      muted && 'text-gray-400',
-      warn && 'text-warning',
-    )}>
-      <span className="h-1 w-1 rounded-full bg-current opacity-60 shrink-0" />
-      {label}
-    </li>
-  )
 }
