@@ -37,6 +37,8 @@ import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel
 import {
   EMAIL_BUCKET_CONFIG,
   EMAIL_DISPLAY_CONFIG,
+  EMAIL_DETAIL_TONE,
+  EMAIL_DETAIL_HEADER_BG,
   getEmailDisplayState,
   type EmailBucket,
   type EmailDisplayState,
@@ -70,21 +72,10 @@ type ApiErrorPayload = {
   error?: { message?: string } | string
 }
 
-const DETAIL_CLASS_TONE: Record<EmailDisplayState, string> = {
-  needs_action: 'bg-critical-50/70 text-critical border-critical-100',
-  tracked: 'bg-brand-50 text-brand-700 border-brand-100',
-  fyi: 'bg-white text-gray-700 border-gray-200',
-  ignored: 'bg-transparent text-gray-400 border-gray-200',
-  uncertain: 'bg-warning-50/70 text-warning-700 border-warning-100',
-}
-
-const DETAIL_HEADER_TONE: Record<EmailDisplayState, string> = {
-  needs_action: 'from-critical-50/25 via-white to-white',
-  tracked: 'from-brand-50/30 via-white to-white',
-  fyi: 'from-gray-50/30 via-white to-white',
-  ignored: 'from-gray-50/25 via-white to-white',
-  uncertain: 'from-warning-50/20 via-white to-white',
-}
+// Shared between real and demo email detail — see EMAIL_DETAIL_TONE /
+// EMAIL_DETAIL_HEADER_BG in src/lib/email-classification.ts.
+const DETAIL_CLASS_TONE = EMAIL_DETAIL_TONE
+const DETAIL_HEADER_TONE = EMAIL_DETAIL_HEADER_BG
 
 const DETAIL_SENDER_TONE: Record<EmailDisplayState, string> = {
   needs_action: 'border-critical-50 bg-white/85',

@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import './landing-tokens.css'
@@ -53,10 +52,6 @@ function clamp(v: number, a = 0, b = 1) {
   return Math.max(a, Math.min(b, v))
 }
 
-function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * t
-}
-
 // ---------- Top-level page ----------
 
 export default function LandingPage() {
@@ -70,8 +65,6 @@ export default function LandingPage() {
       <CinePinnedStory />
       <CineMetrics />
       <CineMatrix />
-      <CineDashboard />
-      <CineWho />
       <CineCTA />
       <CineFooter />
     </div>
@@ -115,6 +108,13 @@ function CineNav() {
         </Link>
         <nav style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
           <Link
+            href="/demo"
+            className="sans"
+            style={{ fontSize: 13.5, color: 'var(--ef-ink-dim)', textDecoration: 'none' }}
+          >
+            Live demo
+          </Link>
+          <Link
             href="/auth/signin"
             className="sans"
             style={{ fontSize: 13.5, color: 'var(--ef-ink-dim)', textDecoration: 'none' }}
@@ -135,7 +135,7 @@ function CineNav() {
               textDecoration: 'none',
             }}
           >
-            Start free
+            Connect Gmail
           </Link>
         </nav>
       </div>
@@ -153,8 +153,8 @@ function LogoMark() {
         width: 32,
         height: 32,
         borderRadius: 10,
-        background: '#2563eb',
-        boxShadow: '0 1px 2px rgba(37,99,235,0.25), 0 6px 16px rgba(37,99,235,0.18)',
+        background: 'var(--ef-signal)',
+        boxShadow: '0 1px 2px rgba(30,75,224,0.25), 0 6px 16px rgba(30,75,224,0.18)',
       }}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -182,9 +182,6 @@ function CineHero() {
           zIndex: 2,
         }}
       >
-        <div style={{ marginBottom: 40 }}>
-          <Label>{'// EmailFlow · 2026'}</Label>
-        </div>
         <h1
           className="serif"
           style={{
@@ -196,9 +193,9 @@ function CineHero() {
             maxWidth: '1100px',
           }}
         >
-          <RevealLine delay={0}>The inbox</RevealLine>
+          <RevealLine delay={0}>Your inbox is a</RevealLine>
           <RevealLine delay={140}>
-            that clears <em style={{ fontStyle: 'italic', color: 'var(--ef-signal)' }}>itself</em>.
+            to-do list <em style={{ fontStyle: 'italic', color: 'var(--ef-signal)' }}>in disguise</em>.
           </RevealLine>
         </h1>
         <div
@@ -214,26 +211,47 @@ function CineHero() {
             className="sans"
             style={{ fontSize: 19, lineHeight: 1.55, color: 'var(--ef-ink-dim)', margin: 0, maxWidth: 520 }}
           >
-            EmailFlow AI reads every thread, extracts the real work, and hands you a ranked queue. For people whose
-            inbox <em>is</em> the job — and who&apos;d rather be done with it by 10am.
+            Long threads. Buried asks. Deadlines you notice only once they&apos;re late. EmailFlow AI reads every
+            thread, pulls out the real tasks, and ranks what needs you first.
           </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'end' }}>
-            <Link
-              href="/auth/signup"
-              className="sans"
-              style={{
-                fontSize: 14,
-                padding: '14px 22px',
-                background: 'var(--ef-signal)',
-                color: '#fff',
-                borderRadius: 999,
-                fontWeight: 500,
-                boxShadow: '0 2px 6px rgba(30,75,224,0.25), 0 16px 40px rgba(30,75,224,0.18)',
-                textDecoration: 'none',
-              }}
-            >
-              Connect Gmail →
-            </Link>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <Link
+                href="/demo"
+                className="sans"
+                style={{
+                  fontSize: 14,
+                  padding: '14px 22px',
+                  background: 'var(--ef-surface)',
+                  color: 'var(--ef-ink)',
+                  border: '1px solid var(--ef-line)',
+                  borderRadius: 999,
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                }}
+              >
+                See the live demo →
+              </Link>
+              <Link
+                href="/auth/signup"
+                className="sans"
+                style={{
+                  fontSize: 14,
+                  padding: '14px 22px',
+                  background: 'var(--ef-signal)',
+                  color: '#fff',
+                  borderRadius: 999,
+                  fontWeight: 500,
+                  boxShadow: '0 2px 6px rgba(30,75,224,0.25), 0 16px 40px rgba(30,75,224,0.18)',
+                  textDecoration: 'none',
+                }}
+              >
+                Connect Gmail →
+              </Link>
+            </div>
+            <span className="sans" style={{ fontSize: 12.5, color: 'var(--ef-ink-mute)' }}>
+              Free to start · read-only — never sends, deletes, or changes your mail.
+            </span>
           </div>
         </div>
 
@@ -318,11 +336,11 @@ function Label({ children, style }: { children: ReactNode; style?: CSSProperties
     <span
       className="mono"
       style={{
-        fontSize: 11.5,
-        color: 'var(--ef-ink-mute)',
+        fontSize: 12,
+        color: 'var(--ef-signal)',
         letterSpacing: '0.14em',
         textTransform: 'uppercase',
-        fontWeight: 500,
+        fontWeight: 600,
         ...style,
       }}
     >
@@ -364,19 +382,66 @@ function ScrollHint() {
 
 // ---------- Hero pipeline ----------
 
-type PipelineItem = { from: string; subj: string; task: string; proj: string; p: string; due: string }
+type PipelinePair = {
+  initial: string
+  color: string
+  sender: string
+  subject: string
+  snippet: string
+  task: string
+  due: string
+  level: 'High' | 'Med' | 'Low'
+  project: string
+}
+
+const PIPELINE_PAIRS: PipelinePair[] = [
+  {
+    initial: 'M',
+    color: '#1E4BE0',
+    sender: 'Morgan Lee',
+    subject: 'Re: Q2 launch sign-off',
+    snippet: '“Need your approval on the launch assets by end of day.”',
+    task: 'Approve the launch assets',
+    due: 'Due today',
+    level: 'High',
+    project: 'Q2 Launch',
+  },
+  {
+    initial: 'P',
+    color: '#7A4DE0',
+    sender: 'Priya Sharma',
+    subject: 'Vendor contract — redlines v3',
+    snippet: '“Legal needs your read on the changes before we can sign.”',
+    task: 'Review the contract changes',
+    due: 'Due today',
+    level: 'High',
+    project: 'Acme Renewal',
+  },
+  {
+    initial: 'D',
+    color: '#1F7A4D',
+    sender: 'Daniel Cho',
+    subject: 'Go / no-go meeting Thursday',
+    snippet: '“Can you confirm you’ll be at Thursday’s 10am?”',
+    task: 'Confirm the Thursday meeting',
+    due: 'Tomorrow',
+    level: 'Med',
+    project: 'Q2 Launch',
+  },
+]
+
+const PIPELINE_LEVEL: Record<'High' | 'Med' | 'Low', { bg: string; fg: string }> = {
+  High: { bg: '#FDECEA', fg: '#C23030' },
+  Med: { bg: '#FEF3E0', fg: '#A07420' },
+  Low: { bg: 'var(--ef-surface-2)', fg: 'var(--ef-ink-mute)' },
+}
 
 function HeroPipeline() {
   const [step, setStep] = useState(0)
   useEffect(() => {
-    const id = setInterval(() => setStep((s) => (s + 1) % 4), 2200)
+    const id = setInterval(() => setStep((s) => (s + 1) % PIPELINE_PAIRS.length), 2800)
     return () => clearInterval(id)
   }, [])
-  const items: PipelineItem[] = [
-    { from: 'morgan@northwind.co', subj: 'Re: Q2 launch sign-off', task: 'Reply approval on assets', proj: 'Q2 Launch', p: 'P0', due: 'Today' },
-    { from: 'priya@acme.io', subj: 'Vendor contract — redlines v3', task: 'Review §4.2, send back', proj: 'Acme Renewal', p: 'P0', due: 'Today' },
-    { from: 'lena@studio.co', subj: 'Stakeholder briefing', task: 'Confirm Thu 10am slot', proj: 'Atlas', p: 'P1', due: 'Tomorrow' },
-  ]
   return (
     <div
       style={{
@@ -387,14 +452,17 @@ function HeroPipeline() {
         boxShadow: '0 40px 100px rgba(10,16,36,0.08)',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
-          <Label>LIVE PIPELINE</Label>
-          <div className="serif" style={{ fontSize: 28, letterSpacing: '-0.02em', marginTop: 8 }}>
-            Inbox → Queue, in real time
+          <Label>WATCH IT WORK</Label>
+          <div className="serif" style={{ fontSize: 26, letterSpacing: '-0.02em', marginTop: 8 }}>
+            Every email becomes one clear task.
           </div>
         </div>
-        <div className="mono" style={{ fontSize: 12, color: 'var(--ef-signal)', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div
+          className="mono"
+          style={{ fontSize: 12, color: 'var(--ef-signal)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, flexShrink: 0 }}
+        >
           <span
             style={{
               width: 7,
@@ -404,122 +472,184 @@ function HeroPipeline() {
               animation: 'landingPulseDot 1.4s infinite',
             }}
           />
-          processing
+          live
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', alignItems: 'center', gap: 24 }}>
-        <div>
-          <div className="mono" style={{ fontSize: 10.5, color: 'var(--ef-ink-mute)', marginBottom: 10, letterSpacing: '0.14em' }}>
-            RAW · GMAIL
+      <div style={{ position: 'relative', minHeight: 172 }}>
+        {PIPELINE_PAIRS.map((pair, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'grid',
+              gridTemplateColumns: '1fr 96px 1fr',
+              alignItems: 'center',
+              gap: 8,
+              opacity: step === i ? 1 : 0,
+              transform: step === i ? 'translateY(0)' : 'translateY(10px)',
+              transition: 'opacity 600ms cubic-bezier(.2,.8,.2,1), transform 600ms cubic-bezier(.2,.8,.2,1)',
+              pointerEvents: step === i ? 'auto' : 'none',
+            }}
+          >
+            <PipelineEmailCard pair={pair} />
+            <PipelineConnector />
+            <PipelineTaskCard pair={pair} />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {items.map((it, i) => (
-              <RawCard key={i} item={it} active={i === step % items.length} />
-            ))}
-          </div>
-        </div>
+        ))}
+      </div>
 
-        <FlowArrow step={step} />
-
-        <div>
-          <div className="mono" style={{ fontSize: 10.5, color: 'var(--ef-signal)', marginBottom: 10, letterSpacing: '0.14em' }}>
-            QUEUE · TASKS
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {items.map((it, i) => (
-              <TaskCard key={i} item={it} active={i === step % items.length} />
-            ))}
-          </div>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 7, marginTop: 22 }}>
+        {PIPELINE_PAIRS.map((_, i) => (
+          <span
+            key={i}
+            style={{
+              width: step === i ? 22 : 7,
+              height: 7,
+              borderRadius: 999,
+              background: step === i ? 'var(--ef-signal)' : 'var(--ef-line)',
+              transition: 'all 400ms cubic-bezier(.2,.8,.2,1)',
+            }}
+          />
+        ))}
       </div>
     </div>
   )
 }
 
-function RawCard({ item, active }: { item: PipelineItem; active: boolean }) {
+function PipelineEmailCard({ pair }: { pair: PipelinePair }) {
   return (
     <div
       style={{
-        padding: '12px 14px',
+        padding: '14px 16px',
         border: '1px solid var(--ef-line)',
-        borderRadius: 10,
+        borderRadius: 12,
         background: 'var(--ef-surface)',
-        transition: 'all 500ms cubic-bezier(.2,.8,.2,1)',
-        transform: active ? 'translateX(6px)' : 'translateX(0)',
-        borderColor: active ? 'var(--ef-signal)' : 'var(--ef-line)',
-        boxShadow: active ? '0 8px 24px rgba(30,75,224,0.15)' : 'none',
       }}
     >
-      <div className="mono" style={{ fontSize: 10.5, color: 'var(--ef-ink-mute)' }}>
-        {item.from}
+      <div className="mono" style={{ fontSize: 9.5, color: 'var(--ef-ink-mute)', letterSpacing: '0.16em', marginBottom: 10 }}>
+        EMAIL
       </div>
-      <div className="sans" style={{ fontSize: 13.5, color: 'var(--ef-ink)', marginTop: 3 }}>
-        {item.subj}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span
+          className="sans"
+          style={{
+            width: 26,
+            height: 26,
+            flexShrink: 0,
+            borderRadius: 999,
+            background: pair.color,
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          {pair.initial}
+        </span>
+        <span className="sans" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ef-ink)' }}>
+          {pair.sender}
+        </span>
+      </div>
+      <div className="sans" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ef-ink)', marginBottom: 5 }}>
+        {pair.subject}
+      </div>
+      <div className="sans" style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--ef-ink-mute)' }}>
+        {pair.snippet}
       </div>
     </div>
   )
 }
 
-function TaskCard({ item, active }: { item: PipelineItem; active: boolean }) {
+function PipelineConnector() {
   return (
-    <div
-      style={{
-        padding: '12px 14px',
-        border: '1px solid var(--ef-line)',
-        borderRadius: 10,
-        background: active ? 'color-mix(in oklab, var(--ef-signal) 8%, var(--ef-surface))' : 'var(--ef-surface)',
-        transition: 'all 700ms cubic-bezier(.2,.8,.2,1)',
-        opacity: active ? 1 : 0.45,
-        transform: active ? 'translateX(0)' : 'translateX(-6px)',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span className="mono" style={{ fontSize: 10.5, color: 'var(--ef-signal)', fontWeight: 600 }}>
-          {item.p} · {item.proj}
-        </span>
-        <span className="mono" style={{ fontSize: 10.5, color: 'var(--ef-ink-mute)' }}>
-          {item.due}
-        </span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      <div
+        className="mono"
+        style={{ fontSize: 9, color: 'var(--ef-ink-mute)', letterSpacing: '0.12em', textAlign: 'center', lineHeight: 1.45 }}
+      >
+        EmailFlow
+        <br />
+        reads it
       </div>
-      <div className="sans" style={{ fontSize: 13.5, color: 'var(--ef-ink)', marginTop: 4 }}>
-        ↳ {item.task}
-      </div>
-    </div>
-  )
-}
-
-function FlowArrow({ step }: { step: number }) {
-  const fraction = ((step + 1) % 4) / 4
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '20px 0' }}>
-      <div className="mono" style={{ fontSize: 10, color: 'var(--ef-ink-mute)', letterSpacing: '0.14em' }}>
-        PARSE
-      </div>
-      <svg width="60" height="60" viewBox="0 0 60 60">
-        <circle cx="30" cy="30" r="22" stroke="var(--ef-line)" strokeWidth="1.5" fill="none" />
-        <circle
-          cx="30"
-          cy="30"
-          r="22"
+      <svg width="40" height="12" viewBox="0 0 40 12" fill="none">
+        <path d="M0 6 H32" stroke="var(--ef-signal)" strokeWidth="1.5" />
+        <path
+          d="M30 1.5 L36 6 L30 10.5"
           stroke="var(--ef-signal)"
           strokeWidth="1.5"
           fill="none"
-          strokeDasharray="138"
-          strokeDashoffset={138 - 138 * fraction}
-          style={{ transition: 'stroke-dashoffset 2.2s linear', transform: 'rotate(-90deg)', transformOrigin: 'center' }}
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
-        <text
-          x="30"
-          y="34"
-          textAnchor="middle"
-          style={{ fontSize: 11, fill: 'var(--ef-signal)', fontFamily: 'var(--ff-mono)' }}
-        >
-          {Math.round(fraction * 100)}
-        </text>
       </svg>
-      <div className="mono" style={{ fontSize: 10, color: 'var(--ef-ink-mute)', letterSpacing: '0.14em' }}>
-        → EXTRACT
+    </div>
+  )
+}
+
+function PipelineTaskCard({ pair }: { pair: PipelinePair }) {
+  const lc = PIPELINE_LEVEL[pair.level]
+  const chip: CSSProperties = {
+    fontSize: 10.5,
+    padding: '3px 9px',
+    borderRadius: 999,
+    border: '1px solid var(--ef-line)',
+    background: 'var(--ef-surface)',
+    color: 'var(--ef-ink-dim)',
+  }
+  return (
+    <div
+      style={{
+        padding: '14px 16px',
+        border: '1px solid var(--ef-signal)',
+        borderRadius: 12,
+        background: 'color-mix(in oklab, var(--ef-signal) 5%, var(--ef-surface))',
+      }}
+    >
+      <div
+        className="mono"
+        style={{ fontSize: 9.5, color: 'var(--ef-signal)', letterSpacing: '0.16em', fontWeight: 600, marginBottom: 10 }}
+      >
+        TASK
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <span
+          style={{
+            width: 18,
+            height: 18,
+            flexShrink: 0,
+            marginTop: 1,
+            borderRadius: 5,
+            border: '2px solid var(--ef-signal)',
+          }}
+        />
+        <div className="sans" style={{ fontSize: 14, fontWeight: 600, color: 'var(--ef-ink)', lineHeight: 1.35 }}>
+          {pair.task}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
+        <span className="sans" style={chip}>
+          {pair.due}
+        </span>
+        <span
+          className="sans"
+          style={{
+            fontSize: 10.5,
+            fontWeight: 700,
+            padding: '3px 9px',
+            borderRadius: 999,
+            background: lc.bg,
+            color: lc.fg,
+          }}
+        >
+          {pair.level}
+        </span>
+        <span className="sans" style={chip}>
+          {pair.project}
+        </span>
       </div>
     </div>
   )
@@ -567,12 +697,12 @@ function CinePinnedStory() {
     }
   }, [])
 
-  const titles = ['Read.', 'Understand.', 'Extract.', 'Rank.']
+  const titles = ['Read.', 'Understand.', 'List.', 'Rank.']
   const descs = [
-    'We attach to Gmail read-only. Every new thread flows into the pipeline within 800ms. We never send, delete, or modify mail.',
-    'The model reads each thread in context: who is asking, for what, by when. It separates signal from noise — action from polite acknowledgement.',
-    'Real asks become structured tasks with deadline, owner, and parent matter. The email stays attached as context so you never lose the thread.',
-    'A single priority score 0–100 — deadline proximity, sender weight, thread age. One ordered list. Work top-down and close it out.',
+    'EmailFlow connects to your Gmail and reads it — that is all it can do. New email gets picked up automatically.',
+    'It reads each email the way you would: who is asking, what they need, and by when. The real requests get separated from the noise.',
+    'Every real request becomes a task — with its deadline, who it is for, and the original email attached so you never lose the context.',
+    'Each task is ranked by how urgent it is, so you get one clear list. Start at the top and work your way down.',
   ]
 
   return (
@@ -603,7 +733,7 @@ function CinePinnedStory() {
             />
 
             <div style={{ padding: '0 60px 0 clamp(24px, 4vw, 80px)', position: 'relative', zIndex: 1 }}>
-              <Label>{'// WORKFLOW'}</Label>
+              <Label>HOW IT WORKS</Label>
 
               <div style={{ position: 'relative', height: 90, overflow: 'hidden', marginTop: 20 }}>
                 {titles.map((t, i) => (
@@ -681,7 +811,7 @@ function CinePinnedStory() {
                 ))}
               </div>
               <div className="mono" style={{ fontSize: 11, color: 'var(--ef-ink-mute)', marginTop: 14, letterSpacing: '0.14em' }}>
-                STAGE 0{act + 1} / 04 · SCROLL TO ADVANCE
+                Step {act + 1} of 4 · scroll to continue
               </div>
             </div>
 
@@ -738,222 +868,301 @@ function CinePinnedStory() {
 }
 
 function Act1Read({ subP }: { subP: number }) {
-  const envs = [0, 1, 2, 3, 4, 5, 6]
+  const emails = [
+    { initial: 'M', name: 'Morgan Lee', subj: 'Re: Q2 launch sign-off', time: '8:42a', color: '#1E4BE0' },
+    { initial: 'P', name: 'Priya Sharma', subj: 'Vendor contract — redlines v3', time: '8:15a', color: '#7A4DE0' },
+    { initial: 'L', name: 'Lena Cole', subj: 'Homepage redesign — round 2', time: 'Yest', color: '#E0884D' },
+    { initial: 'D', name: 'Daniel Cho', subj: 'Go / no-go meeting Thursday', time: 'Yest', color: '#1F7A4D' },
+    { initial: 'T', name: 'Talent Team', subj: 'Interview feedback needed', time: 'Mon', color: '#C4302B' },
+  ]
+  const scan = clamp(subP * 1.2)
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 14, left: 14 }}>
-        <Label>{'// GMAIL → PIPELINE'}</Label>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <span className="sans" style={{ fontSize: 15, fontWeight: 600 }}>
+          Gmail · Inbox
+        </span>
+        <span
+          className="mono"
+          style={{ fontSize: 11, color: 'var(--ef-signal)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 999,
+              background: 'var(--ef-signal)',
+              animation: 'landingPulseDot 1.4s infinite',
+            }}
+          />
+          Reading
+        </span>
       </div>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {envs.map((i) => {
-          const t = (subP * 4 + i * 0.22) % 1
-          const y = lerp(-100, 260, t)
-          const opacity = t < 0.1 ? t * 10 : t > 0.85 ? (1 - t) * 6.67 : 1
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {emails.map((e, i) => {
+          const read = scan > (i + 0.6) / emails.length
           return (
             <div
               key={i}
               style={{
-                position: 'absolute',
-                left: `${20 + i * 11}%`,
-                top: y,
-                width: 68,
-                height: 44,
-                borderRadius: 6,
-                border: '1.5px solid var(--ef-ink)',
-                background: 'var(--ef-surface)',
-                opacity,
-                transition: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '11px 14px',
+                border: '1px solid',
+                borderColor: read ? 'var(--ef-signal)' : 'var(--ef-line)',
+                borderRadius: 10,
+                background: read
+                  ? 'color-mix(in oklab, var(--ef-signal) 6%, var(--ef-surface))'
+                  : 'var(--ef-surface)',
+                transition: 'background 350ms ease, border-color 350ms ease',
               }}
             >
               <div
+                className="sans"
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '50%',
-                  borderBottom: '1.5px solid var(--ef-ink)',
-                  clipPath: 'polygon(0 0, 50% 100%, 100% 0)',
-                  background: 'var(--ef-surface-2)',
+                  width: 30,
+                  height: 30,
+                  flexShrink: 0,
+                  borderRadius: 999,
+                  background: e.color,
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 13,
+                  fontWeight: 600,
                 }}
-              />
+              >
+                {e.initial}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="sans" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ef-ink)' }}>
+                  {e.name}
+                </div>
+                <div
+                  className="sans"
+                  style={{
+                    fontSize: 12.5,
+                    color: 'var(--ef-ink-mute)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {e.subj}
+                </div>
+              </div>
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--ef-ink-faint)', flexShrink: 0 }}>
+                {e.time}
+              </span>
+              <span
+                style={{
+                  width: 18,
+                  height: 18,
+                  flexShrink: 0,
+                  borderRadius: 999,
+                  background: 'var(--ef-signal)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 11,
+                  opacity: read ? 1 : 0,
+                  transform: read ? 'scale(1)' : 'scale(0.5)',
+                  transition: 'all 300ms cubic-bezier(.2,.8,.2,1)',
+                }}
+              >
+                ✓
+              </span>
             </div>
           )
         })}
       </div>
       <div
-        style={{
-          position: 'absolute',
-          bottom: 60,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '60%',
-          height: 4,
-          background: 'var(--ef-signal)',
-          borderRadius: 2,
-          boxShadow: '0 0 32px rgba(30,75,224,0.6)',
-        }}
-      />
-      <div style={{ position: 'absolute', bottom: 24, left: 0, right: 0, textAlign: 'center' }}>
-        <span className="mono" style={{ fontSize: 12, color: 'var(--ef-signal)' }}>
-          READ-ONLY · OAUTH 2.0
-        </span>
+        className="sans"
+        style={{ marginTop: 16, fontSize: 12, color: 'var(--ef-ink-mute)', textAlign: 'center', lineHeight: 1.5 }}
+      >
+        EmailFlow only <strong style={{ color: 'var(--ef-ink-dim)' }}>reads</strong> your inbox — it never sends,
+        deletes, or changes anything.
       </div>
     </div>
   )
 }
 
 function Act2Understand({ subP }: { subP: number }) {
-  const chips = [
-    { t: 'action', x: 58, y: 18, d: 0.1 },
-    { t: 'urgent', x: 70, y: 38, d: 0.3 },
-    { t: 'project: Q2 Launch', x: 28, y: 58, d: 0.5 },
-    { t: 'sender: known', x: 62, y: 76, d: 0.7 },
+  const findings: Array<[string, string]> = [
+    ['They want', 'Your approval on the launch assets'],
+    ['By when', 'End of day today'],
+    ['Urgency', 'High — it blocks the launch'],
+    ['Project', 'Q2 Launch'],
   ]
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 14, left: 14 }}>
-        <Label>{'// MODEL · CLAUDE'}</Label>
-      </div>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div
         style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: '64%',
-          padding: 20,
-          background: 'var(--ef-surface-2)',
           border: '1px solid var(--ef-line)',
           borderRadius: 12,
+          padding: 16,
+          background: 'var(--ef-surface-2)',
         }}
       >
         <div className="mono" style={{ fontSize: 11, color: 'var(--ef-ink-mute)', marginBottom: 6 }}>
-          morgan@northwind.co · 8:42am
+          Morgan Lee · 8:42am
         </div>
-        <div className="serif" style={{ fontSize: 20, fontWeight: 400, marginBottom: 10 }}>
+        <div className="serif" style={{ fontSize: 19, fontWeight: 400, marginBottom: 8 }}>
           Re: Q2 launch sign-off
         </div>
         <div className="sans" style={{ fontSize: 13, color: 'var(--ef-ink-dim)', lineHeight: 1.55 }}>
-          &ldquo;Need your approval on final asset delivery by EOD today — design cleared everything on the 16th. We can
-          push to next week if you&apos;re underwater.&rdquo;
+          &ldquo;Need your approval on the launch assets by end of day today — design cleared everything on the
+          16th.&rdquo;
         </div>
       </div>
-      {chips.map((c, i) => {
-        const visible = subP > c.d
-        return (
-          <div
-            key={i}
-            style={{
-              position: 'absolute',
-              left: `${c.x}%`,
-              top: `${c.y}%`,
-              padding: '5px 10px',
-              borderRadius: 999,
-              border: '1px solid var(--ef-signal)',
-              background: 'var(--ef-surface)',
-              transform: visible ? 'scale(1)' : 'scale(0.6)',
-              opacity: visible ? 1 : 0,
-              transition: 'all 400ms cubic-bezier(.2,.8,.2,1)',
-            }}
-          >
-            <span className="mono" style={{ fontSize: 10.5, color: 'var(--ef-signal)', fontWeight: 600 }}>
-              ● {c.t}
-            </span>
-          </div>
-        )
-      })}
+      <div
+        style={{
+          flex: 1,
+          border: '1px solid var(--ef-signal)',
+          borderRadius: 12,
+          padding: '16px 18px',
+          background: 'color-mix(in oklab, var(--ef-signal) 4%, var(--ef-surface))',
+        }}
+      >
+        <div className="sans" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ef-signal)', marginBottom: 14 }}>
+          What EmailFlow understood
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {findings.map(([k, v], i) => {
+            const visible = subP > 0.12 + i * 0.18
+            return (
+              <div
+                key={k}
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 10,
+                  opacity: visible ? 1 : 0,
+                  transform: visible ? 'translateY(0)' : 'translateY(8px)',
+                  transition: 'all 420ms cubic-bezier(.2,.8,.2,1)',
+                }}
+              >
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 10.5,
+                    color: 'var(--ef-ink-mute)',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    width: 78,
+                    flexShrink: 0,
+                  }}
+                >
+                  {k}
+                </span>
+                <span style={{ color: 'var(--ef-signal)', flexShrink: 0 }}>→</span>
+                <span className="sans" style={{ fontSize: 14, color: 'var(--ef-ink)', fontWeight: 500 }}>
+                  {v}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
 
 function Act3Extract({ subP }: { subP: number }) {
-  const showTask = subP > 0.35
-  const showFields = subP > 0.55
+  const showTask = subP > 0.32
+  const markStyle: CSSProperties = {
+    background: 'color-mix(in oklab, var(--ef-signal) 20%, transparent)',
+    color: 'var(--ef-ink)',
+    padding: '2px 4px',
+    borderRadius: 3,
+  }
+  const chipStyle: CSSProperties = {
+    fontSize: 11,
+    padding: '4px 10px',
+    borderRadius: 999,
+    border: '1px solid var(--ef-line)',
+    background: 'var(--ef-surface)',
+    color: 'var(--ef-ink-dim)',
+  }
   return (
     <div
       style={{
         width: '100%',
         height: '100%',
-        position: 'relative',
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: 20,
-        alignItems: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        gap: 18,
       }}
     >
-      <div style={{ position: 'absolute', top: 14, left: 14 }}>
-        <Label>{'// EXTRACT'}</Label>
-      </div>
-      <div style={{ paddingLeft: 8 }}>
-        <div className="sans" style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--ef-ink-dim)' }}>
-          &ldquo;Need your{' '}
-          <mark
-            style={{
-              background: 'color-mix(in oklab, var(--ef-signal) 22%, transparent)',
-              color: 'var(--ef-ink)',
-              padding: '2px 4px',
-              borderRadius: 3,
-            }}
-          >
-            approval on final asset delivery
-          </mark>{' '}
-          by{' '}
-          <mark
-            style={{
-              background: 'color-mix(in oklab, var(--ef-signal) 22%, transparent)',
-              color: 'var(--ef-ink)',
-              padding: '2px 4px',
-              borderRadius: 3,
-            }}
-          >
-            EOD today
-          </mark>{' '}
-          — design cleared everything on the 16th.&rdquo;
+      <div>
+        <div
+          className="sans"
+          style={{
+            fontSize: 11,
+            color: 'var(--ef-ink-mute)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            fontWeight: 600,
+            marginBottom: 10,
+          }}
+        >
+          From the email
         </div>
+        <div className="sans" style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--ef-ink-dim)' }}>
+          &ldquo;Need your <mark style={markStyle}>approval on the launch assets</mark> by{' '}
+          <mark style={markStyle}>end of day today</mark>.&rdquo;
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1, height: 1, background: 'var(--ef-line)' }} />
+        <span
+          className="mono"
+          style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--ef-signal)', letterSpacing: '0.1em' }}
+        >
+          BECOMES A TASK ↓
+        </span>
+        <div style={{ flex: 1, height: 1, background: 'var(--ef-line)' }} />
       </div>
       <div
         style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 14,
           padding: 18,
           borderRadius: 12,
           border: '1px solid var(--ef-signal)',
           background: 'color-mix(in oklab, var(--ef-signal) 4%, var(--ef-surface))',
-          transform: showTask ? 'translateX(0)' : 'translateX(20px)',
           opacity: showTask ? 1 : 0,
-          transition: 'all 600ms cubic-bezier(.2,.8,.2,1)',
+          transform: showTask ? 'translateY(0)' : 'translateY(14px)',
+          transition: 'all 550ms cubic-bezier(.2,.8,.2,1)',
         }}
       >
-        <div className="mono" style={{ fontSize: 10.5, color: 'var(--ef-signal)', fontWeight: 600, marginBottom: 8 }}>
-          P0 · Q2 LAUNCH
-        </div>
-        <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
-          Reply approval on asset delivery
-        </div>
-        <div
+        <span
           style={{
-            marginTop: 14,
-            paddingTop: 12,
-            borderTop: '1px solid var(--ef-line)',
-            display: showFields ? 'grid' : 'none',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '6px 16px',
+            width: 22,
+            height: 22,
+            flexShrink: 0,
+            marginTop: 2,
+            borderRadius: 6,
+            border: '2px solid var(--ef-signal)',
           }}
-        >
-          {[
-            ['due', 'Today 6:00pm'],
-            ['thread', '1 of 4'],
-            ['sender', 'morgan@northwind.co'],
-            ['project', 'Q2 Launch'],
-          ].map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span className="mono" style={{ fontSize: 10.5, color: 'var(--ef-ink-mute)' }}>
-                {k}
-              </span>
-              <span className="mono" style={{ fontSize: 10.5, color: 'var(--ef-ink)' }}>
-                {v}
-              </span>
-            </div>
-          ))}
+        />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="serif" style={{ fontSize: 21, letterSpacing: '-0.01em', lineHeight: 1.25 }}>
+            Approve the launch assets
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            <span className="sans" style={chipStyle}>
+              Due today, 6:00pm
+            </span>
+            <span className="sans" style={chipStyle}>
+              Q2 Launch
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -961,95 +1170,68 @@ function Act3Extract({ subP }: { subP: number }) {
 }
 
 function Act4Rank({ subP }: { subP: number }) {
-  const tasks = [
-    { t: 'Reply approval on asset delivery', v: 96, p: 'P0' },
-    { t: 'Review §4.2, send redlines back', v: 91, p: 'P0' },
-    { t: 'Confirm Thu 10am stakeholder slot', v: 74, p: 'P1' },
-    { t: 'Send cap table + ARR chart', v: 68, p: 'P1' },
-    { t: 'Approve vendor SOC-2 renewal', v: 42, p: 'P2' },
+  const tasks: Array<[string, 'High' | 'Med' | 'Low']> = [
+    ['Approve the launch assets', 'High'],
+    ['Review the contract changes', 'High'],
+    ['Confirm the Thursday meeting', 'Med'],
+    ['Send the quarterly numbers', 'Med'],
+    ['Approve the vendor renewal', 'Low'],
   ]
+  const levelStyle: Record<'High' | 'Med' | 'Low', { bg: string; fg: string }> = {
+    High: { bg: '#FDECEA', fg: '#C23030' },
+    Med: { bg: '#FEF3E0', fg: '#A07420' },
+    Low: { bg: 'var(--ef-surface-2)', fg: 'var(--ef-ink-mute)' },
+  }
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        padding: '4px 0',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-      }}
-    >
-      <div style={{ position: 'absolute', top: 14, left: 14 }}>
-        <Label>{'// PRIORITY SCORE 0–100'}</Label>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div className="sans" style={{ fontSize: 15, fontWeight: 600 }}>
+        Your day, in order
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-        {tasks.map((t, i) => {
-          const w = clamp(subP * 1.4 - i * 0.1, 0, 1) * t.v
-          const bg =
-            t.p === 'P0'
-              ? 'color-mix(in oklab, #E03E3E 12%, transparent)'
-              : t.p === 'P1'
-              ? 'color-mix(in oklab, #F5B547 12%, transparent)'
-              : 'var(--ef-surface-2)'
-          const color = t.p === 'P0' ? '#C23030' : t.p === 'P1' ? '#A07420' : 'var(--ef-ink-mute)'
+      <div className="sans" style={{ fontSize: 12, color: 'var(--ef-ink-mute)', marginTop: 2, marginBottom: 16 }}>
+        One list — most important first.
+      </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {tasks.map(([title, level], i) => {
+          const visible = subP > i * 0.16
+          const lc = levelStyle[level]
           return (
             <div
-              key={i}
+              key={title}
               style={{
-                display: 'grid',
-                gridTemplateColumns: '44px 1fr 56px',
-                gap: 12,
+                display: 'flex',
                 alignItems: 'center',
+                gap: 13,
+                padding: '12px 14px',
+                border: '1px solid var(--ef-line)',
+                borderRadius: 10,
+                background: 'var(--ef-surface)',
+                opacity: visible ? 1 : 0,
+                transform: visible ? 'translateX(0)' : 'translateX(-18px)',
+                transition: 'all 450ms cubic-bezier(.2,.8,.2,1)',
               }}
             >
               <span
-                className="mono"
+                className="serif"
+                style={{ fontSize: 20, color: 'var(--ef-signal)', width: 22, textAlign: 'center', flexShrink: 0 }}
+              >
+                {i + 1}
+              </span>
+              <span className="sans" style={{ flex: 1, fontSize: 14, fontWeight: 500, color: 'var(--ef-ink)' }}>
+                {title}
+              </span>
+              <span
+                className="sans"
                 style={{
                   fontSize: 10.5,
-                  padding: '3px 7px',
-                  borderRadius: 3,
-                  textAlign: 'center',
-                  background: bg,
-                  color,
-                  fontWeight: 600,
+                  fontWeight: 700,
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  background: lc.bg,
+                  color: lc.fg,
+                  flexShrink: 0,
                 }}
               >
-                {t.p}
-              </span>
-              <div style={{ position: 'relative', height: 28 }}>
-                <div
-                  className="sans"
-                  style={{
-                    position: 'absolute',
-                    left: 10,
-                    top: 6,
-                    fontSize: 12.5,
-                    color: 'var(--ef-ink)',
-                    zIndex: 2,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {t.t}
-                </div>
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    height: '100%',
-                    width: `${w}%`,
-                    background: 'color-mix(in oklab, var(--ef-signal) 18%, var(--ef-surface-2))',
-                    borderRadius: 4,
-                    transition: 'width 120ms linear',
-                    borderRight: '2px solid var(--ef-signal)',
-                  }}
-                />
-              </div>
-              <span
-                className="mono"
-                style={{ fontSize: 12, color: 'var(--ef-signal)', textAlign: 'right', fontWeight: 600 }}
-              >
-                {Math.round(w)}
+                {level}
               </span>
             </div>
           )
@@ -1064,7 +1246,20 @@ function Act4Rank({ subP }: { subP: number }) {
 function CineMetrics() {
   const ref = useRef<HTMLElement>(null)
   const p = useProgress(ref)
-  const on = p > 0.15
+  const rows: Array<[string, string]> = [
+    [
+      'Open your inbox and scan dozens of threads to work out what matters.',
+      'Open one short list — the most important thing is already on top.',
+    ],
+    [
+      'Hope you did not miss a request buried three replies deep.',
+      'Every request and deadline is pulled out and shown to you.',
+    ],
+    [
+      'Keep your inbox open all day, just in case something needs you.',
+      'Read one morning summary, then close it and get on with your day.',
+    ],
+  ]
   return (
     <section
       ref={ref}
@@ -1075,122 +1270,9 @@ function CineMetrics() {
         borderBottom: '1px solid var(--ef-line-soft)',
       }}
     >
-      <div style={{ maxWidth: 1360, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: 72 }}>
-          <div>
-            <Label>{'// MEASURED'}</Label>
-            <h2
-              className="serif"
-              style={{
-                fontSize: 'clamp(44px, 5.4vw, 80px)',
-                lineHeight: 1,
-                letterSpacing: '-0.03em',
-                margin: '18px 0 0',
-                fontWeight: 400,
-              }}
-            >
-              Efficiency, in numbers.
-            </h2>
-          </div>
-          <span className="mono" style={{ fontSize: 12, color: 'var(--ef-ink-mute)', letterSpacing: '0.14em' }}>
-            PRIVATE BETA · Q1 2026
-          </span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderTop: '1px solid var(--ef-line)' }}>
-          <MetricCell target={87} unit="%" label="inbox → action ratio" desc="Threads closed without re-opening" on={on} />
-          <MetricCell target={2.1} unit="s" label="avg processing time" desc="From delivery to task in queue" fix={1} on={on} />
-          <MetricCell
-            target={11400}
-            unit=""
-            label="tasks auto-extracted"
-            desc="Across beta cohort, Q1"
-            fmt={(n) => Math.round(n).toLocaleString()}
-            on={on}
-          />
-          <MetricCell target={94} unit="%" label="digest accuracy" desc="Rated useful by users (n=412)" on={on} />
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function MetricCell({
-  target,
-  unit,
-  label,
-  desc,
-  fix = 0,
-  fmt,
-  on,
-}: {
-  target: number
-  unit: string
-  label: string
-  desc: string
-  fix?: number
-  fmt?: (n: number) => string
-  on: boolean
-}) {
-  const [n, setN] = useState(0)
-  useEffect(() => {
-    if (!on) return
-    const dur = 1600
-    let start: number | null = null
-    let raf: number
-    const step = (t: number) => {
-      if (start === null) start = t
-      const p = Math.min(1, (t - start) / dur)
-      const eased = 1 - Math.pow(1 - p, 4)
-      setN(target * eased)
-      if (p < 1) raf = requestAnimationFrame(step)
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [on, target])
-  const shown = fmt ? fmt(n) : fix ? n.toFixed(fix) : Math.round(n).toString()
-  return (
-    <div style={{ padding: '40px 36px 48px', borderRight: '1px solid var(--ef-line)' }}>
-      <div className="mono" style={{ fontSize: 11, color: 'var(--ef-ink-mute)', letterSpacing: '0.14em', marginBottom: 28 }}>
-        {label.toUpperCase()}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-        <span
-          className="serif"
-          style={{ fontSize: 88, lineHeight: 0.95, letterSpacing: '-0.035em', color: 'var(--ef-signal)' }}
-        >
-          {shown}
-        </span>
-        {unit && (
-          <span className="serif" style={{ fontSize: 40, color: 'var(--ef-signal)' }}>
-            {unit}
-          </span>
-        )}
-      </div>
-      <div className="sans" style={{ fontSize: 13.5, color: 'var(--ef-ink-dim)', marginTop: 20, lineHeight: 1.5 }}>
-        {desc}
-      </div>
-    </div>
-  )
-}
-
-// ---------- Matrix ----------
-
-function CineMatrix() {
-  const ref = useRef<HTMLElement>(null)
-  const p = useProgress(ref)
-  const feats = [
-    { k: 'Tasks from text', d: 'Deadlines and asks pulled from natural language.' },
-    { k: 'Matter memory', d: 'Threads on the same subject cluster into one running context.' },
-    { k: 'Priority score', d: 'Deadline + sender + age → 0–100. Explainable.' },
-    { k: 'Morning digest', d: 'One summary at your hour. No push notifications, ever.' },
-    { k: 'Retention rules', d: 'Noise expires automatically. You whitelist what matters.' },
-    { k: 'Read-only', d: 'No send, delete, or modify. Revocable at Google.' },
-  ]
-  return (
-    <section ref={ref} style={{ padding: '96px 36px' }}>
-      <div style={{ maxWidth: 1360, margin: '0 auto' }}>
-        <div style={{ marginBottom: 72 }}>
-          <Label>{'// CAPABILITIES'}</Label>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ marginBottom: 56 }}>
+          <Label>WHY IT HELPS</Label>
           <h2
             className="serif"
             style={{
@@ -1201,9 +1283,83 @@ function CineMatrix() {
               fontWeight: 400,
             }}
           >
-            Six primitives.
+            Get your morning back.
+          </h2>
+        </div>
+        <div style={{ borderTop: '1px solid var(--ef-line)' }}>
+          {rows.map(([before, after], i) => {
+            const on = clamp((p - 0.05 - i * 0.1) * 6)
+            return (
+              <div
+                key={i}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 40px 1fr',
+                  gap: 20,
+                  alignItems: 'center',
+                  padding: '32px 0',
+                  borderBottom: '1px solid var(--ef-line)',
+                  opacity: on,
+                  transform: `translateY(${(1 - on) * 16}px)`,
+                }}
+              >
+                <div>
+                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--ef-ink-mute)', letterSpacing: '0.14em', marginBottom: 8 }}>
+                    BEFORE
+                  </div>
+                  <p className="sans" style={{ fontSize: 16, lineHeight: 1.5, color: 'var(--ef-ink-mute)', margin: 0 }}>
+                    {before}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'center', color: 'var(--ef-signal)', fontSize: 22 }}>→</div>
+                <div>
+                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--ef-signal)', letterSpacing: '0.14em', marginBottom: 8 }}>
+                    WITH EMAILFLOW
+                  </div>
+                  <p className="sans" style={{ fontSize: 16, lineHeight: 1.5, color: 'var(--ef-ink)', margin: 0, fontWeight: 500 }}>
+                    {after}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ---------- Matrix ----------
+
+function CineMatrix() {
+  const ref = useRef<HTMLElement>(null)
+  const p = useProgress(ref)
+  const feats = [
+    { k: 'Finds your to-dos', d: 'Reads plain, messy emails and pulls out what you actually need to do.' },
+    { k: 'Keeps threads together', d: 'Emails about the same thing stay grouped, so you see the whole story.' },
+    { k: "Knows what's urgent", d: 'Sorts tasks by deadline and importance, so the one on top is the right one.' },
+    { k: 'One morning summary', d: 'A single recap of what needs you, instead of checking email all day.' },
+    { k: 'Clears the clutter', d: 'Old and unimportant email fades away on its own. You keep what matters.' },
+    { k: 'Read-only and safe', d: 'EmailFlow can only read your inbox — never send, delete, or change a thing.' },
+  ]
+  return (
+    <section ref={ref} style={{ padding: '96px 36px' }}>
+      <div style={{ maxWidth: 1360, margin: '0 auto' }}>
+        <div style={{ marginBottom: 72 }}>
+          <Label>WHAT IT DOES</Label>
+          <h2
+            className="serif"
+            style={{
+              fontSize: 'clamp(44px, 5.4vw, 80px)',
+              lineHeight: 1,
+              letterSpacing: '-0.03em',
+              margin: '18px 0 0',
+              fontWeight: 400,
+            }}
+          >
+            Everything it does
             <br />
-            No decoration.
+            for you.
           </h2>
         </div>
         <div
@@ -1254,181 +1410,6 @@ function CineMatrix() {
   )
 }
 
-// ---------- Dashboard preview ----------
-
-function CineDashboard() {
-  const ref = useRef<HTMLElement>(null)
-  const p = useProgress(ref)
-  return (
-    <section
-      ref={ref}
-      style={{
-        padding: '96px 36px',
-        background: 'var(--ef-surface)',
-        borderTop: '1px solid var(--ef-line-soft)',
-        borderBottom: '1px solid var(--ef-line-soft)',
-      }}
-    >
-      <div style={{ maxWidth: 1360, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 72 }}>
-          <Label>{'// THE WORKSPACE'}</Label>
-          <h2
-            className="serif"
-            style={{
-              fontSize: 'clamp(44px, 5.4vw, 80px)',
-              lineHeight: 1,
-              letterSpacing: '-0.03em',
-              margin: '18px 0 0',
-              fontWeight: 400,
-            }}
-          >
-            One screen.{' '}
-            <em style={{ fontStyle: 'italic', color: 'var(--ef-signal)' }}>Every matter.</em>
-          </h2>
-        </div>
-        <div
-          style={{
-            transform: `translateY(${(1 - clamp(p * 2)) * 40}px) scale(${0.95 + clamp(p * 2) * 0.05})`,
-            opacity: clamp(p * 2),
-            transition: 'none',
-          }}
-        >
-          <DashboardMock />
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function DashboardMock() {
-  return (
-    <div
-      style={{
-        border: '1px solid var(--ef-line)',
-        borderRadius: 12,
-        overflow: 'hidden',
-        background: 'var(--ef-surface)',
-        boxShadow: '0 40px 120px rgba(10,16,36,0.18)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '10px 14px',
-          borderBottom: '1px solid var(--ef-line)',
-          background: 'var(--ef-surface-2)',
-        }}
-      >
-        <Dot c="#FF6B5B" size={8} />
-        <Dot c="#F5B547" size={8} />
-        <Dot c="var(--ef-signal)" size={8} />
-        <span className="mono" style={{ fontSize: 11, color: 'var(--ef-ink-mute)', marginLeft: 12 }}>
-          app.emailflow.ai/dashboard
-        </span>
-      </div>
-      <Image
-        src="/emailflow-dashboard.png"
-        alt="EmailFlow AI workspace — dashboard view"
-        width={1920}
-        height={1080}
-        priority
-        style={{
-          display: 'block',
-          width: '100%',
-          height: 'auto',
-        }}
-      />
-    </div>
-  )
-}
-
-
-function Dot({ c = 'var(--ef-signal)', size = 6 }: { c?: string; size?: number }) {
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        width: size,
-        height: size,
-        borderRadius: 999,
-        background: c,
-        flexShrink: 0,
-      }}
-    />
-  )
-}
-
-// ---------- Who ----------
-
-function CineWho() {
-  const roles: Array<[string, string]> = [
-    ['Founders', 'Fundraise, customers, team asks — ranked by what moves the business.'],
-    ['Operators', 'Vendors, finance, exec — one ordered queue across all of them.'],
-    ['Project leads', 'Briefs, redlines, sign-offs — stitched to the project, not your inbox.'],
-    ['Consultants', 'Parallel engagements without bleed. Every client gets its own context.'],
-  ]
-  return (
-    <section style={{ padding: '96px 36px' }}>
-      <div style={{ maxWidth: 1360, margin: '0 auto' }}>
-        <div style={{ marginBottom: 72 }}>
-          <Label>{'// WHO IT&apos;S FOR'}</Label>
-          <h2
-            className="serif"
-            style={{
-              fontSize: 'clamp(44px, 5.4vw, 80px)',
-              lineHeight: 1,
-              letterSpacing: '-0.03em',
-              margin: '18px 0 0',
-              fontWeight: 400,
-            }}
-          >
-            For people whose inbox{' '}
-            <em style={{ fontStyle: 'italic', color: 'var(--ef-signal)' }}>is</em> the job.
-          </h2>
-        </div>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 0,
-            borderTop: '1px solid var(--ef-line)',
-          }}
-        >
-          {roles.map(([k, d], i) => (
-            <div
-              key={k}
-              style={{
-                padding: '44px 28px 36px',
-                borderRight: i < 3 ? '1px solid var(--ef-line)' : 'none',
-              }}
-            >
-              <div className="mono" style={{ fontSize: 11, color: 'var(--ef-signal)', fontWeight: 600, marginBottom: 20 }}>
-                0{i + 1}
-              </div>
-              <h3
-                className="serif"
-                style={{
-                  fontSize: 36,
-                  fontWeight: 400,
-                  letterSpacing: '-0.02em',
-                  margin: '0 0 14px',
-                  fontStyle: 'italic',
-                }}
-              >
-                {k}
-              </h3>
-              <p className="sans" style={{ fontSize: 14, color: 'var(--ef-ink-dim)', lineHeight: 1.55, margin: 0 }}>
-                {d}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
 // ---------- CTA ----------
 
 function CineCTA() {
@@ -1442,7 +1423,7 @@ function CineCTA() {
         }}
       />
       <div style={{ maxWidth: 1100, margin: '0 auto', textAlign: 'center', position: 'relative' }}>
-        <Label>{'// BEGIN'}</Label>
+        <Label>GET STARTED</Label>
         <h2
           className="serif"
           style={{
@@ -1453,9 +1434,9 @@ function CineCTA() {
             fontWeight: 400,
           }}
         >
-          Two minutes.
+          Two minutes to connect.
           <br />
-          <em style={{ fontStyle: 'italic', color: 'var(--ef-signal)' }}>First task by the third.</em>
+          <em style={{ fontStyle: 'italic', color: 'var(--ef-signal)' }}>Then your inbox works for you.</em>
         </h2>
         <div style={{ display: 'flex', gap: 14, justifyContent: 'center' }}>
           <Link
@@ -1475,7 +1456,7 @@ function CineCTA() {
             Connect Gmail →
           </Link>
           <Link
-            href="/dashboard"
+            href="/demo"
             className="sans"
             style={{
               fontSize: 15,
@@ -1486,7 +1467,7 @@ function CineCTA() {
               textDecoration: 'none',
             }}
           >
-            Open dashboard
+            See the live demo →
           </Link>
         </div>
       </div>
@@ -1519,7 +1500,7 @@ function CineFooter() {
                 fontStyle: 'italic',
               }}
             >
-              The inbox that clears itself.
+              Your inbox is a to-do list in disguise.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 28, alignItems: 'center' }}>
@@ -1545,7 +1526,7 @@ function CineFooter() {
             © {new Date().getFullYear()} EmailFlow AI
           </span>
           <span className="mono" style={{ fontSize: 11, color: 'var(--ef-signal)' }}>
-            ● Read-only · revocable any time
+            ● Read-only · disconnect any time
           </span>
         </div>
       </div>

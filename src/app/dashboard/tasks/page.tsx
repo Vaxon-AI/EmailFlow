@@ -45,6 +45,7 @@ import { BatchReassignModal } from '@/components/batch-reassign-modal'
 import { UpgradeModal } from '@/components/upgrade-modal'
 import { useAuth } from '@/lib/use-auth'
 import { InlineEditableName } from '@/components/inline-editable-name'
+import { ScorePicker } from '@/components/score-picker'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
@@ -1330,24 +1331,30 @@ function TasksContent() {
 
             <div className="space-y-2">
               <Label>Priority</Label>
-              <Select
-                value={priorityBucketFromScore(draftPriorityScore)}
-                onValueChange={(v) => {
-                  if (!v) return
-                  const p = PRIORITY_LEVELS[v]
-                  if (p) { setDraftUrgency(p.urgency); setDraftImpact(p.impact); setDraftPriorityScore(p.score) }
-                }}
-              >
-                <SelectTrigger className="h-8 w-full text-sm">
-                  <SelectValue>{PRIORITY_LABELS[priorityBucketFromScore(draftPriorityScore)]}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Urgency × Impact → priorityScore. Display still uses the
+                  band (critical / high / medium / low) computed from the
+                  product, so list chips don't change. */}
+              <div className="grid grid-cols-2 gap-3">
+                <ScorePicker
+                  label="Urgency"
+                  value={draftUrgency}
+                  onChange={(v) => {
+                    setDraftUrgency(v)
+                    setDraftPriorityScore(v * draftImpact)
+                  }}
+                />
+                <ScorePicker
+                  label="Impact"
+                  value={draftImpact}
+                  onChange={(v) => {
+                    setDraftImpact(v)
+                    setDraftPriorityScore(draftUrgency * v)
+                  }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {PRIORITY_LABELS[priorityBucketFromScore(draftUrgency * draftImpact)]} · score {draftUrgency * draftImpact}
+              </p>
             </div>
           </div>
 

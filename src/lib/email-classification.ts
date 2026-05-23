@@ -132,3 +132,30 @@ export function getEmailDisplayState(input: {
   // action, null/undefined, anything else → needs_action
   return 'needs_action'
 }
+
+// ---------------------------------------------------------------------------
+// Detail-page tones — these are LIGHTER than the list-chip `color` / `bg`
+// above on purpose. In a list, every row is a tag so the chip needs solid
+// saturation to pop out. On a detail page, there's only ONE classification
+// banner, so a tinted card reads cleaner and lets the email body itself
+// carry visual weight. Both the real `/dashboard/emails/[id]` and demo
+// `/demo/emails/[id]` import these — keeping them in one place avoids drift.
+// ---------------------------------------------------------------------------
+
+/** Chip / banner colour set (text + bg + border) for the email detail page. */
+export const EMAIL_DETAIL_TONE: Record<EmailDisplayState, string> = {
+  needs_action: 'bg-critical-50/70 text-critical border-critical-100',
+  tracked: 'bg-brand-50 text-brand-700 border-brand-100',
+  fyi: 'bg-white text-gray-700 border-gray-200',
+  ignored: 'bg-transparent text-gray-400 border-gray-200',
+  uncertain: 'bg-warning-50/70 text-warning-700 border-warning-100',
+}
+
+/** Gradient header background (`from-…` half) used by the detail card header. */
+export const EMAIL_DETAIL_HEADER_BG: Record<EmailDisplayState, string> = {
+  needs_action: 'from-critical-50/25 via-white to-white',
+  tracked: 'from-brand-50/30 via-white to-white',
+  fyi: 'from-gray-50/30 via-white to-white',
+  ignored: 'from-gray-50/25 via-white to-white',
+  uncertain: 'from-warning-50/20 via-white to-white',
+}
