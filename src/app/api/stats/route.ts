@@ -8,7 +8,7 @@ const EMPTY_STATS = {
   tasks: { total: 0, pending: 0, completed: 0, dismissed: 0 },
   sync: {
     lastSyncAt: null,
-    gmailConnected: false,
+    emailConnected: false,
     syncEnabled: false,
     providerReauthRequired: false,
     providerReauthReason: null,

@@ -7,8 +7,8 @@ export async function POST() {
   try {
     const user = await getAuthUser()
 
-    // Phase 1: Gmail fetch + email storage + updateLastSync.
-    // Returns in seconds (Gmail API + DB writes, no AI).
+    // Phase 1: provider fetch + email storage + updateLastSync.
+    // Returns in seconds (provider API + DB writes, no AI).
     const phase1 = await syncEmailsPhase1(user.id)
 
     // Phase 2: AI classification, task extraction, retry work.

@@ -10,7 +10,6 @@ async function main() {
     update: {
       name: 'Demo User',
       timezone: 'Asia/Shanghai',
-      gmailConnected: true,
       syncEnabled: true,
       lastSyncAt: new Date(),
     },
@@ -19,7 +18,6 @@ async function main() {
       email: 'demo@emailflow.ai',
       name: 'Demo User',
       timezone: 'Asia/Shanghai',
-      gmailConnected: true,
       syncEnabled: true,
       lastSyncAt: new Date(),
     },
@@ -138,7 +136,7 @@ async function main() {
   const emails = [
     // ── PM @ TechCorp — Q1 Planning ──────────────────────────────────────
     {
-      gmailMessageId: 'msg-001',
+      providerMessageId: 'msg-001',
       threadId: 'thread-001',
       accountEmail: WORK,
       subject: 'Q1 Report — Please review and submit feedback by EOD Friday',
@@ -155,7 +153,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-010',
+      providerMessageId: 'msg-010',
       threadId: 'thread-001',
       accountEmail: WORK,
       subject: 'Re: Q1 Report — page 3 revenue numbers look off',
@@ -172,7 +170,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-011',
+      providerMessageId: 'msg-011',
       threadId: 'thread-011',
       accountEmail: WORK,
       subject: 'Sprint 13 planning — notes and action items',
@@ -189,7 +187,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-012',
+      providerMessageId: 'msg-012',
       threadId: 'thread-012',
       accountEmail: WORK,
       subject: 'OKR mid-quarter check-in — your input needed by Thursday',
@@ -207,7 +205,7 @@ async function main() {
     },
     // ── PM @ TechCorp — Infrastructure & Vendors ─────────────────────────
     {
-      gmailMessageId: 'msg-006',
+      providerMessageId: 'msg-006',
       threadId: 'thread-006',
       accountEmail: WORK,
       subject: 'Contract draft ready — confirm clauses 3 and 7 by Tuesday',
@@ -224,7 +222,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-007',
+      providerMessageId: 'msg-007',
       threadId: 'thread-007',
       accountEmail: WORK,
       subject: 'Invoice #2048 due in 3 days — CloudHost',
@@ -241,7 +239,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-013',
+      providerMessageId: 'msg-013',
       threadId: 'thread-013',
       accountEmail: WORK,
       subject: 'CloudHost — Updated Service Agreement (effective next month)',
@@ -258,7 +256,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-017',
+      providerMessageId: 'msg-017',
       threadId: 'thread-017',
       accountEmail: WORK,
       subject: 'GitHub Actions — CI quota 85% used this month',
@@ -276,7 +274,7 @@ async function main() {
     },
     // ── PM @ TechCorp — Team Operations ──────────────────────────────────
     {
-      gmailMessageId: 'msg-004',
+      providerMessageId: 'msg-004',
       threadId: 'thread-004',
       accountEmail: WORK,
       subject: 'Reminder: Submit timesheet today before 6pm',
@@ -293,7 +291,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-002',
+      providerMessageId: 'msg-002',
       threadId: 'thread-002',
       accountEmail: WORK,
       subject: 'Weekly team status update — Sprint 12',
@@ -310,7 +308,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-018',
+      providerMessageId: 'msg-018',
       threadId: 'thread-018',
       accountEmail: WORK,
       subject: 'Q2 Team Offsite — confirm attendance by Friday',
@@ -328,7 +326,7 @@ async function main() {
     },
     // ── Founder @ SideApp — Fundraising & BD ─────────────────────────────
     {
-      gmailMessageId: 'msg-009',
+      providerMessageId: 'msg-009',
       threadId: 'thread-009',
       accountEmail: SIDE,
       subject: 'Partnership opportunity — let\'s schedule a call',
@@ -345,7 +343,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-014',
+      providerMessageId: 'msg-014',
       threadId: 'thread-014',
       accountEmail: SIDE,
       subject: 'Investor update requested — Series A deck review',
@@ -362,7 +360,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-020',
+      providerMessageId: 'msg-020',
       threadId: 'thread-020',
       accountEmail: SIDE,
       subject: 'Re: SideApp — intro to 3 potential enterprise leads',
@@ -380,7 +378,7 @@ async function main() {
     },
     // ── Founder @ SideApp — Product & Growth ─────────────────────────────
     {
-      gmailMessageId: 'msg-015',
+      providerMessageId: 'msg-015',
       threadId: 'thread-015',
       accountEmail: SIDE,
       subject: 'User interview notes — 5 new signups this week',
@@ -397,7 +395,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-016',
+      providerMessageId: 'msg-016',
       threadId: 'thread-016',
       accountEmail: SIDE,
       subject: 'Weekly co-founder sync — agenda for tomorrow',
@@ -414,7 +412,7 @@ async function main() {
       isWorkRelated: true,
     },
     {
-      gmailMessageId: 'msg-021',
+      providerMessageId: 'msg-021',
       threadId: 'thread-021',
       accountEmail: SIDE,
       subject: 'Onboarding flow v2 — design review comments',
@@ -432,7 +430,7 @@ async function main() {
     },
     // ── Personal / no project ─────────────────────────────────────────────
     {
-      gmailMessageId: 'msg-003',
+      providerMessageId: 'msg-003',
       threadId: 'thread-003',
       accountEmail: HOME,
       subject: '50% OFF SALE 🔥 — Today only',
@@ -449,7 +447,7 @@ async function main() {
       isWorkRelated: false,
     },
     {
-      gmailMessageId: 'msg-005',
+      providerMessageId: 'msg-005',
       threadId: 'thread-005',
       accountEmail: HOME,
       subject: 'Password reset request for your account',
@@ -466,7 +464,7 @@ async function main() {
       isWorkRelated: false,
     },
     {
-      gmailMessageId: 'msg-008',
+      providerMessageId: 'msg-008',
       threadId: 'thread-008',
       accountEmail: HOME,
       subject: 'Flight booking confirmation ✈️ — SYD → MEL',
@@ -483,7 +481,7 @@ async function main() {
       isWorkRelated: false,
     },
     {
-      gmailMessageId: 'msg-019',
+      providerMessageId: 'msg-019',
       threadId: 'thread-019',
       accountEmail: HOME,
       subject: 'Product management in 2025 — this month\'s digest',
@@ -502,7 +500,12 @@ async function main() {
   ]
 
   for (const e of emails) {
-    const existing = await prisma.email.findFirst({ where: { userId: user.id, gmailMessageId: e.gmailMessageId } })
+    const existing = await prisma.email.findFirst({
+      where: {
+        userId: user.id,
+        providerMessageId: e.providerMessageId,
+      },
+    })
     if (existing) {
       await prisma.email.update({
         where: { id: existing.id },
@@ -636,7 +639,12 @@ async function main() {
   const createdTasks: Record<string, string> = {} // msgId → taskId
 
   for (const bp of taskBlueprints) {
-    const sourceEmail = await prisma.email.findFirst({ where: { userId: user.id, gmailMessageId: bp.msgId } })
+    const sourceEmail = await prisma.email.findFirst({
+      where: {
+        userId: user.id,
+        providerMessageId: bp.msgId,
+      },
+    })
     if (!sourceEmail) continue
 
     let task = await prisma.task.findFirst({ where: { userId: user.id, title: bp.title } })

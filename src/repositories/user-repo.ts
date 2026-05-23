@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { getEnabledEmailProviderKeys } from '@/integrations/provider-registry'
 
 // ============================================================
 // User Repository — all user database operations
@@ -19,27 +20,37 @@ export async function updateAccountLastSync(accountId: string) {
 }
 
 export async function getUserSyncInfo(userId: string) {
-  return prisma.user.findUnique({
+  const providerKeys = getEnabledEmailProviderKeys()
+  const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       lastSyncAt: true,
-      gmailConnected: true,
       syncEnabled: true,
       manualReviewMode: true,
       emailProviderReauthRequired: true,
       emailProviderReauthReason: true,
       emailProviderReauthAt: true,
       emailProviderReauthProvider: true,
+      accounts: {
+        where: { provider: { in: providerKeys }, syncEnabled: true },
+        select: { id: true },
+        take: 1,
+      },
     },
   })
+  if (!user) return null
+  const { accounts, ...syncInfo } = user
+  return { ...syncInfo, emailConnected: accounts.length > 0 }
 }
 
-export async function listEnabledGmailAccounts(userId: string) {
+export async function listEnabledEmailAccounts(userId: string) {
+  const providerKeys = getEnabledEmailProviderKeys()
   return prisma.account.findMany({
-    where: { userId, provider: 'google', syncEnabled: true },
+    where: { userId, provider: { in: providerKeys }, syncEnabled: true },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,
+      provider: true,
       email: true,
       syncEnabled: true,
       reauthRequired: true,

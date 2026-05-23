@@ -7,7 +7,7 @@ import { createDailyDigest, createWeeklyDigest } from '@/workflows/digest-pipeli
 // ============================================================
 // Cron: Daily Digest Generator
 // Runs every hour via Vercel Cron.
-// For each Gmail-connected user, fires when it's 20:xx in their timezone.
+// For each email-connected user, fires when it's 20:xx in their timezone.
 //
 // Protected by CRON_SECRET — Vercel sends it as Authorization header.
 // To trigger manually: GET /api/cron/digest
@@ -59,9 +59,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Find all users with Gmail connected
+  // Find all users with email connected
   const users = await prisma.user.findMany({
-    where: { gmailConnected: true },
+    where: { accounts: { some: { provider: 'google', syncEnabled: true } } },
     select: { id: true, email: true, timezone: true },
   })
 

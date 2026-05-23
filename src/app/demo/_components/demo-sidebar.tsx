@@ -95,7 +95,7 @@ export function DemoSidebar({
           <div className="rounded-xl border border-brand-100 bg-brand-50 p-3.5">
             <p className="text-sm font-semibold text-brand-700">Like what you see?</p>
             <p className="mt-0.5 text-xs text-brand-500">
-              Connect your own Gmail and EmailFlow does this for your real inbox.
+              Connect your own email account and EmailFlow does this for your real inbox.
             </p>
             <Link
               href="/auth/signup"

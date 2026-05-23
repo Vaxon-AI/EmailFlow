@@ -10,7 +10,7 @@ import type { EmailMessage } from '@/integrations'
 export const MAX_RETRY_COUNT = 5
 
 export interface FailedEmailRecord {
-  gmailMessageId: string
+  providerMessageId: string
   threadId: string | null
   receivedAt: Date | null
   subject: string | null
@@ -19,7 +19,7 @@ export interface FailedEmailRecord {
 
 /**
  * Record (or increment) a failed store attempt for a single email.
- * Uses upsert so the same gmailMessageId is never duplicated per user.
+ * Uses upsert so the same providerMessageId is never duplicated per user.
  */
 export async function recordFailedEmail(
   userId: string,
@@ -28,10 +28,10 @@ export async function recordFailedEmail(
 ) {
   const now = new Date()
   await prisma.failedEmailSync.upsert({
-    where: { userId_gmailMessageId: { userId, gmailMessageId: message.providerMessageId } },
+    where: { userId_providerMessageId: { userId, providerMessageId: message.providerMessageId } },
     create: {
       userId,
-      gmailMessageId: message.providerMessageId,
+      providerMessageId: message.providerMessageId,
       threadId: message.threadId ?? null,
       receivedAt: message.receivedAt ?? null,
       subject: message.subject ?? null,
@@ -67,9 +67,9 @@ export async function loadPendingFailures(userId: string) {
 /**
  * Mark a failed record as resolved after a successful retry.
  */
-export async function resolveFailedEmail(userId: string, gmailMessageId: string) {
+export async function resolveFailedEmail(userId: string, providerMessageId: string) {
   await prisma.failedEmailSync.update({
-    where: { userId_gmailMessageId: { userId, gmailMessageId } },
+    where: { userId_providerMessageId: { userId, providerMessageId } },
     data: { status: 'resolved', resolvedAt: new Date() },
   })
 }
@@ -78,9 +78,9 @@ export async function resolveFailedEmail(userId: string, gmailMessageId: string)
  * Record another retry failure. Advances retryCount and flips to
  * permanent_failed if the limit is reached.
  */
-export async function recordRetryFailure(userId: string, gmailMessageId: string, errorReason: string) {
+export async function recordRetryFailure(userId: string, providerMessageId: string, errorReason: string) {
   const record = await prisma.failedEmailSync.findUnique({
-    where: { userId_gmailMessageId: { userId, gmailMessageId } },
+    where: { userId_providerMessageId: { userId, providerMessageId } },
     select: { retryCount: true },
   })
   if (!record) return
@@ -89,7 +89,7 @@ export async function recordRetryFailure(userId: string, gmailMessageId: string,
   const isPermanent = newRetryCount >= MAX_RETRY_COUNT
 
   await prisma.failedEmailSync.update({
-    where: { userId_gmailMessageId: { userId, gmailMessageId } },
+    where: { userId_providerMessageId: { userId, providerMessageId } },
     data: {
       retryCount: newRetryCount,
       errorReason,

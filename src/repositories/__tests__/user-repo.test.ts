@@ -56,7 +56,7 @@ describe('getUserSyncInfo', () => {
   it('returns the user sync info from prisma', async () => {
     const syncInfo = {
       lastSyncAt: new Date(),
-      gmailConnected: true,
+      accounts: [{ id: 'account-1' }],
       syncEnabled: true,
       manualReviewMode: false,
       emailProviderReauthRequired: false,
@@ -66,7 +66,16 @@ describe('getUserSyncInfo', () => {
     }
     mockPrismaUser.findUnique.mockResolvedValue(syncInfo as never)
     const result = await getUserSyncInfo(USER_ID)
-    expect(result).toEqual(syncInfo)
+    expect(result).toEqual({
+      lastSyncAt: syncInfo.lastSyncAt,
+      emailConnected: true,
+      syncEnabled: true,
+      manualReviewMode: false,
+      emailProviderReauthRequired: false,
+      emailProviderReauthReason: null,
+      emailProviderReauthAt: null,
+      emailProviderReauthProvider: null,
+    })
   })
 
   it('queries by userId with the correct select fields', async () => {
@@ -76,8 +85,10 @@ describe('getUserSyncInfo', () => {
       where: { id: USER_ID },
       select: expect.objectContaining({
         lastSyncAt: true,
-        gmailConnected: true,
         syncEnabled: true,
+        accounts: expect.objectContaining({
+          where: { provider: { in: ['google'] }, syncEnabled: true },
+        }),
       }),
     })
   })

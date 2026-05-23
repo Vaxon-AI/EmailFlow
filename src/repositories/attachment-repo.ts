@@ -2,7 +2,7 @@
  * Attachment Repository
  *
  * Manages the Attachment model for retention tracking.
- * Actual attachment files live on Gmail; purgedAt marks that this
+ * Actual attachment files live with the email provider; purgedAt marks that this
  * local tracking record has been cleared.
  */
 
@@ -12,7 +12,7 @@ export type AttachmentInput = {
   filename: string
   mimeType: string
   size: number
-  gmailAttachmentId?: string
+  providerAttachmentId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -34,7 +34,7 @@ export async function upsertAttachmentsForEmail(
       filename: a.filename,
       mimeType: a.mimeType,
       size: a.size,
-      gmailAttachmentId: a.gmailAttachmentId ?? null,
+      providerAttachmentId: a.providerAttachmentId ?? null,
     })),
     skipDuplicates: true,
   })
@@ -42,7 +42,7 @@ export async function upsertAttachmentsForEmail(
 
 /**
  * Mark a set of attachment records as purged.
- * This signals that the user can no longer fetch them via the Gmail API.
+ * This signals that the user can no longer fetch them via the provider API.
  */
 export async function markAttachmentsPurged(attachmentIds: string[]) {
   if (attachmentIds.length === 0) return
@@ -77,7 +77,7 @@ export async function getAttachmentsByEmailId(emailId: string) {
       filename: true,
       mimeType: true,
       size: true,
-      gmailAttachmentId: true,
+      providerAttachmentId: true,
       purgedAt: true,
     },
   })

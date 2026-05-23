@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { errorFromException } from '@/lib/api-helpers'
-import { gmailProvider } from '@/integrations'
+import { getEmailProvider } from '@/integrations/provider-registry'
 import { requireCurrentUser } from '@/lib/auth-session'
 import { prisma } from '@/lib/prisma'
 
@@ -25,11 +25,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid accountId' }, { status: 400 })
     }
 
-    await gmailProvider.disconnect(user.id, accountId)
+    const account = accountId
+      ? await prisma.account.findFirst({
+          where: { id: accountId, userId: user.id },
+          select: { provider: true },
+        })
+      : null
+
+    if (accountId && !account) {
+      return NextResponse.json({ success: false, error: 'Email account not found' }, { status: 404 })
+    }
+
+    await getEmailProvider(account?.provider ?? 'google').disconnect(user.id, accountId)
 
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[google disconnect]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to disconnect Gmail', 500)
+    return errorFromException(err, 'SYNC_FAILED', 'Failed to disconnect email account', 500)
   }
 }

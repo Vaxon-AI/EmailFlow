@@ -54,7 +54,7 @@ export async function GET() {
               : null,
           }
         : null,
-      // All Gmail threadIds belonging to this matter (for email grouping)
+      // All provider threadIds belonging to this matter (for email grouping)
       threadIds: m.threads.map((t) => t.threadId),
       // All task IDs linked to threads in this matter (for task grouping)
       taskIds: m.threads.map((t) => t.linkedTaskId).filter(Boolean) as string[],

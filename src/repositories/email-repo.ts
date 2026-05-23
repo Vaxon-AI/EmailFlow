@@ -28,7 +28,7 @@ export async function storeEmail(data: StoreEmailData): Promise<StoreEmailResult
     where: {
       userId: data.userId,
       accountId: data.message.accountId ?? null,
-      gmailMessageId: data.message.providerMessageId,
+      providerMessageId: data.message.providerMessageId,
     },
     select: { id: true },
   })
@@ -39,7 +39,7 @@ export async function storeEmail(data: StoreEmailData): Promise<StoreEmailResult
   const fields = {
     userId: data.userId,
     accountId: data.message.accountId ?? undefined,
-    gmailMessageId: data.message.providerMessageId,
+    providerMessageId: data.message.providerMessageId,
     threadId: data.message.threadId,
     accountEmail: data.message.accountEmail ?? '',
     subject: data.message.subject,
@@ -56,8 +56,8 @@ export async function storeEmail(data: StoreEmailData): Promise<StoreEmailResult
   const existing = await prisma.email.findFirst({
     where: {
       userId: data.userId,
-      gmailMessageId: data.message.providerMessageId,
       accountId: data.message.accountId ?? null,
+      providerMessageId: data.message.providerMessageId,
     },
   })
   if (existing) {
@@ -139,7 +139,7 @@ export async function approveReviewEmails(emailIds: string[]) {
 // Collapses the email into the ignore bucket: classification flips to 'ignore'
 // and actioned=true marks it user-handled (so dashboard counts and the
 // Needs Action tab stops surfacing it). The DB row stays intact so the next
-// Gmail sync still sees the message ID and won't re-pull it.
+// email sync still sees the provider message ID and won't re-pull it.
 export async function dismissReviewEmails(emailIds: string[]) {
   if (emailIds.length === 0) return
   return prisma.email.updateMany({
@@ -393,6 +393,7 @@ export async function findEmailsPaginated(
       take: options.limit,
       select: {
         id: true,
+        providerMessageId: true,
         subject: true,
         sender: true,
         bodyPreview: true,
@@ -532,6 +533,7 @@ export async function findBatchStatus(userId: string, batchId: string) {
     where: { userId, syncBatchId: batchId },
     select: {
       id: true,
+      providerMessageId: true,
       subject: true,
       sender: true,
       receivedAt: true,

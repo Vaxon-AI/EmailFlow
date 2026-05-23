@@ -493,7 +493,7 @@ export default function EmailDetailPage() {
           Back to inbox
         </Button>
         {/* Ignore = soft delete: collapses the email into the ignore bucket so
-            it stops showing up in Needs Action / All. DB row stays so Gmail
+            it stops showing up in Needs Action / All. DB row stays so email
             sync dedup is unaffected. Hidden once already actioned to avoid a
             confusing no-op click. */}
         {!email.actioned && email.classification !== 'ignore' && (
@@ -617,7 +617,7 @@ export default function EmailDetailPage() {
                   {email.restorableUntil
                     ? `Restorable until ${new Date(email.restorableUntil).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}.`
                     : 'Restore window may be limited.'}
-                  {' '}Re-fetches the original content from Gmail.
+                  {' '}Re-fetches the original content from your email provider.
                 </p>
               </div>
               <Button

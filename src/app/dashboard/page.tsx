@@ -49,7 +49,6 @@ import {
 import { cn } from '@/lib/utils'
 import { CACHE_TIME } from '@/lib/query-cache'
 import { toast } from 'sonner'
-import { tr } from 'date-fns/locale'
 
 type DashboardTask = {
   id: string
@@ -96,7 +95,7 @@ type DashboardStats = {
   tasks: { total: number; pending: number; confirmed: number; completed: number; dismissed: number }
   sync: {
     lastSyncAt?: string | null
-    gmailConnected?: boolean
+    emailConnected?: boolean
     providerReauthRequired?: boolean
   }
 }
@@ -224,7 +223,7 @@ function DashboardContent() {
   }, [searchParams, router])
 
   // Open the sync setup modal only for first-time users — OAuth callback
-  // redirects them with ?gmail_connected=1 after the initial Gmail link.
+  // redirects them with ?gmail_connected=1 after the initial email provider link.
   useEffect(() => {
     if (searchParams.get('gmail_connected') === '1') {
       setShowSyncModal(true)
@@ -656,7 +655,7 @@ function DashboardContent() {
                   Reconnect Email
                 </Button>
               </Link>
-            ) : s?.sync?.gmailConnected ? (
+            ) : s?.sync?.emailConnected ? (
               <span className="flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
                 Email Connected
@@ -801,7 +800,7 @@ function DashboardContent() {
               title="Last Synced"
               value={s?.sync?.lastSyncAt ? timeAgo(s.sync.lastSyncAt) : 'Never'}
               icon={<Clock className="h-4 w-4 text-gray-500" />}
-              detail={s?.sync?.gmailConnected ? 'Email connected' : 'Not connected'}
+              detail={s?.sync?.emailConnected ? 'Email connected' : 'Not connected'}
             />
           </>
         )}

@@ -70,8 +70,8 @@ function makeAccountMessage(id = 'gmail-msg-1', accountId = 'account-1') {
   }
 }
 
-const EXISTING_EMAIL = { id: 'email-1', gmailMessageId: 'gmail-msg-1' }
-const CREATED_EMAIL = { id: 'email-new', gmailMessageId: 'gmail-msg-2' }
+const EXISTING_EMAIL = { id: 'email-1', providerMessageId: 'provider-msg-1' }
+const CREATED_EMAIL = { id: 'email-new', providerMessageId: 'provider-msg-2' }
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -104,7 +104,7 @@ describe('storeEmail — dedup logic', () => {
     expect(mockPrismaEmail.create).toHaveBeenCalledOnce()
   })
 
-  it('passes the correct userId and gmailMessageId to create', async () => {
+  it('passes the correct userId and message IDs to create', async () => {
     mockPrismaEmail.findFirst.mockResolvedValue(null)
     mockPrismaEmail.create.mockResolvedValue(CREATED_EMAIL as any)
 
@@ -114,7 +114,7 @@ describe('storeEmail — dedup logic', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           userId: 'user-42',
-          gmailMessageId: 'msg-x',
+          providerMessageId: 'msg-x',
         }),
       })
     )
@@ -173,8 +173,8 @@ describe('storeEmail — dedup logic', () => {
     expect(mockPrismaEmail.findFirst).toHaveBeenCalledWith({
       where: {
         userId: 'user-1',
-        gmailMessageId: 'shared-msg',
         accountId: 'account-1',
+        providerMessageId: 'shared-msg',
       },
     })
     expect(mockPrismaEmail.create).toHaveBeenCalledWith(

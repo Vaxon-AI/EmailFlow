@@ -89,9 +89,9 @@ export default function PrivacyPage() {
               </div>
 
               <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                <p className="font-medium text-gray-800">Google (Gmail)</p>
+                <p className="font-medium text-gray-800">Google email</p>
                 <p className="mt-1 text-gray-600">
-                  We connect to your Gmail account with read-only access. We do not store
+                  We connect to your email account with read-only access. We do not store
                   your Google password. You can revoke access at any time from your{' '}
                   <a href="https://myaccount.google.com/permissions" target="_blank"
                     rel="noopener noreferrer" className="text-brand-600 hover:underline">
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
             <ul className="list-disc space-y-1.5 pl-5">
               <li>Your data is retained for as long as your account is active</li>
               <li>If you delete your account, your data is permanently removed from our systems within 30 days</li>
-              <li>You can disconnect your Gmail at any time from Settings, which stops further email syncing</li>
+              <li>You can disconnect your email account at any time from Settings, which stops further email syncing</li>
               <li>Email content sent for AI processing is not retained by the processing provider</li>
             </ul>
           </section>
@@ -190,4 +190,3 @@ export default function PrivacyPage() {
     </div>
   )
 }
-

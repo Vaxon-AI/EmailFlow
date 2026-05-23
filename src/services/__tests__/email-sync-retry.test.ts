@@ -34,12 +34,12 @@ vi.mock('@/repositories/failed-email-sync-repo', () => ({
 vi.mock('@/repositories/user-repo', () => ({
   getUserSyncInfo: vi.fn(),
   updateLastSync: vi.fn(),
-  listEnabledGmailAccounts: vi.fn(),
+  listEnabledEmailAccounts: vi.fn(),
   updateAccountLastSync: vi.fn(),
 }))
 
-vi.mock('@/integrations', () => ({
-  gmailProvider: { fetchNewEmails: vi.fn() },
+vi.mock('@/integrations/provider-registry', () => ({
+  getEmailProvider: vi.fn(),
 }))
 
 vi.mock('@/workflows', () => ({
@@ -69,7 +69,7 @@ const RETRY_BATCH_SIZE = 10
 type FailedRecord = {
   id: string
   userId: string
-  gmailMessageId: string
+  providerMessageId: string
   threadId: string | null
   receivedAt: Date
   subject: string
@@ -82,14 +82,14 @@ type FailedRecord = {
   resolvedAt: null
 }
 
-function makeFailedRecord(gmailMessageId: string, overrides: Partial<FailedRecord> = {}): FailedRecord {
+function makeFailedRecord(providerMessageId: string, overrides: Partial<FailedRecord> = {}): FailedRecord {
   return {
-    id: `failed-${gmailMessageId}`,
+    id: `failed-${providerMessageId}`,
     userId: 'user-1',
-    gmailMessageId,
-    threadId: `thread-${gmailMessageId}`,
+    providerMessageId,
+    threadId: `thread-${providerMessageId}`,
     receivedAt: new Date('2024-01-15T10:00:00Z'),
-    subject: `Subject for ${gmailMessageId}`,
+    subject: `Subject for ${providerMessageId}`,
     sender: 'sender@example.com',
     errorReason: 'DB write failed',
     retryCount: 0,
@@ -162,7 +162,7 @@ describe('retryFailedEmails — successful recovery', () => {
     expect(emailRepo.storeEmail).toHaveBeenCalledTimes(2)
   })
 
-  it('passes the original gmailMessageId as providerMessageId', async () => {
+  it('passes the original providerMessageId to storeEmail', async () => {
     vi.mocked(failedRepo.loadPendingFailures).mockResolvedValue([makeFailedRecord('original-msg-id')])
 
     await syncEmailsPhase2('user-1', [])
@@ -359,7 +359,7 @@ describe('retryFailedEmails — batch size cap', () => {
       (call) => call[0].message.providerMessageId
     )
     // First 10 should be processed, last 2 should be skipped
-    expect(calledIds).toEqual(records.slice(0, 10).map((r) => r.gmailMessageId))
+    expect(calledIds).toEqual(records.slice(0, 10).map((r) => r.providerMessageId))
   })
 })
 

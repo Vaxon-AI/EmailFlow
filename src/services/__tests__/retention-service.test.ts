@@ -418,7 +418,7 @@ describe('restoreEmail', () => {
   it('returns error when email is ACTIVE (not METADATA_ONLY)', async () => {
     mockEmailFindFirst.mockResolvedValue({
       id: 'email-1',
-      gmailMessageId: 'gmail-1',
+      providerMessageId: 'provider-1',
       retentionStatus: 'ACTIVE',
       restorableUntil: null,
     })
@@ -430,7 +430,7 @@ describe('restoreEmail', () => {
   it('returns error when email is PURGED', async () => {
     mockEmailFindFirst.mockResolvedValue({
       id: 'email-1',
-      gmailMessageId: 'gmail-1',
+      providerMessageId: 'provider-1',
       retentionStatus: 'PURGED',
       restorableUntil: null,
     })
@@ -442,7 +442,7 @@ describe('restoreEmail', () => {
   it('returns error when restore window has expired', async () => {
     mockEmailFindFirst.mockResolvedValue({
       id: 'email-1',
-      gmailMessageId: 'gmail-1',
+      providerMessageId: 'provider-1',
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: subDays(NOW, 1),  // expired yesterday
     })
@@ -454,7 +454,7 @@ describe('restoreEmail', () => {
   it('returns error when Gmail returns empty body', async () => {
     mockEmailFindFirst.mockResolvedValue({
       id: 'email-1',
-      gmailMessageId: 'gmail-1',
+      providerMessageId: 'provider-1',
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: addDays(NOW, 10),
     })
@@ -464,23 +464,23 @@ describe('restoreEmail', () => {
     if (!result.success) expect(result.reason).toContain('empty body')
   })
 
-  it('returns error when Gmail API throws', async () => {
+  it('returns error when the provider API throws', async () => {
     mockEmailFindFirst.mockResolvedValue({
       id: 'email-1',
-      gmailMessageId: 'gmail-1',
+      providerMessageId: 'provider-1',
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: addDays(NOW, 10),
     })
     mockFetchGmail.mockRejectedValue(new Error('PROVIDER_REAUTH_REQUIRED'))
     const result = await restoreEmail('user-1', 'email-1')
     expect(result.success).toBe(false)
-    if (!result.success) expect(result.reason).toContain('Gmail')
+    if (!result.success) expect(result.reason).toContain('provider')
   })
 
   it('succeeds when email is METADATA_ONLY and window is open', async () => {
     mockEmailFindFirst.mockResolvedValue({
       id: 'email-1',
-      gmailMessageId: 'gmail-1',
+      providerMessageId: 'provider-1',
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: addDays(NOW, 15),
     })
@@ -493,13 +493,13 @@ describe('restoreEmail', () => {
   it('calls restoreEmailBody with the fetched content', async () => {
     mockEmailFindFirst.mockResolvedValue({
       id: 'email-1',
-      gmailMessageId: 'gmail-xyz',
+      providerMessageId: 'provider-xyz',
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: addDays(NOW, 20),
     })
     mockFetchGmail.mockResolvedValue('The restored body.')
     await restoreEmail('user-1', 'email-1')
-    expect(mockFetchGmail).toHaveBeenCalledWith('user-1', 'gmail-xyz')
+    expect(mockFetchGmail).toHaveBeenCalledWith('user-1', 'provider-xyz')
     expect(mockRestoreBody).toHaveBeenCalledWith('email-1', 'The restored body.')
   })
 
@@ -507,7 +507,7 @@ describe('restoreEmail', () => {
     // null restorableUntil means we don't enforce a window — allow restore
     mockEmailFindFirst.mockResolvedValue({
       id: 'email-1',
-      gmailMessageId: 'gmail-1',
+      providerMessageId: 'provider-1',
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: null,
     })

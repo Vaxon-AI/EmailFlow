@@ -26,7 +26,7 @@ type DashboardStats = {
   tasks: { total: number; pending: number; confirmed: number; completed: number; dismissed: number }
   sync: {
     lastSyncAt: Date | null | undefined
-    gmailConnected: boolean | undefined
+    emailConnected: boolean | undefined
     syncEnabled: boolean | undefined
     providerReauthRequired: boolean | undefined
     providerReauthReason: string | null | undefined
@@ -149,12 +149,16 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       where: { id: userId },
       select: {
         lastSyncAt: true,
-        gmailConnected: true,
         syncEnabled: true,
         emailProviderReauthRequired: true,
         emailProviderReauthReason: true,
         emailProviderReauthAt: true,
         emailProviderReauthProvider: true,
+        accounts: {
+          where: { provider: 'google', syncEnabled: true },
+          select: { id: true },
+          take: 1,
+        },
       },
     }),
     prisma.task.findMany({
@@ -410,7 +414,7 @@ function buildStats(
   taskGroups: Array<{ status: string; _count: { id: number } }>,
   userInfo: {
     lastSyncAt: Date | null
-    gmailConnected: boolean
+    accounts: Array<{ id: string }>
     syncEnabled: boolean
     emailProviderReauthRequired: boolean
     emailProviderReauthReason: string | null
@@ -457,7 +461,7 @@ function buildStats(
     },
     sync: {
       lastSyncAt: userInfo?.lastSyncAt,
-      gmailConnected: userInfo?.gmailConnected,
+      emailConnected: (userInfo?.accounts.length ?? 0) > 0,
       syncEnabled: userInfo?.syncEnabled,
       providerReauthRequired: userInfo?.emailProviderReauthRequired,
       providerReauthReason: userInfo?.emailProviderReauthReason,

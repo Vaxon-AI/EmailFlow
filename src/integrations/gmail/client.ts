@@ -343,6 +343,8 @@ function mapGmailLabelsToCategories(labels: string[]): NormalizedCategory[] {
 
 export const gmailProvider: EmailProvider = {
   name: 'gmail',
+  accountProvider: 'google',
+  displayName: 'Google',
 
   async fetchNewEmails(userId: string, options?: FetchNewEmailsOptions): Promise<EmailMessage[]> {
     try {
@@ -383,9 +385,9 @@ export const gmailProvider: EmailProvider = {
         (
           await prisma.email.findMany({
             where: { userId, accountId: accountId ?? null },
-            select: { gmailMessageId: true },
+            select: { providerMessageId: true },
           })
-        ).map((e) => e.gmailMessageId)
+        ).map((e) => e.providerMessageId)
       )
 
       // Cap at the Gmail page size (100). Caller may request fewer when the
@@ -598,11 +600,9 @@ export const gmailProvider: EmailProvider = {
         await prisma.user.update({
           where: { id: userId },
           data: {
-            gmailEmail: null,
             gmailAccessToken: null,
             gmailRefreshToken: null,
             gmailTokenExpiry: null,
-            gmailConnected: false,
             syncEnabled: false,
             lastSyncAt: null,
             emailProviderReauthRequired: false,
@@ -618,11 +618,9 @@ export const gmailProvider: EmailProvider = {
     await prisma.user.update({
       where: { id: userId },
       data: {
-        gmailEmail: null,
         gmailAccessToken: null,
         gmailRefreshToken: null,
         gmailTokenExpiry: null,
-        gmailConnected: false,
         syncEnabled: false,
         lastSyncAt: null,
         emailProviderReauthRequired: false,
@@ -644,14 +642,14 @@ export const gmailProvider: EmailProvider = {
  */
 export async function fetchGmailMessageBody(
   userId: string,
-  gmailMessageId: string
+  providerMessageId: string
 ): Promise<string> {
   const auth = await getAuthenticatedClient(userId)
   const gmail = google.gmail({ version: 'v1', auth })
 
   const res = await gmail.users.messages.get({
     userId: 'me',
-    id: gmailMessageId,
+    id: providerMessageId,
     format: 'full',
   })
 

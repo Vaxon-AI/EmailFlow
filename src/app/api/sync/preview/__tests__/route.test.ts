@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/integrations', () => ({
-  gmailProvider: {
-    previewCount: vi.fn(),
-  },
+vi.mock('@/integrations/provider-registry', () => ({
+  getEmailProvider: vi.fn(),
+  getEnabledEmailProviderKeys: vi.fn(() => ['google']),
 }))
+
+const mockProvider = {
+    previewCount: vi.fn(),
+}
 
 vi.mock('@/lib/quota', () => ({
   getClassifyRemaining: vi.fn(),
@@ -26,14 +29,16 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
   }
 })
 
-import { gmailProvider } from '@/integrations'
+import { getEmailProvider, getEnabledEmailProviderKeys } from '@/integrations/provider-registry'
 import { getClassifyRemaining } from '@/lib/quota'
 import { getAuthUser } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 import { GET } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
-const mockPreviewCount = vi.mocked(gmailProvider.previewCount)
+const mockGetProvider = vi.mocked(getEmailProvider)
+const mockGetProviderKeys = vi.mocked(getEnabledEmailProviderKeys)
+const mockPreviewCount = mockProvider.previewCount
 const mockGetRemaining = vi.mocked(getClassifyRemaining)
 const mockAccount = vi.mocked(prisma.account)
 
@@ -46,6 +51,8 @@ describe('GET /api/sync/preview', () => {
     vi.clearAllMocks()
     mockGetAuthUser.mockResolvedValue({ id: 'user-1' } as never)
     mockAccount.findMany.mockResolvedValue([] as never)
+    mockGetProvider.mockReturnValue(mockProvider as any)
+    mockGetProviderKeys.mockReturnValue(['google'])
     mockPreviewCount.mockResolvedValue({ quotaImpactCount: 42, capped: false })
     mockGetRemaining.mockResolvedValue(80)
   })
@@ -97,6 +104,38 @@ describe('GET /api/sync/preview', () => {
     const body = await res.json()
     expect(body.data.since).toBe(since)
     expect(mockPreviewCount).toHaveBeenCalledWith('user-1', { since: new Date(since) })
+  })
+
+  it('aggregates previews across supported provider accounts', async () => {
+    mockAccount.findMany.mockResolvedValue([
+      { id: 'account-1', provider: 'google' },
+      { id: 'account-2', provider: 'google' },
+    ] as never)
+    mockPreviewCount
+      .mockResolvedValueOnce({ quotaImpactCount: 10, capped: false })
+      .mockResolvedValueOnce({ quotaImpactCount: 20, capped: true })
+
+    const res = await GET(getRequest('?days=7'))
+    const body = await res.json()
+
+    expect(body.data.quotaImpactCount).toBe(30)
+    expect(body.data.capped).toBe(true)
+    expect(mockPreviewCount).toHaveBeenCalledWith('user-1', expect.objectContaining({ accountId: 'account-1' }))
+    expect(mockPreviewCount).toHaveBeenCalledWith('user-1', expect.objectContaining({ accountId: 'account-2' }))
+  })
+
+  it('queries only registered provider account keys', async () => {
+    mockGetProviderKeys.mockReturnValue(['google', 'microsoft'])
+
+    await GET(getRequest('?days=7'))
+
+    expect(mockAccount.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          provider: { in: ['google', 'microsoft'] },
+        }),
+      })
+    )
   })
 
   it('rejects ?days outside [1, 365]', async () => {

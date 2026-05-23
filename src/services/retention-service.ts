@@ -338,13 +338,13 @@ export async function executeRetention(
 // ---------------------------------------------------------------------------
 
 /**
- * Restores a METADATA_ONLY email to ACTIVE by re-fetching bodyFull from Gmail.
+ * Restores a METADATA_ONLY email to ACTIVE by re-fetching bodyFull from the provider.
  *
  * Fails with a descriptive error if:
  *  - email doesn't belong to the user
  *  - email is not in METADATA_ONLY state
  *  - restore window has expired
- *  - Gmail API call fails (token expired, message deleted, etc.)
+ *  - Provider API call fails (token expired, message deleted, etc.)
  */
 export async function restoreEmail(
   userId: string,
@@ -354,7 +354,7 @@ export async function restoreEmail(
     where: { id: emailId, userId },
     select: {
       id: true,
-      gmailMessageId: true,
+      providerMessageId: true,
       retentionStatus: true,
       restorableUntil: true,
     },
@@ -378,21 +378,21 @@ export async function restoreEmail(
     }
   }
 
-  // Re-fetch body from Gmail
+  // Re-fetch body from the provider. Gmail is the only concrete provider today.
   let bodyFull: string
   try {
-    bodyFull = await fetchGmailMessageBody(userId, email.gmailMessageId)
+    bodyFull = await fetchGmailMessageBody(userId, email.providerMessageId)
   } catch (err) {
     return {
       success: false,
-      reason: `Could not fetch email from Gmail: ${errorMessage(err)}`,
+      reason: `Could not fetch email from provider: ${errorMessage(err)}`,
     }
   }
 
   if (!bodyFull) {
     return {
       success: false,
-      reason: 'Gmail returned an empty body — the message may have been deleted from Gmail',
+      reason: 'The provider returned an empty body - the message may have been deleted from the source mailbox',
     }
   }
 

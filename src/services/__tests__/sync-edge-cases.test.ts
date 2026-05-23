@@ -18,8 +18,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/integrations', () => ({
-  gmailProvider: { fetchNewEmails: vi.fn() },
+vi.mock('@/integrations/provider-registry', () => ({
+  getEmailProvider: vi.fn(),
 }))
 
 vi.mock('@/repositories/email-repo', () => ({
@@ -30,7 +30,7 @@ vi.mock('@/repositories/email-repo', () => ({
 vi.mock('@/repositories/user-repo', () => ({
   getUserSyncInfo: vi.fn(),
   updateLastSync: vi.fn(),
-  listEnabledGmailAccounts: vi.fn(),
+  listEnabledEmailAccounts: vi.fn(),
   updateAccountLastSync: vi.fn(),
 }))
 
@@ -55,7 +55,7 @@ vi.mock('@/lib/quota', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { gmailProvider } from '@/integrations'
+import { getEmailProvider } from '@/integrations/provider-registry'
 import * as emailRepo from '@/repositories/email-repo'
 import * as userRepo from '@/repositories/user-repo'
 import * as failedRepo from '@/repositories/failed-email-sync-repo'
@@ -67,12 +67,16 @@ import { syncEmailsPhase1 } from '../email-sync-service'
 
 const DEFAULT_SYNC_INFO = {
   lastSyncAt: null,
-  gmailConnected: true,
+  emailConnected: true,
   syncEnabled: true,
   emailProviderReauthRequired: false,
   emailProviderReauthReason: null,
   emailProviderReauthAt: null,
   emailProviderReauthProvider: null,
+}
+
+const mockProvider = {
+  fetchNewEmails: vi.fn(),
 }
 
 function makeGmailMessage(id: string, overrides: Record<string, unknown> = {}) {
@@ -114,9 +118,10 @@ beforeEach(() => {
 
   vi.mocked(userRepo.getUserSyncInfo).mockResolvedValue(DEFAULT_SYNC_INFO as any)
   vi.mocked(userRepo.updateLastSync).mockResolvedValue({} as any)
-  vi.mocked(userRepo.listEnabledGmailAccounts).mockResolvedValue([] as any)
+  vi.mocked(userRepo.listEnabledEmailAccounts).mockResolvedValue([] as any)
   vi.mocked(userRepo.updateAccountLastSync).mockResolvedValue({} as any)
-  vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([])
+  vi.mocked(getEmailProvider).mockReturnValue(mockProvider as any)
+  mockProvider.fetchNewEmails.mockResolvedValue([])
   vi.mocked(emailRepo.storeEmail).mockResolvedValue({ email: makeStoredEmail('e1') as any, wasCreated: true })
   vi.mocked(emailRepo.fixStuckEmails).mockResolvedValue(0)
   vi.mocked(failedRepo.countPendingFailures).mockResolvedValue(0)
@@ -136,7 +141,7 @@ beforeEach(() => {
 
 describe('syncEmailsPhase1 — Gmail failure must not update lastSyncAt', () => {
   it('does NOT call updateLastSync when fetchNewEmails throws', async () => {
-    vi.mocked(gmailProvider.fetchNewEmails).mockRejectedValue(new Error('Gmail API 500'))
+    mockProvider.fetchNewEmails.mockRejectedValue(new Error('Gmail API 500'))
 
     await syncEmailsPhase1('user-1').catch(() => {})
 
@@ -144,7 +149,7 @@ describe('syncEmailsPhase1 — Gmail failure must not update lastSyncAt', () => 
   })
 
   it('re-throws the Gmail error so the caller knows the sync failed', async () => {
-    vi.mocked(gmailProvider.fetchNewEmails).mockRejectedValue(new Error('Gmail API 500'))
+    mockProvider.fetchNewEmails.mockRejectedValue(new Error('Gmail API 500'))
 
     await expect(syncEmailsPhase1('user-1')).rejects.toThrow('Gmail API 500')
   })
@@ -176,7 +181,7 @@ describe('syncEmailsPhase1 — guard failures must not update lastSyncAt', () =>
 
   it('does NOT call updateLastSync when Gmail is not connected', async () => {
     vi.mocked(userRepo.getUserSyncInfo).mockResolvedValue({
-      ...DEFAULT_SYNC_INFO, gmailConnected: false,
+      ...DEFAULT_SYNC_INFO, emailConnected: false,
     } as any)
 
     await syncEmailsPhase1('user-1').catch(() => {})
@@ -191,7 +196,7 @@ describe('syncEmailsPhase1 — guard failures must not update lastSyncAt', () =>
 
 describe('syncEmailsPhase1 — empty Gmail response is a valid run', () => {
   it('calls updateLastSync even when Gmail returns no messages', async () => {
-    vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([])
+    mockProvider.fetchNewEmails.mockResolvedValue([])
 
     await syncEmailsPhase1('user-1')
 
@@ -200,7 +205,7 @@ describe('syncEmailsPhase1 — empty Gmail response is a valid run', () => {
   })
 
   it('returns zero counts when Gmail returns no messages', async () => {
-    vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([])
+    mockProvider.fetchNewEmails.mockResolvedValue([])
 
     const result = await syncEmailsPhase1('user-1')
 
@@ -220,7 +225,7 @@ describe('syncEmailsPhase1 — empty Gmail response is a valid run', () => {
 
 describe('syncEmailsPhase1 — duplicate email counted as skipped, not failed', () => {
   it('increments skippedCount and NOT failedCount for a duplicate', async () => {
-    vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([makeGmailMessage('msg-dup')])
+    mockProvider.fetchNewEmails.mockResolvedValue([makeGmailMessage('msg-dup')])
     vi.mocked(emailRepo.storeEmail).mockResolvedValue({ email: makeStoredEmail('e1') as any, wasCreated: false })
 
     const result = await syncEmailsPhase1('user-1')
@@ -230,7 +235,7 @@ describe('syncEmailsPhase1 — duplicate email counted as skipped, not failed', 
   })
 
   it('does NOT call recordFailedEmail for a duplicate (wasCreated:false is success)', async () => {
-    vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([makeGmailMessage('msg-dup')])
+    mockProvider.fetchNewEmails.mockResolvedValue([makeGmailMessage('msg-dup')])
     vi.mocked(emailRepo.storeEmail).mockResolvedValue({ email: makeStoredEmail('e1') as any, wasCreated: false })
 
     await syncEmailsPhase1('user-1')
@@ -245,7 +250,7 @@ describe('syncEmailsPhase1 — duplicate email counted as skipped, not failed', 
 
 describe('syncEmailsPhase1 — recordFailedEmail failure is isolated', () => {
   it('continues storing remaining emails when recordFailedEmail throws', async () => {
-    vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([
+    mockProvider.fetchNewEmails.mockResolvedValue([
       makeGmailMessage('msg-fail'),
       makeGmailMessage('msg-ok'),
     ])
@@ -261,7 +266,7 @@ describe('syncEmailsPhase1 — recordFailedEmail failure is isolated', () => {
   })
 
   it('calls updateLastSync even when recordFailedEmail throws', async () => {
-    vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([makeGmailMessage('msg-fail')])
+    mockProvider.fetchNewEmails.mockResolvedValue([makeGmailMessage('msg-fail')])
     vi.mocked(emailRepo.storeEmail).mockRejectedValue(new Error('DB error'))
     vi.mocked(failedRepo.recordFailedEmail).mockRejectedValue(new Error('record also failed'))
 
@@ -277,7 +282,7 @@ describe('syncEmailsPhase1 — recordFailedEmail failure is isolated', () => {
 
 describe('syncEmailsPhase1 — message with null threadId', () => {
   it('stores a message that has no threadId without throwing', async () => {
-    vi.mocked(gmailProvider.fetchNewEmails).mockResolvedValue([
+    mockProvider.fetchNewEmails.mockResolvedValue([
       makeGmailMessage('msg-no-thread', { threadId: null }),
     ])
 

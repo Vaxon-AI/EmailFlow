@@ -135,7 +135,7 @@ function CineNav() {
               textDecoration: 'none',
             }}
           >
-            Connect Gmail
+            Connect email
           </Link>
         </nav>
       </div>
@@ -246,7 +246,7 @@ function CineHero() {
                   textDecoration: 'none',
                 }}
               >
-                Connect Gmail →
+                Connect email →
               </Link>
             </div>
             <span className="sans" style={{ fontSize: 12.5, color: 'var(--ef-ink-mute)' }}>
@@ -699,7 +699,7 @@ function CinePinnedStory() {
 
   const titles = ['Read.', 'Understand.', 'List.', 'Rank.']
   const descs = [
-    'EmailFlow connects to your Gmail and reads it — that is all it can do. New email gets picked up automatically.',
+    'EmailFlow connects to your inbox and reads it — that is all it can do. New email gets picked up automatically.',
     'It reads each email the way you would: who is asking, what they need, and by when. The real requests get separated from the noise.',
     'Every real request becomes a task — with its deadline, who it is for, and the original email attached so you never lose the context.',
     'Each task is ranked by how urgent it is, so you get one clear list. Start at the top and work your way down.',
@@ -880,7 +880,7 @@ function Act1Read({ subP }: { subP: number }) {
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <span className="sans" style={{ fontSize: 15, fontWeight: 600 }}>
-          Gmail · Inbox
+          Email · Inbox
         </span>
         <span
           className="mono"
@@ -1453,7 +1453,7 @@ function CineCTA() {
               textDecoration: 'none',
             }}
           >
-            Connect Gmail →
+            Connect email →
           </Link>
           <Link
             href="/demo"

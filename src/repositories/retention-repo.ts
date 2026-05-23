@@ -255,7 +255,7 @@ export async function deleteEmailRows(userId: string, gracePeriodDays: number): 
       retentionStatus: 'PURGED',
       purgedAt: { lt: cutoff },
     },
-    select: { id: true, accountId: true, gmailMessageId: true },
+    select: { id: true, accountId: true, providerMessageId: true },
   })
   if (candidates.length === 0) return 0
 
@@ -263,7 +263,7 @@ export async function deleteEmailRows(userId: string, gracePeriodDays: number): 
     data: candidates.map((e) => ({
       userId,
       accountId: e.accountId,
-      gmailMessageId: e.gmailMessageId,
+      providerMessageId: e.providerMessageId,
     })),
     skipDuplicates: true,
   })

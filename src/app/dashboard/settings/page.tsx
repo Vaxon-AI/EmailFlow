@@ -52,10 +52,12 @@ import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
 import { requestStepUp, verifyStepUp, type StepUpAction } from '@/lib/step-up-client'
 import { RetentionPolicyCard } from '@/components/retention-policy-card'
+import { getEmailProviderAccountLabel, getEmailProviderLabel } from '@/lib/email-provider-labels'
 
 type CurrentUser = {
   email?: string | null
-  gmailEmail?: string | null
+  providerEmail?: string | null
+  emailConnected?: boolean | null
   name?: string | null
   syncStartDate?: string | null
   timezone?: string | null
@@ -228,7 +230,7 @@ export default function SettingsPage() {
 
   const currentUser: CurrentUser | null = meRes?.user || meRes?.data || null
   const syncData = stats?.data?.sync
-  const gmailConnected = Boolean(syncData?.gmailConnected)
+  const emailConnected = Boolean(syncData?.emailConnected)
   const providerReauthRequired = Boolean(
     currentUser?.emailProviderReauthRequired || syncData?.providerReauthRequired
   )
@@ -319,8 +321,8 @@ export default function SettingsPage() {
                       <Badge variant="outline" className="border-warning-100 bg-warning-50 text-warning-700">
                         Reconnect required
                       </Badge>
-                    ) : gmailConnected ? (
-                      <Badge className="bg-success-100 text-success hover:bg-success-100">Gmail connected</Badge>
+                    ) : emailConnected ? (
+                      <Badge className="bg-success-100 text-success hover:bg-success-100">Email connected</Badge>
                     ) : (
                       <Badge variant="outline">Email not connected</Badge>
                     )}
@@ -646,7 +648,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="pt-2.5">
                     <span className="font-medium text-gray-700">Disconnect anytime:</span>{' '}
-                    Disconnecting Gmail stops future sync runs. Existing tasks and stored records remain until you clear account data.
+                    Disconnecting your email account stops future sync runs. Existing tasks and stored records remain until you clear account data.
                   </div>
                 </div>
               </CardContent>
@@ -1722,7 +1724,7 @@ function LinkAccountCard({
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-gray-600">Connect one or more Gmail accounts. EmailFlow uses read-only access and keeps each email connection separate for sync and filtering.</p>
+              <p className="text-sm text-gray-600">Connect one or more email accounts. EmailFlow uses read-only access and keeps each email connection separate for sync and filtering.</p>
             </div>
 
             {accounts.length > 0 ? (
@@ -1735,9 +1737,9 @@ function LinkAccountCard({
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="outline" className="border-brand-200 bg-brand-50 text-brand-700">
-                            Gmail
+                            {getEmailProviderLabel(account.provider)}
                           </Badge>
-                          <span className="truncate text-sm font-medium text-gray-900">{account.email || 'Gmail account'}</span>
+                          <span className="truncate text-sm font-medium text-gray-900">{account.email || getEmailProviderAccountLabel(account.provider)}</span>
                           <Badge
                             variant={reauthRequired ? 'default' : account.syncEnabled ? 'outline' : 'outline'}
                             className={reauthRequired ? 'bg-warning-100 text-warning-700 hover:bg-warning-100' : account.syncEnabled ? 'border-success-100 bg-success-50 text-success' : ''}
@@ -1793,7 +1795,7 @@ function LinkAccountCard({
               <a href="/api/auth/google" className="self-start">
                 <Button size="sm" className="gap-2">
                   <KeyRound className="h-3.5 w-3.5" />
-                  Add Gmail account
+                  Add email account
                 </Button>
               </a>
               <Button size="sm" variant="outline" disabled className="gap-2">
@@ -1806,7 +1808,7 @@ function LinkAccountCard({
         {(providerReauthRequired || accounts.some((account) => account.reauthRequired)) && (
           <InlineNotice variant="warning">
             <p className="text-sm">
-              Your {providerReauthProvider === 'outlook' ? 'Outlook' : 'Gmail'} connection can no longer refresh access.
+              Your {getEmailProviderLabel(providerReauthProvider)} connection can no longer refresh access.
               Reconnect it, then run sync again.
             </p>
           </InlineNotice>
@@ -1814,7 +1816,7 @@ function LinkAccountCard({
 
         <InlineNotice variant="info">
           <p className="text-sm">
-            Gmail is available now. Outlook and additional providers can use this same account list when they are added.
+            Google is available now. Outlook and additional providers can use this same account list when they are added.
           </p>
         </InlineNotice>
       </CardContent>

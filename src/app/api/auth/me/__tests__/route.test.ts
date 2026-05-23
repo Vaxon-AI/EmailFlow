@@ -67,7 +67,6 @@ describe('GET /api/auth/me', () => {
       email: 'alice@example.com',
       name: 'Alice',
       isAdmin: false,
-      gmailEmail: 'alice@gmail.com',
       syncStartDate,
       timezone: 'Australia/Sydney',
       totpEnabled: true,

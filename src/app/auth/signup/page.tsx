@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 
-const GMAIL_ERROR_MESSAGES: Record<string, string> = {
+const GOOGLE_OAUTH_ERROR_MESSAGES: Record<string, string> = {
   no_email: 'Your Google account must have an email address.',
   no_provider_id: 'Google sign-in failed: missing account identifier.',
   token_exchange_failed: 'Google sign-in failed. Please try again.',
@@ -23,13 +23,13 @@ const GMAIL_ERROR_MESSAGES: Record<string, string> = {
   server_error: 'An unexpected error occurred. Please try again.',
 }
 
-function GmailErrorReader({ onError }: { onError: (msg: string) => void }) {
+function EmailConnectionErrorReader({ onError }: { onError: (msg: string) => void }) {
   const searchParams = useSearchParams()
   const router = useRouter()
   useEffect(() => {
-    const gmailError = searchParams.get('gmail_error')
-    if (!gmailError) return
-    onError(GMAIL_ERROR_MESSAGES[gmailError] ?? 'Google sign-in failed. Please try again.')
+    const emailConnectionError = searchParams.get('gmail_error')
+    if (!emailConnectionError) return
+    onError(GOOGLE_OAUTH_ERROR_MESSAGES[emailConnectionError] ?? 'Google sign-in failed. Please try again.')
     router.replace('/auth/signup', { scroll: false })
   }, [searchParams, router, onError])
   return null
@@ -99,7 +99,7 @@ export default function SignUpPage() {
   return (
     <>
       <Suspense fallback={null}>
-        <GmailErrorReader onError={setError} />
+        <EmailConnectionErrorReader onError={setError} />
       </Suspense>
       <Dialog open={legalModal !== null} onOpenChange={(open) => { if (!open) setLegalModal(null) }}>
         <DialogContent
@@ -231,8 +231,8 @@ export default function SignUpPage() {
                       <p className="mt-1 text-xs text-gray-600">Email content is sent to a third-party AI processing service to classify emails and extract tasks. This provider is contractually prohibited from storing or using your content to train models.</p>
                     </div>
                     <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                      <p className="font-medium text-gray-800">Google (Gmail)</p>
-                      <p className="mt-1 text-xs text-gray-600">We connect to your Gmail account with read-only access. You can revoke access at any time from your Google account settings.</p>
+                      <p className="font-medium text-gray-800">Google email</p>
+                      <p className="mt-1 text-xs text-gray-600">We connect to your email account with read-only access. You can revoke access at any time from your Google account settings.</p>
                     </div>
                     <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
                       <p className="font-medium text-gray-800">Infrastructure</p>

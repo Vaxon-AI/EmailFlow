@@ -1,10 +1,10 @@
 # EmailFlow AI
 
-An AI-powered email management app that syncs your Gmail, classifies emails, extracts actionable tasks, and delivers smart daily digests.
+An AI-powered email management app that syncs your email account, classifies emails, extracts actionable tasks, and delivers smart daily digests.
 
 ## Features
 
-- **Gmail Sync** — OAuth-based Gmail integration with incremental sync and configurable start date
+- **Email Sync** — OAuth-based email integration with incremental sync and configurable start date
 - **AI Classification** — Emails are automatically classified by category and priority using Claude / GPT models
 - **Task Extraction** — AI pulls actionable tasks out of email threads and links them to projects
 - **Daily Digests** — Scheduled digest pipeline summarises your inbox and surfaces what matters
@@ -37,7 +37,7 @@ An AI-powered email management app that syncs your Gmail, classifies emails, ext
 - Node.js 20+
 - PostgreSQL
 - Redis (for BullMQ job queues)
-- A Gmail OAuth app (Client ID + Secret)
+- A Google OAuth app (Client ID + Secret) for the current email provider
 
 ### Setup
 

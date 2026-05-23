@@ -7,7 +7,7 @@ import { executeRetention } from '@/services/retention-service'
 // ============================================================
 // Cron: Retention Cleanup
 // Runs daily via Vercel Cron (recommended: once per day, e.g. 03:00 UTC).
-// Processes all Gmail-connected users in sequence.
+// Processes all email-connected users in sequence.
 //
 // Protected by CRON_SECRET — Vercel sends it as Authorization header.
 // To trigger manually: GET /api/cron/retention
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   }
 
   const users = await prisma.user.findMany({
-    where: { gmailConnected: true },
+    where: { accounts: { some: { provider: 'google', syncEnabled: true } } },
     select: { id: true },
   })
 

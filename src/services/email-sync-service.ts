@@ -1,6 +1,6 @@
 import { AppError } from '@/lib/app-errors'
 import * as Sentry from '@sentry/nextjs'
-import { gmailProvider } from '@/integrations'
+import { getEmailProvider } from '@/integrations/provider-registry'
 import type { EmailMessage } from '@/integrations'
 import { processEmail } from '@/workflows'
 import * as emailRepo from '@/repositories/email-repo'
@@ -55,10 +55,10 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
 
   const syncInfo = await userRepo.getUserSyncInfo(userId)
   if (!syncInfo) throw new Error('User not found')
-  if (!syncInfo.gmailConnected) throw new AppError('SYNC_FAILED', 'Email not connected', 400)
+  if (!syncInfo.emailConnected) throw new AppError('SYNC_FAILED', 'Email not connected', 400)
   if (!syncInfo.syncEnabled) throw new Error('Email sync is disabled')
   if (syncInfo.emailProviderReauthRequired) {
-    const enabledAccounts = await userRepo.listEnabledGmailAccounts(userId)
+    const enabledAccounts = await userRepo.listEnabledEmailAccounts(userId)
     if (enabledAccounts.length === 0) {
       throw new AppError(
         'PROVIDER_REAUTH_REQUIRED',
@@ -72,8 +72,8 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
     }
   }
 
-  // Cap Gmail fetch by the user's remaining classify quota. Without this cap,
-  // a free user with quota=6 would still pull 100 messages from Gmail; the 94
+  // Cap provider fetch by the user's remaining classify quota. Without this cap,
+  // a free user with quota=6 would still pull 100 messages from the provider; the 94
   // that Phase 2 can't classify would sit in DB as 'pending' until fixStuckEmails
   // marks them failed — wasting storage and confusing the user.
   const quotaRemaining = await getClassifyRemaining(userId)
@@ -81,7 +81,7 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
   const quotaLimited = quotaRemaining !== Infinity && quotaRemaining < 100
 
   if (fetchCap === 0) {
-    console.log(`[sync] phase1 quota=0, skipping Gmail fetch entirely`)
+    console.log(`[sync] phase1 quota=0, skipping provider fetch entirely`)
     await userRepo.updateLastSync(userId)
     const pendingFailedCount = await failedRepo.countPendingFailures(userId)
     return {
@@ -97,16 +97,16 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
     }
   }
 
-  const gmailAccounts = await userRepo.listEnabledGmailAccounts(userId)
-  const accountsToSync = gmailAccounts.length > 0
-    ? gmailAccounts
-    : [{ id: undefined, email: null, reauthRequired: false }]
+  const emailAccounts = await userRepo.listEnabledEmailAccounts(userId)
+  const accountsToSync = emailAccounts.length > 0
+    ? emailAccounts
+    : [{ id: undefined, provider: 'google', email: null, reauthRequired: false }]
 
   if (accountsToSync.length === 0) {
     throw new AppError('SYNC_FAILED', 'Email not connected', 400)
   }
 
-  // 1) Fetch new emails from Gmail
+  // 1) Fetch new emails from providers
   const tFetch = Date.now()
   const messages: EmailMessage[] = []
   let remainingFetchBudget = fetchCap
@@ -115,7 +115,7 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
 
   for (const account of accountsToSync) {
     if (account.reauthRequired) {
-      console.warn(`[sync] skipping Gmail account ${account.email || account.id || 'legacy'}: reauth required`)
+      console.warn(`[sync] skipping email account ${account.email || account.id || 'legacy'}: reauth required`)
       continue
     }
 
@@ -123,7 +123,8 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
 
     const accountCap = remainingFetchBudget === Infinity ? 100 : Math.min(remainingFetchBudget, 100)
     try {
-      const accountMessages = await gmailProvider.fetchNewEmails(userId, {
+      const provider = getEmailProvider(account.provider)
+      const accountMessages = await provider.fetchNewEmails(userId, {
         maxResults: accountCap,
         accountId: account.id,
       })
@@ -138,10 +139,10 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
     } catch (err) {
       lastFetchError = err
       if (err instanceof AppError && err.code === 'PROVIDER_REAUTH_REQUIRED') {
-        console.warn(`[sync] Gmail account ${account.email || account.id || 'legacy'} needs reauth`)
+        console.warn(`[sync] email account ${account.email || account.id || 'legacy'} needs reauth`)
         continue
       }
-      console.error(`[sync] fetch failed for Gmail account ${account.email || account.id || 'legacy'}:`, err)
+      console.error(`[sync] fetch failed for email account ${account.email || account.id || 'legacy'}:`, err)
       if (accountsToSync.length === 1) throw err
     }
   }
@@ -179,11 +180,11 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
     } catch (err) {
       failedCount++
       const reason = err instanceof Error ? err.message : String(err)
-      console.error(`Failed to store email gmailMessageId=${message.providerMessageId}: ${reason}`)
+      console.error(`Failed to store email providerMessageId=${message.providerMessageId}: ${reason}`)
       try {
         await failedRepo.recordFailedEmail(userId, message, reason)
       } catch (recordErr) {
-        console.error(`Failed to record failed email gmailMessageId=${message.providerMessageId}:`, recordErr)
+        console.error(`Failed to record failed email providerMessageId=${message.providerMessageId}:`, recordErr)
       }
     }
   }
@@ -335,11 +336,12 @@ async function retryFailedEmails(userId: string): Promise<{ retriedSuccessCount:
   const pendingRecords = allPendingRecords.slice(0, RETRY_BATCH_SIZE)
 
   for (const record of pendingRecords) {
+    const providerMessageId = record.providerMessageId
     try {
       const { wasCreated } = await emailRepo.storeEmail({
         userId,
         message: {
-          providerMessageId: record.gmailMessageId,
+          providerMessageId,
           threadId: record.threadId ?? null,
           receivedAt: record.receivedAt ?? new Date(),
           subject: record.subject ?? '(no subject)',
@@ -354,16 +356,16 @@ async function retryFailedEmails(userId: string): Promise<{ retriedSuccessCount:
       })
 
       retriedSuccessCount++
-      await failedRepo.resolveFailedEmail(userId, record.gmailMessageId)
-      console.log(`Retry resolved gmailMessageId=${record.gmailMessageId} wasCreated=${wasCreated}`)
+      await failedRepo.resolveFailedEmail(userId, providerMessageId)
+      console.log(`Retry resolved providerMessageId=${providerMessageId} wasCreated=${wasCreated}`)
     } catch (err) {
       retriedFailedCount++
       const reason = err instanceof Error ? err.message : String(err)
-      console.error(`Retry failed gmailMessageId=${record.gmailMessageId}: ${reason}`)
+      console.error(`Retry failed providerMessageId=${providerMessageId}: ${reason}`)
       try {
-        await failedRepo.recordRetryFailure(userId, record.gmailMessageId, reason)
+        await failedRepo.recordRetryFailure(userId, providerMessageId, reason)
       } catch (updateErr) {
-        console.error(`Failed to update retry record gmailMessageId=${record.gmailMessageId}:`, updateErr)
+        console.error(`Failed to update retry record providerMessageId=${providerMessageId}:`, updateErr)
       }
     }
   }

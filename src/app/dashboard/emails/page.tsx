@@ -391,7 +391,7 @@ function EmailsContent() {
   const clearSelection = () => setSelectedIds(new Set())
 
   // Batch ignore: collapses selected emails into the ignore bucket
-  // (classification='ignore', actioned=true). DB rows stay so Gmail sync
+  // (classification='ignore', actioned=true). DB rows stay so email sync
   // dedup remains intact — selected emails just disappear from the default
   // tabs and end up in All + classification=ignore.
   const bulkIgnoreMutation = useMutation({

@@ -283,12 +283,12 @@ describe('resolveFailedEmail', () => {
     expect(resolvedAt.getTime()).toBeLessThanOrEqual(after)
   })
 
-  it('targets the correct userId + gmailMessageId composite key', async () => {
+  it('targets the correct userId + providerMessageId composite key', async () => {
     await resolveFailedEmail('user-99', 'specific-msg')
 
     expect(mockRepo.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId_gmailMessageId: { userId: 'user-99', gmailMessageId: 'specific-msg' } },
+        where: { userId_providerMessageId: { userId: 'user-99', providerMessageId: 'specific-msg' } },
       })
     )
   })
@@ -332,7 +332,7 @@ describe('recordFailedEmail', () => {
     )
   })
 
-  it('stores the gmailMessageId from providerMessageId', async () => {
+  it('stores providerMessageId', async () => {
     await recordFailedEmail(
       'user-1',
       { providerMessageId: 'gmail-abc-123', threadId: null, receivedAt: new Date(), subject: 'S', sender: 's@s.com' },
@@ -341,8 +341,10 @@ describe('recordFailedEmail', () => {
 
     expect(mockRepo.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId_gmailMessageId: { userId: 'user-1', gmailMessageId: 'gmail-abc-123' } },
-        create: expect.objectContaining({ gmailMessageId: 'gmail-abc-123' }),
+        where: { userId_providerMessageId: { userId: 'user-1', providerMessageId: 'gmail-abc-123' } },
+        create: expect.objectContaining({
+          providerMessageId: 'gmail-abc-123',
+        }),
       })
     )
   })

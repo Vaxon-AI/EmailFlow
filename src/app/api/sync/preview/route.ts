@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { error, errorFromException, getAuthUser, success } from '@/lib/api-helpers'
-import { gmailProvider } from '@/integrations'
+import { getEmailProvider, getEnabledEmailProviderKeys } from '@/integrations/provider-registry'
 import { getClassifyRemaining } from '@/lib/quota'
 import { prisma } from '@/lib/prisma'
 
@@ -10,7 +10,7 @@ import { prisma } from '@/lib/prisma'
 // this for each preset (7/15/30 days) plus any custom date the user picks, so
 // they can pick a window that fits the free-plan cap instead of guessing.
 //
-// Accepts ?days=N (preset) or ?since=ISO_DATE (custom). Single Gmail API call
+// Accepts ?days=N (preset) or ?since=ISO_DATE (custom). Single provider API call
 // (resultSizeEstimate, no body fetch). The actual fetch behavior is unchanged
 // — non-Primary mail still gets stored but skipped by pre-filter, so this
 // number is the AI quota burn estimate, not the total mail count.
@@ -35,18 +35,19 @@ export async function GET(req: Request) {
       since = new Date(Date.now() - days * 86_400_000)
     }
 
+    const providerKeys = getEnabledEmailProviderKeys()
     const accounts = await prisma.account.findMany({
-      where: { userId: user.id, provider: 'google', syncEnabled: true, reauthRequired: false },
-      select: { id: true },
+      where: { userId: user.id, provider: { in: providerKeys }, syncEnabled: true, reauthRequired: false },
+      select: { id: true, provider: true },
     })
 
     const previewPromise = accounts.length > 0
-      ? Promise.all(accounts.map((account) => gmailProvider.previewCount(user.id, { since, accountId: account.id })))
+      ? Promise.all(accounts.map((account) => getEmailProvider(account.provider).previewCount(user.id, { since, accountId: account.id })))
           .then((previews) => ({
             quotaImpactCount: previews.reduce((sum, preview) => sum + preview.quotaImpactCount, 0),
             capped: previews.some((preview) => preview.capped),
           }))
-      : gmailProvider.previewCount(user.id, { since })
+      : getEmailProvider('google').previewCount(user.id, { since })
 
     const [preview, quotaRemaining] = await Promise.all([
       previewPromise,

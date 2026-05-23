@@ -18,14 +18,12 @@ model User {
   gmailAccessToken            String?
   gmailRefreshToken           String?
   gmailTokenExpiry            DateTime?
-  gmailConnected              Boolean              @default(false)
   lastSyncAt                  DateTime?
   syncEnabled                 Boolean              @default(true)
   createdAt                   DateTime             @default(now())
   updatedAt                   DateTime             @updatedAt
   totpEnabled                 Boolean              @default(false)
   totpSecret                  String?
-  gmailEmail                  String?
   syncStartDate               DateTime?
   emailProviderReauthRequired Boolean              @default(false)
   emailProviderReauthReason   String?
@@ -123,7 +121,7 @@ model Email {
   id                 String          @id @default(cuid())
   userId             String
   accountId          String?
-  gmailMessageId     String
+  providerMessageId  String
   threadId           String?
   accountEmail       String          @default("")
   subject            String
@@ -158,7 +156,7 @@ model Email {
   user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskLinks          TaskEmail[]
 
-  @@unique([userId, accountId, gmailMessageId])
+  @@unique([userId, accountId, providerMessageId])
   @@index([userId, receivedAt(sort: Desc)])
   @@index([accountId, receivedAt(sort: Desc)])
   @@index([userId, classification, receivedAt(sort: Desc)])
@@ -349,22 +347,22 @@ model ProjectContext {
 }
 
 model FailedEmailSync {
-  id             String    @id @default(cuid())
-  userId         String
-  gmailMessageId String
-  threadId       String?
-  receivedAt     DateTime?
-  subject        String?
-  sender         String?
-  errorReason    String
-  retryCount     Int       @default(0)
-  status         String    @default("pending")
-  firstFailedAt  DateTime  @default(now())
-  lastFailedAt   DateTime  @default(now())
-  resolvedAt     DateTime?
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String    @id @default(cuid())
+  userId            String
+  providerMessageId String
+  threadId          String?
+  receivedAt        DateTime?
+  subject           String?
+  sender            String?
+  errorReason       String
+  retryCount        Int       @default(0)
+  status            String    @default("pending")
+  firstFailedAt     DateTime  @default(now())
+  lastFailedAt      DateTime  @default(now())
+  resolvedAt        DateTime?
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, gmailMessageId])
+  @@unique([userId, providerMessageId])
 }
 
 model ThreadMemory {
@@ -396,15 +394,15 @@ model ThreadMemory {
 }
 
 model Attachment {
-  id                String    @id @default(cuid())
-  emailId           String
-  filename          String
-  mimeType          String    @default("")
-  size              Int       @default(0)
-  gmailAttachmentId String?
-  purgedAt          DateTime?
-  createdAt         DateTime  @default(now())
-  email             Email     @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  id                   String    @id @default(cuid())
+  emailId              String
+  filename             String
+  mimeType             String    @default("")
+  size                 Int       @default(0)
+  providerAttachmentId String?
+  purgedAt             DateTime?
+  createdAt            DateTime  @default(now())
+  email                Email     @relation(fields: [emailId], references: [id], onDelete: Cascade)
 
   @@index([emailId])
 }
@@ -462,15 +460,15 @@ model RetentionJobLog {
 }
 
 model DeletedEmailMarker {
-  id             String   @id @default(cuid())
-  userId         String
-  accountId      String?
-  gmailMessageId String
-  deletedAt      DateTime @default(now())
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  userId            String
+  accountId         String?
+  providerMessageId String
+  deletedAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, accountId, gmailMessageId])
-  @@index([userId, gmailMessageId])
+  @@unique([userId, accountId, providerMessageId])
+  @@index([userId, providerMessageId])
 }
 
 model Feedback {

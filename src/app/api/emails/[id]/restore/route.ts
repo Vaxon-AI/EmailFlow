@@ -1,12 +1,12 @@
 /**
  * POST /api/emails/[id]/restore
  *
- * Restores the body of a METADATA_ONLY email by re-fetching it from Gmail.
+ * Restores the body of a METADATA_ONLY email by re-fetching it from the email provider.
  * Fails if:
  *  - Email doesn't belong to the authenticated user
  *  - Email is not in METADATA_ONLY status
  *  - The restore window has expired
- *  - Gmail cannot return the message (deleted, token invalid, etc.)
+ *  - The email provider cannot return the message (deleted, token invalid, etc.)
  */
 
 import { getAuthUser, success, error, errorFromException } from '@/lib/api-helpers'

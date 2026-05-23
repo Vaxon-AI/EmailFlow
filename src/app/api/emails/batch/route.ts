@@ -74,7 +74,7 @@ export async function POST(req: Request) {
 
     if (action === 'ignore') {
       // Soft delete: collapse the selected emails into the ignore bucket.
-      // DB rows stay so the next Gmail sync still dedups by gmailMessageId.
+      // DB rows stay so the next email sync still dedups by provider message id.
       const result = await emailRepo.bulkIgnoreEmails(user.id, ids)
       return success({ affected: result?.count ?? 0 })
     }

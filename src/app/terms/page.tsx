@@ -36,7 +36,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-semibold text-gray-900 mb-3">1. What EmailFlow AI does</h2>
             <p>
-              EmailFlow AI connects to your email account (currently Gmail, with more providers
+              EmailFlow AI connects to your email account (currently Google, with more providers
               planned) using read-only OAuth access. It uses artificial intelligence to classify
               incoming emails, extract actionable tasks, assign priority scores, and organise work
               by project. You can view, confirm, complete, or dismiss these tasks from a dashboard.
@@ -144,4 +144,3 @@ export default function TermsPage() {
     </div>
   )
 }
-

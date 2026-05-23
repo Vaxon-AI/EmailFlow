@@ -74,6 +74,12 @@ export interface EmailProvider {
   /** Unique name for this provider (e.g. 'gmail', 'outlook') */
   name: string
 
+  /** Account.provider key used in the database/OAuth layer (e.g. 'google', 'microsoft'). */
+  accountProvider: string
+
+  /** User-facing provider name. */
+  displayName?: string
+
   /** Fetch new emails (excluding already-known message IDs). */
   fetchNewEmails(userId: string, options?: FetchNewEmailsOptions): Promise<EmailMessage[]>
 
