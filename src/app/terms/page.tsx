@@ -39,7 +39,7 @@ export default function TermsPage() {
               EmailFlow AI connects to your email account (currently Google, with more providers
               planned) using read-only OAuth access. It uses artificial intelligence to classify
               incoming emails, extract actionable tasks, assign priority scores, and organise work
-              by project. You can view, confirm, complete, or dismiss these tasks from a dashboard.
+              by project. You can view, activate, complete, or delete these tasks from a dashboard.
             </p>
             <p className="mt-3">
               EmailFlow AI does not send, delete, modify, or forward any of your emails. Our access

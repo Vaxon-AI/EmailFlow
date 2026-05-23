@@ -43,7 +43,7 @@ const TAB_VALUES: ReadonlySet<string> = new Set([
 
 function tabOf(email: DemoEmail): Tab {
   const state = displayStateOf(email)
-  return state === 'uncertain' ? 'unclassified' : state
+  return state
 }
 
 function parseTab(value: string | null): Tab {

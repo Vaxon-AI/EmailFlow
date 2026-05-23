@@ -25,7 +25,7 @@ export function DemoEmailRow({
   const accentBar =
     state === 'needs_action'
       ? 'border-l-2 border-l-critical'
-      : state === 'uncertain'
+      : state === 'unclassified'
         ? 'border-l-2 border-l-warning'
         : state === 'tracked'
           ? 'border-l-2 border-l-brand-500'
@@ -56,7 +56,7 @@ export function DemoEmailRow({
         />
       )}
       <Link href={`/demo/emails/${email.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-        {(state === 'needs_action' || state === 'uncertain' || state === 'tracked') && (
+        {(state === 'needs_action' || state === 'unclassified' || state === 'tracked') && (
           <ClassChip state={state} className="w-[104px] justify-center" />
         )}
         <div className="min-w-0 flex-1">

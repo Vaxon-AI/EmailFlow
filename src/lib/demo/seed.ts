@@ -154,13 +154,13 @@ export function computeDigestStats(
   })
   return {
     actionCount: inWindow.filter((e) => e.classification === 'action').length,
-    trackedCount: tasks.filter((t) => t.status === 'confirmed').length,
+    trackedCount: tasks.filter((t) => t.status === 'active').length,
     awarenessCount: inWindow.filter((e) => e.classification === 'awareness').length,
     unresolvedCount: inWindow.filter((e) => e.awaitingReview).length,
     ignoredCount: inWindow.filter((e) => e.classification === 'ignore').length,
     taskTotal: tasks.length,
-    taskActive: tasks.filter((t) => t.status === 'confirmed').length,
-    taskPending: tasks.filter((t) => t.status === 'pending').length,
+    taskActive: tasks.filter((t) => t.status === 'active').length,
+    taskPending: tasks.filter((t) => t.status === 'ai_suggestion').length,
     taskCompleted: tasks.filter((t) => t.status === 'completed').length,
   }
 }
@@ -177,7 +177,7 @@ export function buildDigestContent(
   now: Date,
 ): string {
   const todayEnd = startOfDay(now).getTime() + DAY_MS
-  const open = tasks.filter((t) => t.status === 'pending' || t.status === 'confirmed')
+  const open = tasks.filter((t) => t.status === 'ai_suggestion' || t.status === 'active')
 
   const overdue = open.filter((t) => {
     const d = effectiveDeadlineMs(t)

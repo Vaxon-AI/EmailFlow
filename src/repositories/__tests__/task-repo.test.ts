@@ -76,7 +76,7 @@ const CREATED_TASK = {
   id: TASK_ID,
   userId: USER_ID,
   title: 'Review contract',
-  status: 'pending',
+  status: 'ai_suggestion',
   priorityScore: 15,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -110,16 +110,16 @@ describe('createTask', () => {
     mockPrismaTaskEmail.create.mockResolvedValue({} as never)
     await createTask(makeCreateTaskData())
     expect(mockPrismaTask.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'pending' }) })
+      expect.objectContaining({ data: expect.objectContaining({ status: 'ai_suggestion' }) })
     )
   })
 
-  it('sets status to confirmed when explicitly provided', async () => {
-    mockPrismaTask.create.mockResolvedValue({ ...CREATED_TASK, status: 'confirmed' } as never)
+  it('sets status to active when explicitly provided', async () => {
+    mockPrismaTask.create.mockResolvedValue({ ...CREATED_TASK, status: 'active' } as never)
     mockPrismaTaskEmail.create.mockResolvedValue({} as never)
-    await createTask(makeCreateTaskData({ status: 'confirmed' }))
+    await createTask(makeCreateTaskData({ status: 'active' }))
     expect(mockPrismaTask.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'confirmed' }) })
+      expect.objectContaining({ data: expect.objectContaining({ status: 'active' }) })
     )
   })
 
@@ -189,12 +189,12 @@ describe('findTaskById', () => {
 
 describe('updateTask', () => {
   it('calls prisma.task.update with the correct id and data', async () => {
-    const updated = { ...CREATED_TASK, status: 'confirmed' }
+    const updated = { ...CREATED_TASK, status: 'active' }
     mockPrismaTask.update.mockResolvedValue(updated as never)
-    const result = await updateTask(TASK_ID, { status: 'confirmed' })
+    const result = await updateTask(TASK_ID, { status: 'active' })
     expect(mockPrismaTask.update).toHaveBeenCalledWith({
       where: { id: TASK_ID },
-      data: { status: 'confirmed' },
+      data: { status: 'active' },
     })
     expect(result).toEqual(updated)
   })

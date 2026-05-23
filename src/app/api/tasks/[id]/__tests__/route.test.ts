@@ -33,7 +33,7 @@ const mockInvalidateStatsCache = vi.mocked(invalidateStatsCache)
 const STORED_TASK = {
   id: 'task-1',
   title: 'Review contract',
-  status: 'pending',
+  status: 'ai_suggestion',
   urgency: 3,
   impact: 4,
   priorityScore: 12,
@@ -137,10 +137,10 @@ describe('PATCH /api/tasks/[id]', () => {
     )
   })
 
-  it('sets confirmedAt when status changes to confirmed', async () => {
+  it('sets activeAt when status changes to active', async () => {
     const req = new NextRequest('http://localhost', {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'confirmed' }),
+      body: JSON.stringify({ status: 'active' }),
       headers: { 'content-type': 'application/json' },
     })
 
@@ -149,8 +149,8 @@ describe('PATCH /api/tasks/[id]', () => {
     expect(mockUpdateTask).toHaveBeenCalledWith(
       'task-1',
       expect.objectContaining({
-        status: 'confirmed',
-        confirmedAt: expect.any(Date),
+        status: 'active',
+        activeAt: expect.any(Date),
         dismissedAt: null,
         completedAt: null,
       })
@@ -173,7 +173,7 @@ describe('PATCH /api/tasks/[id]', () => {
     )
   })
 
-  it('hard deletes task when legacy callers send dismissed status', async () => {
+  it('rejects dismissed as an invalid task status', async () => {
     const req = new NextRequest('http://localhost', {
       method: 'PATCH',
       body: JSON.stringify({ status: 'dismissed' }),
@@ -182,17 +182,15 @@ describe('PATCH /api/tasks/[id]', () => {
 
     const res = await PATCH(req, { params: Promise.resolve({ id: 'task-1' }) })
 
-    expect(mockDeleteTask).toHaveBeenCalledWith('task-1', 'user-1')
+    expect(mockDeleteTask).not.toHaveBeenCalled()
     expect(mockUpdateTask).not.toHaveBeenCalled()
-    expect(mockInvalidateStatsCache).toHaveBeenCalledWith('user-1')
-    expect(res.status).toBe(200)
-    expect((await res.json()).data.deleted).toBe(true)
+    expect(res.status).toBe(400)
   })
 
   it('clears all timestamps when status changes to pending', async () => {
     const req = new NextRequest('http://localhost', {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'pending' }),
+      body: JSON.stringify({ status: 'ai_suggestion' }),
       headers: { 'content-type': 'application/json' },
     })
 
@@ -201,8 +199,8 @@ describe('PATCH /api/tasks/[id]', () => {
     expect(mockUpdateTask).toHaveBeenCalledWith(
       'task-1',
       expect.objectContaining({
-        status: 'pending',
-        confirmedAt: null,
+        status: 'ai_suggestion',
+        activeAt: null,
         dismissedAt: null,
         completedAt: null,
       })

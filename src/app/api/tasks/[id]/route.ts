@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client'
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
+import { isTaskStatus } from '@/lib/task-status'
 
 type AllowedTaskField =
   | 'title'
@@ -61,10 +62,8 @@ export async function PATCH(
     const existing = await taskRepo.findTaskById(user.id, id)
     if (!existing) return error('NOT_FOUND', 'Task not found', 404)
 
-    if (body.status === 'dismissed') {
-      await taskRepo.deleteTask(id, user.id)
-      invalidateStatsCache(user.id)
-      return success({ deleted: true })
+    if (body.status !== undefined && !isTaskStatus(body.status)) {
+      return error('BAD_REQUEST', 'Invalid task status', 400)
     }
 
     const allowed: AllowedTaskField[] = [
@@ -127,15 +126,15 @@ export async function PATCH(
       data.priorityScore = u * i
     }
 
-    if (body.status === 'confirmed') {
-      data.confirmedAt = new Date()
+    if (body.status === 'active') {
+      data.activeAt = new Date()
       data.dismissedAt = null
       data.completedAt = null
     } else if (body.status === 'completed') {
       data.completedAt = new Date()
       data.dismissedAt = null
-    } else if (body.status === 'pending') {
-      data.confirmedAt = null
+    } else if (body.status === 'ai_suggestion') {
+      data.activeAt = null
       data.dismissedAt = null
       data.completedAt = null
     }

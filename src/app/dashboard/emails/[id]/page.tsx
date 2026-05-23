@@ -82,7 +82,7 @@ const DETAIL_SENDER_TONE: Record<EmailDisplayState, string> = {
   tracked: 'border-brand-50 bg-white/85',
   fyi: 'border-gray-100 bg-white/85',
   ignored: 'border-gray-100 bg-white/85',
-  uncertain: 'border-warning-50 bg-white/85',
+  unclassified: 'border-warning-50 bg-white/85',
 }
 
 export default function EmailDetailPage() {
@@ -170,7 +170,7 @@ export default function EmailDetailPage() {
     // 'uncertain' which intentionally never matches, so an uncertain email
     // always commits on the first click.
     const currentDisplay = email
-      ? getEmailDisplayState({ classification: email.classification, actioned: email.actioned })
+      ? getEmailDisplayState({ classification: email.classification, actioned: email.actioned, taskLinks: email.taskLinks })
       : null
     if (newBucket === currentDisplay) return
     setClassifying(true)
@@ -297,8 +297,8 @@ export default function EmailDetailPage() {
 
   const handleExtractToTask = async () => {
     if (extracting) return
-    if (email?.classification !== 'action' && email?.classification !== 'uncertain') {
-      showError('Only Needs Action or Uncertain emails can be extracted into tasks.')
+    if (email?.classification !== 'action' && email?.classification !== 'uncertain' && email?.classification) {
+      showError('Only Needs Action or Unclassified emails can be extracted into tasks.')
       return
     }
     setExtracting(true)
@@ -457,6 +457,7 @@ export default function EmailDetailPage() {
   const displayState = getEmailDisplayState({
     classification: email.classification,
     actioned: email.actioned,
+    taskLinks: email.taskLinks,
   })
   const cls = EMAIL_DISPLAY_CONFIG[displayState]
   const ClsIcon = cls.icon
@@ -466,7 +467,7 @@ export default function EmailDetailPage() {
   // Picker can't represent 'uncertain' (it's an AI-only state); leave the
   // Select unselected so the user is nudged to commit a real bucket.
   const pickerValue: EmailBucket | undefined =
-    displayState === 'uncertain' ? undefined : displayState
+    displayState === 'unclassified' ? undefined : displayState
   const senderName = email.sender?.split('<')[0]?.trim()
   const senderEmail = email.sender?.match(/<(.+?)>/)?.[1] || email.sender
   const senderInitial = (senderName || 'U')[0].toUpperCase()
@@ -477,7 +478,7 @@ export default function EmailDetailPage() {
   const isCompletedTrackedEmail = displayState === 'tracked' && linkedTaskState === 'completed'
   const canShowReplyDraft = email.classification === 'action' || email.classification === 'uncertain' || taskLinks.length > 0 || !!email.aiReplyDraft
   const canGenerateReply = email.retentionStatus !== 'PURGED'
-  const canExtractTask = email.classification === 'action' || email.classification === 'uncertain'
+  const canExtractTask = email.classification === 'action' || email.classification === 'uncertain' || !email.classification
   const hasLinkedTasks = taskLinks.length > 0
   const hasAiAnalysis = Boolean(
     email.classReasoning &&
@@ -808,7 +809,7 @@ export default function EmailDetailPage() {
                 {taskLinks.length ? (
                   taskLinks.map((link) => {
                   const band = getPriorityBand(link.task.priorityScore || 0)
-                  const isDone = link.task.status === 'completed' || link.task.status === 'dismissed'
+                  const isDone = link.task.status === 'completed'
                   const isArchived = !!link.task.archivedAt
                   const isUnlinking = unlinkingTaskId === link.task.id
                   return (
@@ -835,9 +836,8 @@ export default function EmailDetailPage() {
                           <div className="flex items-center gap-1.5 mt-1">
                             <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
                               link.task.status === 'completed' ? 'bg-success-100 text-success' :
-                              link.task.status === 'confirmed' ? 'bg-brand-100 text-brand-700' :
-                              link.task.status === 'dismissed' ? 'bg-gray-100 text-gray-500' :
-                              'bg-brand-100 text-brand-700'
+                              link.task.status === 'active' ? 'bg-brand-100 text-brand-700' :
+                              'bg-ai-100 text-ai-700'
                             }`}>
                               {getTaskStatusLabel(link.task.status)}
                             </span>

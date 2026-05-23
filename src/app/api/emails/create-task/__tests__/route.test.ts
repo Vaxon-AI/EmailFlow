@@ -72,8 +72,8 @@ describe('POST /api/emails/create-task', () => {
     expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         matterId: undefined,
-        status: 'confirmed',
-        confirmedAt: expect.any(Date),
+        status: 'active',
+        activeAt: expect.any(Date),
         source: 'manual',
       }),
     }))

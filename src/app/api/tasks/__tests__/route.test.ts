@@ -71,13 +71,13 @@ describe('GET /api/tasks', () => {
       total: 21,
     } as never)
 
-    const req = new NextRequest('http://localhost/api/tasks?page=2&limit=10&status=done&scope=open&priority=high&sort=deadline')
+    const req = new NextRequest('http://localhost/api/tasks?page=2&limit=10&status=active&scope=open&priority=high&sort=deadline')
     const res = await GET(req)
 
     expect(mockFindTasksPaginated).toHaveBeenCalledWith('user-1', {
       page: 2,
       limit: 10,
-      status: 'done',
+      status: 'active',
       scope: 'open',
       priority: 'high',
       sort: 'deadline',
@@ -183,8 +183,8 @@ describe('POST /api/tasks', () => {
         userId: 'user-1',
         title: 'Follow up',
         summary: 'Call the client',
-        status: 'confirmed',
-        confirmedAt: expect.any(Date),
+        status: 'active',
+        activeAt: expect.any(Date),
         urgency: 4,
         impact: 5,
         priorityScore: 20,
@@ -218,8 +218,8 @@ describe('POST /api/tasks', () => {
         userId: 'user-1',
         title: 'Inbox zero',
         summary: '',
-        status: 'confirmed',
-        confirmedAt: expect.any(Date),
+        status: 'active',
+        activeAt: expect.any(Date),
         urgency: 3,
         impact: 3,
         priorityScore: 9,
@@ -261,8 +261,8 @@ describe('POST /api/tasks', () => {
 
     expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        status: 'pending',
-        confirmedAt: null,
+        status: 'ai_suggestion',
+        activeAt: null,
         source: 'copy_text',
       }),
     }))

@@ -46,13 +46,13 @@ function deadline(t: TaskRow): string | null {
 // ── Daily template ──────────────────────────────────────────
 
 function buildDailyContent({
-  action, awareness, uncertain, ignored, confirmed, pending, date,
+  action, awareness, uncertain, ignored, active, pending, date,
 }: {
   action: EmailRow[]
   awareness: EmailRow[]
   uncertain: EmailRow[]
   ignored: EmailRow[]
-  confirmed: TaskRow[]
+  active: TaskRow[]
   pending: TaskRow[]
   date: string
 }) {
@@ -88,11 +88,11 @@ function buildDailyContent({
   }
 
   lines.push('---', '')
-  lines.push(`### Tasks - ${confirmed.length} active · ${pending.length} AI suggestions`, '')
+  lines.push(`### Tasks - ${active.length} active · ${pending.length} AI suggestions`, '')
 
-  if (confirmed.length) {
-    lines.push('**Active**')
-    confirmed.forEach(t => {
+  if (active.length) {
+    lines.push('**active**')
+    active.forEach(t => {
       const due = deadline(t)
       lines.push(`- ${t.title}${t.priorityScore ? ` · Priority ${t.priorityScore}` : ''}${due ? ` · Due ${due}` : ''}`)
     })
@@ -105,7 +105,7 @@ function buildDailyContent({
     lines.push('')
   }
 
-  if (!confirmed.length && !pending.length) {
+  if (!active.length && !pending.length) {
     lines.push('No tasks in the pipeline.')
   }
 
@@ -115,10 +115,10 @@ function buildDailyContent({
 // ── Weekly template ─────────────────────────────────────────
 
 function buildWeeklyContent({
-  byDay, confirmed, pending, weekLabel,
+  byDay, active, pending, weekLabel,
 }: {
   byDay: { date: Date; action: EmailRow[]; awareness: EmailRow[]; uncertain: EmailRow[]; ignored: EmailRow[] }[]
-  confirmed: TaskRow[]
+  active: TaskRow[]
   pending: TaskRow[]
   weekLabel: string
 }) {
@@ -133,7 +133,7 @@ function buildWeeklyContent({
 
   lines.push('### Summary')
   lines.push(`- **${totalEmails} emails** processed - ${totalAction} needs action · ${totalAwareness} FYI · ${totalUncertain} uncertain · ${totalIgnored} ignored`)
-  lines.push(`- **${confirmed.length + pending.length} tasks** - ${confirmed.length} active · ${pending.length} AI suggestions`)
+  lines.push(`- **${active.length + pending.length} tasks** - ${active.length} active · ${pending.length} AI suggestions`)
   lines.push('')
 
   lines.push('### Daily Breakdown')
@@ -153,11 +153,11 @@ function buildWeeklyContent({
   }
 
   lines.push('---', '')
-  lines.push(`### Tasks - ${confirmed.length} active · ${pending.length} AI suggestions`, '')
+  lines.push(`### Tasks - ${active.length} active · ${pending.length} AI suggestions`, '')
 
-  if (confirmed.length) {
-    lines.push('**Active**')
-    confirmed.forEach(t => {
+  if (active.length) {
+    lines.push('**active**')
+    active.forEach(t => {
       const due = deadline(t)
       lines.push(`- ${t.title}${due ? ` · Due ${due}` : ''}`)
     })
@@ -170,7 +170,7 @@ function buildWeeklyContent({
     lines.push('')
   }
 
-  if (!confirmed.length && !pending.length) {
+  if (!active.length && !pending.length) {
     lines.push('No tasks in the pipeline.')
   }
 
@@ -263,8 +263,8 @@ async function buildDailyDigest(userId: string, timezone?: string, useAi = true)
     taskRepo.findTasksByDateRange(userId, { start, end }),
   ])
 
-  const confirmed = tasks.filter(t => t.status === 'confirmed').sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
-  const pending = tasks.filter(t => t.status === 'pending')
+  const active = tasks.filter(t => t.status === 'active').sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
+  const pending = tasks.filter(t => t.status === 'ai_suggestion')
   const completed = tasks.filter(t => t.status === 'completed')
 
   const stats = {
@@ -274,7 +274,7 @@ async function buildDailyDigest(userId: string, timezone?: string, useAi = true)
     unresolvedCount: uncertain.length,
     ignoredCount: ignored.length,
     taskTotal: tasks.length,
-    taskActive: confirmed.length,
+    taskActive: active.length,
     taskPending: pending.length,
     taskCompleted: completed.length,
   }
@@ -287,14 +287,14 @@ async function buildDailyDigest(userId: string, timezone?: string, useAi = true)
         period: 'daily',
         dateLabel,
         emails: { action, awareness, uncertain, ignored },
-        tasks: { confirmed, pending },
+        tasks: { active, pending },
       })
     } catch (err) {
       console.warn('[digest-pipeline] AI daily digest failed for user, falling back to template:', err)
-      content = buildDailyContent({ action, awareness, uncertain, ignored, confirmed, pending, date: dateLabel })
+      content = buildDailyContent({ action, awareness, uncertain, ignored, active, pending, date: dateLabel })
     }
   } else {
-    content = buildDailyContent({ action, awareness, uncertain, ignored, confirmed, pending, date: dateLabel })
+    content = buildDailyContent({ action, awareness, uncertain, ignored, active, pending, date: dateLabel })
   }
 
   return { period: 'daily', periodStart: start, periodEnd: end, content, stats }
@@ -339,8 +339,8 @@ async function buildWeeklyDigest(userId: string, timezone?: string, useAi = true
   )
 
   const tasks = await taskRepo.findTasksByDateRange(userId, { start, end })
-  const confirmed = tasks.filter(t => t.status === 'confirmed')
-  const pending = tasks.filter(t => t.status === 'pending')
+  const active = tasks.filter(t => t.status === 'active')
+  const pending = tasks.filter(t => t.status === 'ai_suggestion')
   const completed = tasks.filter(t => t.status === 'completed')
 
   const totalAction = byDay.reduce((s, d) => s + d.action.length, 0)
@@ -356,7 +356,7 @@ async function buildWeeklyDigest(userId: string, timezone?: string, useAi = true
     unresolvedCount: totalUncertain,
     ignoredCount: totalIgnored,
     taskTotal: tasks.length,
-    taskActive: confirmed.length,
+    taskActive: active.length,
     taskPending: pending.length,
     taskCompleted: completed.length,
   }
@@ -378,14 +378,14 @@ async function buildWeeklyDigest(userId: string, timezone?: string, useAi = true
           },
           actionEmails: d.action,
         })),
-        tasks: { confirmed, pending },
+        tasks: { active, pending },
       })
     } catch (err) {
       console.warn('[digest-pipeline] AI weekly digest failed for user, falling back to template:', err)
-      content = buildWeeklyContent({ byDay, confirmed, pending, weekLabel })
+      content = buildWeeklyContent({ byDay, active, pending, weekLabel })
     }
   } else {
-    content = buildWeeklyContent({ byDay, confirmed, pending, weekLabel })
+    content = buildWeeklyContent({ byDay, active, pending, weekLabel })
   }
 
   return {
@@ -430,8 +430,8 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
   )
 
   const tasks = await taskRepo.findTasksByDateRange(userId, { start, end })
-  const confirmed = tasks.filter(t => t.status === 'confirmed')
-  const pending = tasks.filter(t => t.status === 'pending')
+  const active = tasks.filter(t => t.status === 'active')
+  const pending = tasks.filter(t => t.status === 'ai_suggestion')
   const completed = tasks.filter(t => t.status === 'completed')
 
   const totalAction = byDay.reduce((s, d) => s + d.action.length, 0)
@@ -447,7 +447,7 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
     unresolvedCount: totalUncertain,
     ignoredCount: totalIgnored,
     taskTotal: tasks.length,
-    taskActive: confirmed.length,
+    taskActive: active.length,
     taskPending: pending.length,
     taskCompleted: completed.length,
   }
@@ -469,14 +469,14 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
           },
           actionEmails: d.action,
         })),
-        tasks: { confirmed, pending },
+        tasks: { active, pending },
       })
     } catch (err) {
       console.warn('[digest-pipeline] AI weekly digest failed for user, falling back to template:', err)
-      content = buildWeeklyContent({ byDay, confirmed, pending, weekLabel })
+      content = buildWeeklyContent({ byDay, active, pending, weekLabel })
     }
   } else {
-    content = buildWeeklyContent({ byDay, confirmed, pending, weekLabel })
+    content = buildWeeklyContent({ byDay, active, pending, weekLabel })
   }
 
   return digestRepo.createDigest({

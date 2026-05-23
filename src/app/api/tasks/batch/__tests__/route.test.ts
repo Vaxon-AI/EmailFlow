@@ -82,12 +82,12 @@ describe('POST /api/tasks/batch', () => {
     expect((await res.json()).data.affected).toBe(2)
   })
 
-  it('marks tasks as confirmed with confirmedAt timestamp', async () => {
-    const res = await POST(postRequest({ ids: ['task-1'], action: 'confirm' }))
+  it('marks tasks as active with activeAt timestamp', async () => {
+    const res = await POST(postRequest({ ids: ['task-1'], action: 'activate' }))
 
     expect(mockTaskUpdateMany).toHaveBeenCalledWith({
       where: { id: { in: ['task-1'] }, userId: 'user-1' },
-      data: expect.objectContaining({ status: 'confirmed', confirmedAt: expect.any(Date), dismissedAt: null }),
+      data: expect.objectContaining({ status: 'active', activeAt: expect.any(Date), dismissedAt: null }),
     })
     expect(res.status).toBe(200)
   })

@@ -52,8 +52,8 @@ import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
 
 type ViewMode = 'list' | 'timeline' | 'calendar'
-type TaskStatus = 'pending' | 'confirmed' | 'completed' | 'dismissed'
-type StatusFilter = 'all' | 'pending' | 'confirmed' | 'completed'
+type TaskStatus = 'ai_suggestion' | 'active' | 'completed'
+type StatusFilter = 'all' | 'ai_suggestion' | 'active' | 'completed'
 
 type TaskEmailLink = {
   email?: {
@@ -158,8 +158,8 @@ const PRIORITY_LABELS: Record<'critical' | 'high' | 'medium' | 'low', string> = 
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
-  { value: 'pending', label: 'AI Suggestions' },
-  { value: 'confirmed', label: 'Active' },
+  { value: 'ai_suggestion', label: 'AI Suggestions' },
+  { value: 'active', label: 'Active' },
   { value: 'completed', label: 'Completed' },
 ]
 
@@ -604,10 +604,10 @@ function TasksContent() {
           .map((task) => task.id === id ? { ...task, ...(data as Partial<TaskItem>) } : task)
           .filter((task) => {
             if (!matchesPriorityFilter(task, priority)) return false
-            if (scopeOrStatus === 'open') return task.status === 'pending' || task.status === 'confirmed'
+            if (scopeOrStatus === 'open') return task.status === 'ai_suggestion' || task.status === 'active'
             if (scopeOrStatus === 'completed') return task.status === 'completed'
-            if (scopeOrStatus === 'pending') return task.status === 'pending'
-            if (scopeOrStatus === 'confirmed') return task.status === 'confirmed'
+            if (scopeOrStatus === 'ai_suggestion') return task.status === 'ai_suggestion'
+            if (scopeOrStatus === 'active') return task.status === 'active'
             return true
           })
         queryClient.setQueryData(queryKey, { ...cached, data: nextData })
@@ -682,7 +682,7 @@ function TasksContent() {
     toast.success('Task deleted')
   }
 
-  const batchOp = async (action: 'complete' | 'confirm' | 'delete') => {
+  const batchOp = async (action: 'complete' | 'activate' | 'delete') => {
     const ids = [...selectedIds]
     await fetch('/api/tasks/batch', {
       method: 'POST',
@@ -692,7 +692,7 @@ function TasksContent() {
     queryClient.invalidateQueries({ queryKey: ['tasks'] })
     queryClient.invalidateQueries({ queryKey: ['stats'] })
     clearSelection()
-    const label = action === 'complete' ? 'completed' : action === 'confirm' ? 'activated' : 'deleted'
+    const label = action === 'complete' ? 'completed' : action === 'activate' ? 'activated' : 'deleted'
     toast.success(`${ids.length} task${ids.length === 1 ? '' : 's'} ${label}`)
   }
 
@@ -1048,7 +1048,7 @@ function TasksContent() {
             </button>
           )}
           <div className="flex-1" />
-          <Button size="sm" variant="brandSoft" className="h-7 text-xs" onClick={() => batchOp('confirm')}>
+          <Button size="sm" variant="brandSoft" className="h-7 text-xs" onClick={() => batchOp('activate')}>
             <ThumbsUp className="mr-1 h-3 w-3" /> Activate
           </Button>
           <Button size="sm" variant="success" className="h-7 text-xs" onClick={() => batchOp('complete')}>
@@ -1383,7 +1383,7 @@ function parsePriorityFilter(value: string | null): PriorityFilter {
 }
 
 function parseStatusFilter(value: string | null): StatusFilter {
-  return value === 'pending' || value === 'confirmed' || value === 'completed' ? value : 'all'
+  return value === 'ai_suggestion' || value === 'active' || value === 'completed' ? value : 'all'
 }
 
 function matchesPriorityFilter(task: TaskItem, priority: unknown) {
@@ -1760,9 +1760,9 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
   const deadline = task.userSetDeadline || task.explicitDeadline || task.inferredDeadline
   const startDate = task.startDate
   const scheduleLabel = formatTaskScheduleLabel(startDate, deadline)
-  const isOverdue = deadline && new Date(deadline) < new Date() && (task.status === 'pending' || task.status === 'confirmed')
+  const isOverdue = deadline && new Date(deadline) < new Date() && (task.status === 'ai_suggestion' || task.status === 'active')
   const senderName = task.emailLinks?.[0]?.email?.sender?.split('<')[0]?.trim()
-  const isPending = task.status === 'pending'
+  const isPending = task.status === 'ai_suggestion'
   const isDone = task.status === 'completed'
   const matter = task.matter ?? null
 
@@ -1814,7 +1814,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
           </Badge>
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
             task.status === 'completed' ? 'bg-success-100 text-success' :
-            task.status === 'confirmed' ? 'bg-brand-100 text-brand-700' :
+            task.status === 'active' ? 'bg-brand-100 text-brand-700' :
             // pending = "AI Suggestions" — uses ai-100 (not 50) so the chip's
             // lightness matches Active's brand-100 chip side-by-side. Same
             // weight, distinct hue.
@@ -1858,7 +1858,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
           <>
             <button
               className="flex min-w-[4.5rem] items-center justify-center gap-1 rounded-md border border-brand-200 bg-brand-50/80 px-2.5 py-1.5 text-xs font-medium text-brand-700 shadow-sm transition-all hover:-translate-y-px hover:bg-brand-100/80 hover:shadow-md"
-              onClick={() => { updateTask.mutate({ id: task.id, data: { status: 'confirmed' } }); toast.success('Task moved to Active') }}
+              onClick={() => { updateTask.mutate({ id: task.id, data: { status: 'active' } }); toast.success('Task moved to Active') }}
             >
               <ThumbsUp className="h-3.5 w-3.5" />
               Activate
@@ -1871,7 +1871,7 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
               Delete
             </button>
           </>
-        ) : task.status === 'confirmed' ? (
+        ) : task.status === 'active' ? (
           <>
             <button
               className="flex min-w-[4.5rem] items-center justify-center gap-1 rounded-md border border-success/20 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success shadow-sm transition-all hover:-translate-y-px hover:bg-success/15 hover:shadow-md"

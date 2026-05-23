@@ -637,7 +637,7 @@ async function findSimilarActiveTask(
     where: {
       userId,
       archivedAt: null,
-      status: { in: ['pending', 'confirmed'] },
+      status: { in: ['ai_suggestion', 'active'] },
       OR: [
         ...(primaryTaskId ? [{ id: primaryTaskId }] : []),
         ...(matterId ? [{ matterId }] : []),
@@ -707,7 +707,7 @@ export async function processEmail(
     labels: string
     threadId?: string | null
     awaitingReview?: boolean
-    taskStatus?: 'pending' | 'confirmed'
+    taskStatus?: 'ai_suggestion' | 'active'
     forceAction?: boolean
   }
 ): Promise<PipelineResult> {
@@ -944,7 +944,7 @@ export async function processEmail(
   const taskIds: string[] = []
   const createdTaskIds: string[] = []
   const dedupedTaskIds: string[] = []
-  const targetStatus = email.taskStatus ?? 'pending'
+  const targetStatus = email.taskStatus ?? 'ai_suggestion'
 
   for (const candidate of candidates) {
     const similarTask = await findSimilarActiveTask(
@@ -1054,7 +1054,7 @@ export async function processEmail(
 export async function createTaskFromClassifiedEmail(
   userId: string,
   emailId: string,
-  taskStatus: 'pending' | 'confirmed' = 'pending'
+  taskStatus: 'ai_suggestion' | 'active' = 'ai_suggestion'
 ): Promise<PipelineResult | null> {
   // Atomic claim: only the first caller sees count=1; subsequent callers see count=0
   const { count } = await prisma.email.updateMany({

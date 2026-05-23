@@ -27,7 +27,7 @@ export interface DailyDigestAIInput {
     ignored: EmailRow[]
   }
   tasks: {
-    confirmed: TaskRow[]
+    active: TaskRow[]
     pending: TaskRow[]
   }
 }
@@ -41,7 +41,7 @@ export interface WeeklyDigestAIInput {
     actionEmails: EmailRow[]
   }>
   tasks: {
-    confirmed: TaskRow[]
+    active: TaskRow[]
     pending: TaskRow[]
   }
 }
@@ -60,7 +60,7 @@ Output rules:
 - For Needs Action items use "- **subject** · sender". For other categories use "- subject · sender".
 - If a category has more than 8 items, list the most important 5–8 (judge by sender weight and obvious urgency cues like "EOD", "today", "ASAP", named stakeholders) and end with "- …and N more."
 - After the email block put "---" on its own line, then "### Tasks - {N} active · {M} AI suggestions".
-- Under "**Active**" list confirmed tasks: "- {title}{ priorityScore? · Priority X : ''}{ deadline? · Due {short date} : ''}".
+- Under "**Active**" list active tasks: "- {title}{ priorityScore? · Priority X : ''}{ deadline? · Due {short date} : ''}".
 - Under "**AI Suggestions**" list pending tasks by title only.
 - If there are no tasks: "No tasks in the pipeline."
 - Never invent emails, tasks, deadlines, or senders. If a field is missing, omit it.
@@ -110,8 +110,8 @@ function buildPrompt(input: DigestAIInput): string {
   }
 
   lines.push('')
-  lines.push(`Tasks - active (${input.tasks.confirmed.length}):`)
-  for (const t of input.tasks.confirmed) lines.push(`  - ${fmtTaskRow(t)}`)
+  lines.push(`Tasks - active (${input.tasks.active.length}):`)
+  for (const t of input.tasks.active) lines.push(`  - ${fmtTaskRow(t)}`)
   lines.push(`Tasks - AI suggestions / pending (${input.tasks.pending.length}):`)
   for (const t of input.tasks.pending) lines.push(`  - ${fmtTaskRow(t)}`)
 

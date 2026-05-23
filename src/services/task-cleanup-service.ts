@@ -11,8 +11,8 @@
  *      removed) → hard delete the task. This is detected as
  *      "archivedAt set AND no remaining TaskEmail rows".
  *
- * User-initiated delete (PATCH /api/tasks/[id] with status='dismissed')
- * stays a hard delete and is intentionally orthogonal to this pipeline.
+ * User-initiated delete stays a hard delete and is intentionally orthogonal
+ * to this retention pipeline.
  */
 
 import { prisma } from '@/lib/prisma'

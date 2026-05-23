@@ -395,7 +395,7 @@ describe('processEmail — action classification (full pipeline)', () => {
 
     expect(taskRepo.createTask).toHaveBeenCalledOnce()
     expect(taskRepo.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-1', status: 'pending' })
+      expect.objectContaining({ userId: 'user-1', status: 'ai_suggestion' })
     )
   })
 
@@ -441,7 +441,7 @@ describe('processEmail — action classification (full pipeline)', () => {
       data: { awaitingReview: false },
     })
     expect(taskRepo.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'pending' })
+      expect.objectContaining({ status: 'ai_suggestion' })
     )
   })
 

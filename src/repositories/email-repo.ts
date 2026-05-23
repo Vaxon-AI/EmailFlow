@@ -190,6 +190,7 @@ export async function bulkMarkActioned(userId: string, emailIds: string[]) {
 // classification='action' because tracking only makes sense for actionable
 // emails — if you wanted FYI, you'd pick FYI directly.
 export type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
+export type EmailTabBucket = EmailBucket | 'unclassified'
 
 function emailBucketData(bucket: EmailBucket) {
   switch (bucket) {
@@ -200,7 +201,44 @@ function emailBucketData(bucket: EmailBucket) {
     case 'fyi':
       return { classification: 'awareness', actioned: false, awaitingReview: false }
     case 'ignored':
-      return { classification: 'ignore', actioned: true, awaitingReview: false }
+      return { classification: 'ignore', actioned: false, awaitingReview: false }
+  }
+}
+
+function emailBucketWhere(bucket: EmailTabBucket): Prisma.EmailWhereInput {
+  switch (bucket) {
+    case 'tracked':
+      return {
+        OR: [
+          { taskLinks: { some: {} } },
+          { classification: 'action', actioned: true },
+        ],
+      }
+    case 'needs_action':
+      return {
+        classification: 'action',
+        actioned: false,
+        taskLinks: { none: {} },
+      }
+    case 'fyi':
+      return {
+        classification: 'awareness',
+        taskLinks: { none: {} },
+      }
+    case 'ignored':
+      return {
+        classification: 'ignore',
+        taskLinks: { none: {} },
+      }
+    case 'unclassified':
+      return {
+        actioned: false,
+        taskLinks: { none: {} },
+        OR: [
+          { classification: 'uncertain' },
+          { classification: null },
+        ],
+      }
   }
 }
 
@@ -315,11 +353,7 @@ export async function countAwaitingReview(userId: string): Promise<number> {
   return prisma.email.count({
     where: {
       userId,
-      actioned: false,
-      OR: [
-        { processingStatus: 'quota_skipped', classification: null },
-        { classification: 'uncertain' },
-      ],
+      ...emailBucketWhere('unclassified'),
     },
   })
 }
@@ -380,10 +414,11 @@ export async function findActionedEmails(
 
 export async function findEmailsPaginated(
   userId: string,
-  options: { page: number; limit: number; classification?: string }
+  options: { page: number; limit: number; classification?: string; bucket?: EmailTabBucket }
 ) {
   const where: Prisma.EmailWhereInput = { userId }
-  if (options.classification) where.classification = options.classification
+  if (options.bucket) Object.assign(where, emailBucketWhere(options.bucket))
+  else if (options.classification) where.classification = options.classification
 
   const [emails, total] = await Promise.all([
     prisma.email.findMany({

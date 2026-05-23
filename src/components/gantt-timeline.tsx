@@ -21,7 +21,7 @@ const TIMELINE_ORDER_STORAGE_KEY = 'emailflow-ai:timeline-order'
 type TimelineTask = {
   id: string
   title: string
-  status: 'pending' | 'confirmed' | 'completed' | 'dismissed'
+  status: 'ai_suggestion' | 'active' | 'completed'
   priorityScore?: number | null
   startDate?: string | null
   explicitDeadline?: string | null
@@ -218,8 +218,8 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
     type IdentityGroup = { id: string; name: string; projects: ProjectGroup[] }
 
     const orderTasks = (items: TimelineTask[]) => {
-      const active = items.filter((task) => task.status !== 'completed' && task.status !== 'dismissed')
-      const done = items.filter((task) => task.status === 'completed' || task.status === 'dismissed')
+      const active = items.filter((task) => task.status !== 'completed')
+      const done = items.filter((task) => task.status === 'completed')
       return [...active, ...done]
     }
 
@@ -540,8 +540,8 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
     const targetProjectId = targetTask.project?.id || '__ungrouped__'
     if (sourceProjectId !== targetProjectId) return false
 
-    const sourceDone = sourceTask.status === 'completed' || sourceTask.status === 'dismissed'
-    const targetDone = targetTask.status === 'completed' || targetTask.status === 'dismissed'
+    const sourceDone = sourceTask.status === 'completed'
+    const targetDone = targetTask.status === 'completed'
     if (sourceDone !== targetDone) return false
 
     return true
@@ -751,7 +751,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
               const isHovered = hoveredTaskId === task.id
               const origStart = getTaskStart(task)
               const origEnd = getTaskEnd(task)
-              const isCompleted = task.status === 'completed' || task.status === 'dismissed'
+              const isCompleted = task.status === 'completed'
 
               return (
                 <div
@@ -954,7 +954,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                   const isHovered = hoveredTaskId === task.id
                   const origStart = getTaskStart(task)
                   const origEnd = getTaskEnd(task)
-                  const isCompleted = task.status === 'completed' || task.status === 'dismissed'
+                  const isCompleted = task.status === 'completed'
 
                   return (
                     <div

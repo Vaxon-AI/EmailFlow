@@ -190,10 +190,10 @@ function DashboardContent() {
     const scopedTasks = tasks.filter((t) => inScope(t.projectId))
     const scopedEmails = emails.filter((e) => inScope(e.projectId))
 
-    const live = scopedTasks.filter((t) => t.status !== 'dismissed')
-    const open = scopedTasks.filter((t) => t.status === 'pending' || t.status === 'confirmed')
-    const confirmed = scopedTasks.filter((t) => t.status === 'confirmed')
-    const pending = scopedTasks.filter((t) => t.status === 'pending')
+    const live = scopedTasks
+    const open = scopedTasks.filter((t) => t.status === 'ai_suggestion' || t.status === 'active')
+    const active = scopedTasks.filter((t) => t.status === 'active')
+    const pending = scopedTasks.filter((t) => t.status === 'ai_suggestion')
     const completedInWindow = scopedTasks.filter(
       (t) => t.status === 'completed' && t.completedAt && inWindow(t.completedAt, ws),
     )
@@ -225,7 +225,7 @@ function DashboardContent() {
       uncertain: winEmails.filter((e) => e.classification === 'uncertain' && !e.actioned).length,
     }
 
-    const totalForRate = completedInWindow.length + confirmed.length + pending.length
+    const totalForRate = completedInWindow.length + active.length + pending.length
     const completionRate =
       totalForRate > 0 ? Math.round((completedInWindow.length / totalForRate) * 100) : 0
 
@@ -234,7 +234,7 @@ function DashboardContent() {
       open: open.length,
       completed: completedInWindow.length,
       allTimeCompleted,
-      confirmed: confirmed.length,
+      active: active.length,
       pending: pending.length,
       priority,
       upcoming,
@@ -293,7 +293,7 @@ function DashboardContent() {
     () =>
       tasks
         .filter((t) => inScope(t.projectId))
-        .filter((t) => t.status === 'confirmed')
+        .filter((t) => t.status === 'active')
         .sort((a, b) => b.priorityScore - a.priorityScore)
         .slice(0, 5),
     [tasks, inScope],
@@ -411,7 +411,7 @@ function DashboardContent() {
               <DonutChart value={stats.completionRate} size={100} color={donutColor} />
               <div className="space-y-1.5 text-sm">
                 <LegendDot color="bg-success" label={`Completed: ${stats.completed}`} />
-                <LegendDot color="bg-brand-600" label={`Active: ${stats.confirmed}`} />
+                <LegendDot color="bg-brand-600" label={`Active: ${stats.active}`} />
                 <LegendDot color="bg-ai" label={`AI Suggestions: ${stats.pending}`} />
               </div>
             </div>

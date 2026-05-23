@@ -93,7 +93,7 @@ function makeFailedRecord(providerMessageId: string, overrides: Partial<FailedRe
     sender: 'sender@example.com',
     errorReason: 'DB write failed',
     retryCount: 0,
-    status: 'pending',
+    status: 'ai_suggestion',
     firstFailedAt: new Date(),
     lastFailedAt: new Date(),
     resolvedAt: null,

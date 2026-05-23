@@ -173,7 +173,7 @@ model Task {
   title              String
   summary            String
   actionItems        String        @default("")
-  status             String        @default("pending")
+  status             String        @default("ai_suggestion")
   urgency            Int?
   impact             Int?
   priorityScore      Int?
@@ -186,7 +186,7 @@ model Task {
   isUserEdited       Boolean       @default(false)
   userNotes          String?
   checkedActionItems String        @default("[]")
-  confirmedAt        DateTime?
+  activeAt           DateTime?
   dismissedAt        DateTime?
   completedAt        DateTime?
   archivedAt         DateTime?

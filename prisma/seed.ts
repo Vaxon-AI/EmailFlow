@@ -528,7 +528,7 @@ async function main() {
       actionItems: ['Confirm correct baseline on page 3 revenue projections with James', 'Review page 7 cost breakdown', 'Reply to Sarah with final feedback'],
       urgency: 5, impact: 5, priorityScore: 25,
       priorityReason: 'Board meeting dependency and hard Friday deadline',
-      startDate: daysAgo(0), explicitDeadline: nextWeekday(5), deadlineConfidence: 0.95, status: 'pending',
+      startDate: daysAgo(0), explicitDeadline: nextWeekday(5), deadlineConfidence: 0.95, status: 'ai_suggestion',
     },
     {
       msgId: 'msg-012',
@@ -537,7 +537,7 @@ async function main() {
       actionItems: ['Open OKR spreadsheet', 'Update progress scores for each KR', 'Add brief comments on blockers'],
       urgency: 4, impact: 4, priorityScore: 16,
       priorityReason: 'Needed before leadership sync Thursday 2pm',
-      startDate: daysAgo(0), explicitDeadline: nextWeekday(4), deadlineConfidence: 0.91, status: 'pending',
+      startDate: daysAgo(0), explicitDeadline: nextWeekday(4), deadlineConfidence: 0.91, status: 'ai_suggestion',
     },
     // Infra
     {
@@ -547,7 +547,7 @@ async function main() {
       actionItems: ['Read clause 3 carefully', 'Read clause 7 carefully', 'Reply to legal@vendor.com with approval or redlines'],
       urgency: 4, impact: 5, priorityScore: 20,
       priorityReason: 'Legal review blocking countersignature',
-      startDate: daysAgo(0), explicitDeadline: nextWeekday(2), deadlineConfidence: 0.92, status: 'pending',
+      startDate: daysAgo(0), explicitDeadline: nextWeekday(2), deadlineConfidence: 0.92, status: 'ai_suggestion',
     },
     {
       msgId: 'msg-007',
@@ -556,7 +556,7 @@ async function main() {
       actionItems: ['Log into CloudHost billing portal', 'Review invoice details', 'Complete payment'],
       urgency: 4, impact: 4, priorityScore: 16,
       priorityReason: 'Service continuity risk if unpaid',
-      startDate: daysAgo(0), explicitDeadline: daysFromNow(3), deadlineConfidence: 0.9, status: 'pending',
+      startDate: daysAgo(0), explicitDeadline: daysFromNow(3), deadlineConfidence: 0.9, status: 'ai_suggestion',
     },
     {
       msgId: 'msg-017',
@@ -565,7 +565,7 @@ async function main() {
       actionItems: ['Review Actions usage breakdown by workflow', 'Identify high-cost scheduled workflows', 'Disable or reschedule non-critical pipelines'],
       urgency: 3, impact: 4, priorityScore: 12,
       priorityReason: 'Will hit quota in ~4 days, blocking CI',
-      startDate: daysAgo(0), inferredDeadline: daysFromNow(3), deadlineConfidence: 0.8, status: 'pending',
+      startDate: daysAgo(0), inferredDeadline: daysFromNow(3), deadlineConfidence: 0.8, status: 'ai_suggestion',
     },
     // Team Ops
     {
@@ -575,7 +575,7 @@ async function main() {
       actionItems: ['Open timesheet system', 'Fill in this week\'s hours', 'Submit before 6pm'],
       urgency: 5, impact: 3, priorityScore: 15,
       priorityReason: 'Same-day hard deadline for payroll processing',
-      startDate: daysAgo(0), explicitDeadline: todayAt(18, 0), deadlineConfidence: 0.98, status: 'pending',
+      startDate: daysAgo(0), explicitDeadline: todayAt(18, 0), deadlineConfidence: 0.98, status: 'ai_suggestion',
     },
     {
       msgId: 'msg-018',
@@ -584,7 +584,7 @@ async function main() {
       actionItems: ['Check calendar for that week', 'Complete attendance form', 'Book travel if attending'],
       urgency: 3, impact: 2, priorityScore: 6,
       priorityReason: 'Accommodation booking depends on attendance count',
-      startDate: daysAgo(0), explicitDeadline: nextWeekday(5), deadlineConfidence: 0.85, status: 'pending',
+      startDate: daysAgo(0), explicitDeadline: nextWeekday(5), deadlineConfidence: 0.85, status: 'ai_suggestion',
     },
     // Fundraising
     {
@@ -594,7 +594,7 @@ async function main() {
       actionItems: ['Update deck with latest MRR and churn figures', 'Add revised market size slide', 'Send to rkim@horizon.vc by Wednesday EOD'],
       urgency: 5, impact: 5, priorityScore: 25,
       priorityReason: 'Investor committee meeting Thursday — high stakes',
-      startDate: daysAgo(0), explicitDeadline: nextWeekday(3), deadlineConfidence: 0.96, status: 'pending',
+      startDate: daysAgo(0), explicitDeadline: nextWeekday(3), deadlineConfidence: 0.96, status: 'ai_suggestion',
     },
     {
       msgId: 'msg-020',
@@ -603,7 +603,7 @@ async function main() {
       actionItems: ['Draft tailored pitch email for Marcus at FinoTech', 'Draft pitch for Preet at LegalSoft', 'Draft pitch for Joanna at RetailX'],
       urgency: 4, impact: 5, priorityScore: 20,
       priorityReason: 'Warm intros go cold fast — reach out within 48h',
-      startDate: daysAgo(0), inferredDeadline: daysFromNow(2), deadlineConfidence: 0.88, status: 'pending',
+      startDate: daysAgo(0), inferredDeadline: daysFromNow(2), deadlineConfidence: 0.88, status: 'ai_suggestion',
     },
     // Product
     {
@@ -613,7 +613,7 @@ async function main() {
       actionItems: ['Review Rachel Kim email status', 'Open onboarding v2 Figma and add notes', 'Pull June churn numbers from dashboard'],
       urgency: 3, impact: 3, priorityScore: 9,
       priorityReason: 'Sync is tomorrow — prep needed tonight',
-      startDate: daysAgo(0), inferredDeadline: daysFromNow(1), deadlineConfidence: 0.9, status: 'pending',
+      startDate: daysAgo(0), inferredDeadline: daysFromNow(1), deadlineConfidence: 0.9, status: 'ai_suggestion',
     },
     {
       msgId: 'msg-021',
@@ -622,7 +622,7 @@ async function main() {
       actionItems: ['Move "company size" field to post-onboarding', 'Revise CTA copy on step 1', 'Reply on Figma with updated rationale'],
       urgency: 3, impact: 4, priorityScore: 12,
       priorityReason: 'Blocking next design iteration cycle',
-      startDate: daysAgo(0), inferredDeadline: daysFromNow(2), deadlineConfidence: 0.85, status: 'pending',
+      startDate: daysAgo(0), inferredDeadline: daysFromNow(2), deadlineConfidence: 0.85, status: 'ai_suggestion',
     },
     // Personal
     {
@@ -632,7 +632,7 @@ async function main() {
       actionItems: ['Check if you requested the reset', 'Reset password if legitimate', 'Enable 2FA if suspicious'],
       urgency: 4, impact: 4, priorityScore: 16,
       priorityReason: 'Potential account security risk, 24h window',
-      startDate: daysAgo(0), inferredDeadline: daysFromNow(1), deadlineConfidence: 0.8, status: 'pending',
+      startDate: daysAgo(0), inferredDeadline: daysFromNow(1), deadlineConfidence: 0.8, status: 'ai_suggestion',
     },
   ]
 
@@ -690,7 +690,7 @@ async function main() {
     const exists = await prisma.task.findFirst({ where: { userId: user.id, title: t.title } })
     if (!exists) {
       await prisma.task.create({
-        data: { userId: user.id, title: t.title, summary: t.summary, actionItems: JSON.stringify(t.actionItems), status: 'pending', urgency: t.urgency, impact: t.impact, priorityScore: t.priorityScore, inferredDeadline: t.inferredDeadline },
+        data: { userId: user.id, title: t.title, summary: t.summary, actionItems: JSON.stringify(t.actionItems), status: 'ai_suggestion', urgency: t.urgency, impact: t.impact, priorityScore: t.priorityScore, inferredDeadline: t.inferredDeadline },
       })
     }
   }

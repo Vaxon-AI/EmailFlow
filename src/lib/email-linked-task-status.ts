@@ -12,12 +12,10 @@ export function getEmailLinkedTaskState(links?: TaskLinkLike[] | null): EmailLin
   const tasks = (links ?? [])
     .map((link) => link.task)
     .filter((task): task is LinkedEmailTask => Boolean(task))
-    .filter((task) => task.status !== 'dismissed')
 
   if (tasks.length === 0) return null
-  if (tasks.some((task) => task.status === 'pending')) return 'ai_suggestion'
-  if (tasks.some((task) => task.status === 'confirmed')) return 'active'
+  if (tasks.some((task) => task.status === 'ai_suggestion')) return 'ai_suggestion'
+  if (tasks.some((task) => task.status === 'active')) return 'active'
   if (tasks.every((task) => task.status === 'completed')) return 'completed'
   return 'active'
 }
-

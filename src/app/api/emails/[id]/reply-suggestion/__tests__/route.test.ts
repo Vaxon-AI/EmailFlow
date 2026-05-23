@@ -104,7 +104,7 @@ describe('POST /api/emails/[id]/reply-suggestion', () => {
     mockFindEmailById.mockResolvedValue({
       ...ACTION_EMAIL,
       classification: 'fyi',
-      taskLinks: [{ task: { id: 'task-1', title: 'Review doc', status: 'pending', summary: null } }],
+      taskLinks: [{ task: { id: 'task-1', title: 'Review doc', status: 'ai_suggestion', summary: null } }],
     } as never)
     mockGenerateReplyDraft.mockResolvedValue({ reply: 'Thank you for the update.' } as never)
     mockUpdateReplyDraft.mockResolvedValue({} as never)

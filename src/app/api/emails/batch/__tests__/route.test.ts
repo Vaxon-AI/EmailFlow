@@ -238,14 +238,18 @@ describe('POST /api/emails/batch', () => {
         quotaExhausted: false,
       })
       expect(mockEmail.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({ classification: 'action' }),
+        where: expect.objectContaining({
+          actioned: false,
+          taskLinks: { none: {} },
+          OR: [{ classification: 'action' }, { classification: 'uncertain' }, { classification: null }],
+        }),
       }))
       expect(mockIncrementExtractUsed).toHaveBeenCalledTimes(1)
       // Pipeline runs via after() — our mock executes the callback immediately
       expect(mockProcessEmail).toHaveBeenCalledTimes(1)
       expect(mockProcessEmail).toHaveBeenCalledWith(
         'user-1',
-        expect.objectContaining({ taskStatus: 'pending' })
+        expect.objectContaining({ taskStatus: 'ai_suggestion' })
       )
     })
 

@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     after(async () => {
       for (const emailId of emailIds) {
         try {
-          await createTaskFromClassifiedEmail(user.id, emailId, 'pending')
+          await createTaskFromClassifiedEmail(user.id, emailId, 'ai_suggestion')
         } catch (err) {
           console.error(`[review/approve] failed for email ${emailId}:`, err)
         }

@@ -1,0 +1,21 @@
+export const TASK_STATUSES = ['ai_suggestion', 'active', 'completed'] as const
+
+export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  ai_suggestion: 'AI suggestion',
+  active: 'Active',
+  completed: 'Completed',
+}
+
+export function isTaskStatus(value: unknown): value is TaskStatus {
+  return typeof value === 'string' && TASK_STATUSES.includes(value as TaskStatus)
+}
+
+export function getTaskStatusLabel(status?: string | null): string {
+  return isTaskStatus(status) ? TASK_STATUS_LABELS[status] : 'AI suggestion'
+}
+
+export function activeTaskStatuses(): TaskStatus[] {
+  return ['ai_suggestion', 'active']
+}

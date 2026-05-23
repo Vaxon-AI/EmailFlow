@@ -8,7 +8,7 @@ const EMPTY_SUMMARY = {
   view: 'all',
   stats: {
     emails: { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, linkedAction: 0, needsReview: 0, tracked: 0, unclassified: 0 },
-    tasks: { total: 0, pending: 0, confirmed: 0, completed: 0, dismissed: 0 },
+    tasks: { total: 0, pending: 0, active: 0, completed: 0 },
     sync: {
       lastSyncAt: null,
       emailConnected: false,
@@ -20,11 +20,10 @@ const EMPTY_SUMMARY = {
     },
   },
   tasks: {
-    confirmedPreview: [],
+    activePreview: [],
     pendingPreview: [],
-    confirmedCount: 0,
+    activeCount: 0,
     pendingCount: 0,
-    dismissedCount: 0,
     priorityCounts: { critical: 0, high: 0, medium: 0, low: 0 },
     upcomingCount: 0,
     aiAcceptance: { accepted: 0, rejected: 0, rate: null },

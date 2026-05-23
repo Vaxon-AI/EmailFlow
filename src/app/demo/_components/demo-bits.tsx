@@ -5,7 +5,7 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle2, ThumbsUp, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ThumbsUp } from 'lucide-react'
 import { getPriorityBand, getPriorityColor, getPriorityLabel } from '@/types'
 import {
   EMAIL_DISPLAY_CONFIG,
@@ -104,14 +104,14 @@ export const TASK_STATUS_CONFIG: Record<
     icon: typeof AlertTriangle
   }
 > = {
-  pending: {
-    label: 'AI Suggestion',
+  ai_suggestion: {
+    label: 'AI suggestion',
     chip: 'bg-ai-100 text-ai-700',
     badge: 'bg-ai-50 text-ai-700 border-ai-100',
     headerBg: 'from-ai-50/50 to-white',
     icon: AlertTriangle,
   },
-  confirmed: {
+  active: {
     label: 'Active',
     chip: 'bg-brand-100 text-brand-700',
     badge: 'bg-brand-50 text-brand-700 border-brand-200',
@@ -124,13 +124,6 @@ export const TASK_STATUS_CONFIG: Record<
     badge: 'bg-success-50 text-success border-success-100',
     headerBg: 'from-green-50/50 to-white',
     icon: CheckCircle2,
-  },
-  dismissed: {
-    label: 'Dismissed',
-    chip: 'bg-gray-100 text-gray-500',
-    badge: 'bg-gray-50 text-gray-500 border-gray-200',
-    headerBg: 'from-gray-50/50 to-white',
-    icon: X,
   },
 }
 

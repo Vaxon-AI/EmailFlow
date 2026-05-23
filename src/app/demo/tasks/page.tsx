@@ -43,8 +43,8 @@ type PriorityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low'
 
 const STATUS_VALUES: ReadonlySet<string> = new Set([
   'all',
-  'pending',
-  'confirmed',
+  'ai_suggestion',
+  'active',
   'completed',
 ])
 
@@ -117,8 +117,8 @@ function TasksContent() {
 
   const counts = useMemo(
     () => ({
-      pending: tasks.filter((t) => t.status === 'pending').length,
-      confirmed: tasks.filter((t) => t.status === 'confirmed').length,
+      pending: tasks.filter((t) => t.status === 'ai_suggestion').length,
+      active: tasks.filter((t) => t.status === 'active').length,
       completed: tasks.filter((t) => t.status === 'completed').length,
     }),
     [tasks],
@@ -129,7 +129,7 @@ function TasksContent() {
     if (statusFilter === 'all') {
       // Mirror real `scope=open` — "All" surfaces actionable tasks only;
       // completed lives in its own tab. (dashboard/tasks/page.tsx L254-265.)
-      result = result.filter((t) => t.status === 'pending' || t.status === 'confirmed')
+      result = result.filter((t) => t.status === 'ai_suggestion' || t.status === 'active')
     } else {
       result = result.filter((t) => t.status === statusFilter)
     }
@@ -177,7 +177,7 @@ function TasksContent() {
   const clearSelection = useCallback(() => setSelectedIds(new Set()), [setSelectedIds])
   const selectAll = () => setSelectedIds(new Set(visibleTasks.map((t) => t.id)))
 
-  const batchOp = (action: 'confirm' | 'complete' | 'delete') => {
+  const batchOp = (action: 'activate' | 'complete' | 'delete') => {
     const ids = [...selectedIds]
     if (action === 'delete') {
       // Mirror real batch delete — hard-remove from the store.
@@ -185,9 +185,9 @@ function TasksContent() {
       for (const id of ids) deleteTask(id)
       toast.success(`${ids.length} task${ids.length === 1 ? '' : 's'} deleted`)
     } else {
-      const status: DemoTaskStatus = action === 'confirm' ? 'confirmed' : 'completed'
+      const status: DemoTaskStatus = action === 'activate' ? 'active' : 'completed'
       for (const id of ids) setTaskStatus(id, status)
-      const verb = action === 'confirm' ? 'activated' : 'completed'
+      const verb = action === 'activate' ? 'activated' : 'completed'
       toast.success(`${ids.length} task${ids.length === 1 ? '' : 's'} ${verb}`)
     }
     clearSelection()
@@ -198,7 +198,7 @@ function TasksContent() {
       <PageHeader
         title="Tasks"
         description="Everything EmailFlow pulled out of your inbox, ranked by what matters first."
-        meta={`${counts.pending + counts.confirmed} open · ${counts.completed} completed`}
+        meta={`${counts.pending + counts.active} open · ${counts.completed} completed`}
         actions={
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-700">
@@ -226,8 +226,8 @@ function TasksContent() {
           onChange={(v) => setStatusFilter(v as StatusFilter)}
           options={[
             { value: 'all', label: 'All' },
-            { value: 'pending', label: 'AI Suggestions' },
-            { value: 'confirmed', label: 'Active' },
+            { value: 'ai_suggestion', label: 'AI Suggestions' },
+            { value: 'active', label: 'Active' },
             { value: 'completed', label: 'Completed' },
           ]}
         />
@@ -282,7 +282,7 @@ function TasksContent() {
             size="sm"
             variant="brandSoft"
             className="h-7 text-xs"
-            onClick={() => batchOp('confirm')}
+            onClick={() => batchOp('activate')}
           >
             <ThumbsUp className="mr-1 h-3 w-3" />
             Activate

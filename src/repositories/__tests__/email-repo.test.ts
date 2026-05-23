@@ -132,7 +132,7 @@ describe('storeEmail — dedup logic', () => {
     expect(JSON.parse(data.recipients)).toEqual(['a@b.com', 'c@d.com'])
   })
 
-  it('sets processingStatus to "pending" on creation', async () => {
+  it('sets processingStatus to "ai_suggestion" on creation', async () => {
     mockPrismaEmail.findFirst.mockResolvedValue(null)
     mockPrismaEmail.create.mockResolvedValue(CREATED_EMAIL as any)
 
@@ -345,14 +345,14 @@ describe('setEmailBucket', () => {
     expect(call.data.actioned).toBe(false)
   })
 
-  it('maps ignored to classification=ignore, actioned=true', async () => {
+  it('maps ignored to classification=ignore without tracking', async () => {
     mockPrismaEmail.update.mockResolvedValue({} as any)
 
     await setEmailBucket('email-1', 'ignored')
 
     const call = (mockPrismaEmail.update as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.data.classification).toBe('ignore')
-    expect(call.data.actioned).toBe(true)
+    expect(call.data.actioned).toBe(false)
   })
 })
 
@@ -437,9 +437,10 @@ describe('countAwaitingReview', () => {
       where: {
         userId: 'user-7',
         actioned: false,
+        taskLinks: { none: {} },
         OR: [
-          { processingStatus: 'quota_skipped', classification: null },
           { classification: 'uncertain' },
+          { classification: null },
         ],
       },
     })

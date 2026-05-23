@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 
 type DashboardStats = {
   emails: { total: number; action: number; awareness: number; ignore: number; uncertain: number; unclassified: number }
-  tasks: { total: number; pending: number; completed: number; dismissed: number }
+  tasks: { total: number; pending: number; active: number; completed: number }
   sync: {
     lastSyncAt: Date | null | undefined
     emailConnected: boolean | undefined
@@ -65,9 +65,9 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     taskGroups.find((g) => g.status === status)?._count.id ?? 0
 
   // unclassified = quota_skipped (null classification) + uncertain — both
-  // need user attention and now share the same Needs Review tab.
+  // need user attention and now share the same Unclassified tab.
   const unclassifiedTotal = emailCount(null) + emailCount('uncertain')
-  // Headline total excludes the Needs Review group so it matches what's
+  // Headline total excludes the Unclassified group so it matches what's
   // visible in the inbox tabs (Needs Action / Tracked / FYI / Ignored).
   const emailTotal = emailGroups.reduce((sum, g) => sum + g._count.id, 0) - unclassifiedTotal
   const taskTotal = taskGroups.reduce((sum, g) => sum + g._count.id, 0)
@@ -83,9 +83,9 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     },
     tasks: {
       total: taskTotal,
-      pending: taskCount('pending'),
+      pending: taskCount('ai_suggestion'),
+      active: taskCount('active'),
       completed: taskCount('completed'),
-      dismissed: taskCount('dismissed'),
     },
     sync: {
       lastSyncAt: userInfo?.lastSyncAt,

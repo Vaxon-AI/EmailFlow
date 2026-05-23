@@ -75,6 +75,7 @@ export function getEmailClassConfig(classification?: string | null): EmailClassC
 // ---------------------------------------------------------------------------
 
 export type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
+export type EmailTabBucket = EmailBucket | 'unclassified'
 
 // Bucket hierarchy — Needs Action is the only solid chip, deliberately
 // painted critical red so it pops out of the list. Tracked / FYI step down
@@ -106,12 +107,12 @@ export const EMAIL_BUCKET_CONFIG: Record<EmailBucket, EmailClassConfig> = {
   },
 }
 
-export type EmailDisplayState = EmailBucket | 'uncertain'
+export type EmailDisplayState = EmailTabBucket
 
 export const EMAIL_DISPLAY_CONFIG: Record<EmailDisplayState, EmailClassConfig> = {
   ...EMAIL_BUCKET_CONFIG,
-  uncertain: {
-    label: 'Uncertain',
+  unclassified: {
+    label: 'Unclassified',
     // Solid amber bg + white text — pairs visually with Needs Action's
     // solid red + white text (both attention chips share the "saturated bg
     // + white" pattern, distinct in hue).
@@ -124,12 +125,15 @@ export const EMAIL_DISPLAY_CONFIG: Record<EmailDisplayState, EmailClassConfig> =
 export function getEmailDisplayState(input: {
   classification?: string | null
   actioned?: boolean | null
+  taskLinks?: unknown[] | null
+  processingStatus?: string | null
 }): EmailDisplayState {
-  if (input.actioned) return 'tracked'
+  if ((input.taskLinks?.length ?? 0) > 0) return 'tracked'
+  if (input.actioned && input.classification === 'action') return 'tracked'
   if (input.classification === 'ignore') return 'ignored'
   if (input.classification === 'awareness') return 'fyi'
-  if (input.classification === 'uncertain') return 'uncertain'
-  // action, null/undefined, anything else → needs_action
+  if (input.classification === 'uncertain') return 'unclassified'
+  if (!input.classification) return 'unclassified'
   return 'needs_action'
 }
 
@@ -148,7 +152,7 @@ export const EMAIL_DETAIL_TONE: Record<EmailDisplayState, string> = {
   tracked: 'bg-brand-50 text-brand-700 border-brand-100',
   fyi: 'bg-white text-gray-700 border-gray-200',
   ignored: 'bg-transparent text-gray-400 border-gray-200',
-  uncertain: 'bg-warning-50/70 text-warning-700 border-warning-100',
+  unclassified: 'bg-warning-50/70 text-warning-700 border-warning-100',
 }
 
 /** Gradient header background (`from-…` half) used by the detail card header. */
@@ -157,5 +161,5 @@ export const EMAIL_DETAIL_HEADER_BG: Record<EmailDisplayState, string> = {
   tracked: 'from-brand-50/30 via-white to-white',
   fyi: 'from-gray-50/30 via-white to-white',
   ignored: 'from-gray-50/25 via-white to-white',
-  uncertain: 'from-warning-50/20 via-white to-white',
+  unclassified: 'from-warning-50/20 via-white to-white',
 }

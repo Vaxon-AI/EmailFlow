@@ -89,7 +89,7 @@ export default function DemoEmailDetailPage() {
     linkedTasks.length > 0 ||
     !!email.aiReplyDraft
   const hasAiAnalysis = !!email.classReasoning && email.classConfidence !== null
-  const pickerValue: EmailBucket | '' = state === 'uncertain' ? '' : state
+  const pickerValue: EmailBucket | '' = state === 'unclassified' ? '' : state
 
   const generateReply = async () => {
     setReplyLoading(true)
@@ -397,7 +397,7 @@ export default function DemoEmailDetailPage() {
                   linkedTasks.map((task) => {
                     const band = getPriorityBand(task.priorityScore)
                     const sts = TASK_STATUS_CONFIG[task.status]
-                    const isDone = task.status === 'completed' || task.status === 'dismissed'
+                    const isDone = task.status === 'completed'
                     return (
                       <Link
                         key={task.id}

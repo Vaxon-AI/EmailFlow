@@ -23,9 +23,9 @@ export function DemoTaskRow({
   const deadline = formatDeadline(effectiveDeadline(task))
   const matter = getMatter(task.matterId)
   const sourceEmail = emailsForTask(task.id)[0]?.email
-  const isPending = task.status === 'pending'
+  const isPending = task.status === 'ai_suggestion'
   const isDone = task.status === 'completed'
-  const showOverdue = deadline?.overdue && (task.status === 'pending' || task.status === 'confirmed')
+  const showOverdue = deadline?.overdue && (task.status === 'ai_suggestion' || task.status === 'active')
   const selectable = !!onToggleSelect
 
   const handleDelete = () => {
@@ -123,7 +123,7 @@ export function DemoTaskRow({
             <button
               type="button"
               onClick={() => {
-                setTaskStatus(task.id, 'confirmed')
+                setTaskStatus(task.id, 'active')
                 toast.success('Task moved to Active')
               }}
               className="flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50/80 px-2.5 py-1.5 text-xs font-medium text-brand-700 shadow-sm transition-all hover:-translate-y-px hover:bg-brand-100/80 hover:shadow-md"
@@ -137,14 +137,14 @@ export function DemoTaskRow({
             </button>
           </>
         )}
-        {task.status === 'confirmed' && (
+        {task.status === 'active' && (
           <>
             <button
               type="button"
               onClick={() => {
                 setTaskStatus(task.id, 'completed')
                 toast.success('Task completed', {
-                  action: { label: 'Undo', onClick: () => setTaskStatus(task.id, 'confirmed') },
+                  action: { label: 'Undo', onClick: () => setTaskStatus(task.id, 'active') },
                 })
               }}
               className="flex items-center gap-1 rounded-md border border-success/20 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success shadow-sm transition-all hover:-translate-y-px hover:bg-success/15 hover:shadow-md"
@@ -162,7 +162,7 @@ export function DemoTaskRow({
           <button
             type="button"
             onClick={() => {
-              setTaskStatus(task.id, 'confirmed')
+              setTaskStatus(task.id, 'active')
               toast.success('Task reopened')
             }}
             className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-500 shadow-sm transition-all hover:-translate-y-px hover:bg-gray-50 hover:shadow-md"

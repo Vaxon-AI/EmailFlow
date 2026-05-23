@@ -118,15 +118,12 @@ type QueryResponse<T> = {
 
 const fyiPriority: Record<string, number> = {
   awareness: 0,
-  ignore: 1,
 }
 
 const VALID_TABS = new Set<Tab>(['needs_action', 'tracked', 'fyi', 'ignored', 'unclassified'])
 
 function isNeedsActionPageEmail(email: EmailItem) {
-  // Action-only now. Uncertain moved to the Needs Review tab so this tab
-  // reflects high-confidence actionable emails the user should triage first.
-  return email.classification === 'action' && email.actioned !== true
+  return email.classification === 'action' && email.actioned !== true && !hasLinkedTasks(email)
 }
 
 function isUncertainEmail(email: EmailItem) {
@@ -134,28 +131,32 @@ function isUncertainEmail(email: EmailItem) {
 }
 
 function canGenerateTaskFromEmail(email: EmailItem) {
-  return email.classification === 'action' && email.actioned !== true
+  return (email.classification === 'action' || email.classification === 'uncertain' || !email.classification) && !hasLinkedTasks(email)
+}
+
+function hasLinkedTasks(email: EmailItem) {
+  return (email.taskLinks ?? []).some((link) => link.task)
 }
 
 function isTrackedEmail(email: EmailItem) {
-  return email.actioned === true
+  return hasLinkedTasks(email) || (email.actioned === true && email.classification === 'action')
 }
 
 function isFyiEmail(email: EmailItem) {
-  return email.classification === 'awareness'
+  return email.classification === 'awareness' && !hasLinkedTasks(email)
 }
 
 function isIgnoredEmail(email: EmailItem) {
-  return email.classification === 'ignore'
+  return email.classification === 'ignore' && !hasLinkedTasks(email)
 }
 
-// "Needs Review" bucket: anything the user has to look at manually because
+// "Unclassified" bucket: anything the user has to look at manually because
 // AI either couldn't categorize it (quota_skipped) or wasn't confident
 // enough (uncertain). actioned=true takes the email out of this bucket
 // (it's effectively triaged by being in Tracked).
 function isUnclassifiedEmail(email: EmailItem) {
-  if (email.actioned) return false
-  if (!email.classification && email.processingStatus === 'quota_skipped') return true
+  if (email.actioned || hasLinkedTasks(email)) return false
+  if (!email.classification) return true
   if (email.classification === 'uncertain') return true
   return false
 }
@@ -231,12 +232,13 @@ function filterEmails({
 
 function parseEmailTab(value: string | null, legacyClassification: string | null): Tab {
   if (value && VALID_TABS.has(value as Tab)) return value as Tab
-  if (value === 'needs_review') return 'needs_action'
+  if (value === 'needs_review') return 'unclassified'
   // Legacy URL compat: an old "?tab=all&classification=ignore" link from the
   // dashboard or a bookmark resolves to the new Ignored tab. Other classifications
   // are absorbed into their tab equivalents.
   if (value === 'all' && legacyClassification === 'ignore') return 'ignored'
-  if (legacyClassification === 'action' || legacyClassification === 'uncertain') return 'needs_action'
+  if (legacyClassification === 'action') return 'needs_action'
+  if (legacyClassification === 'uncertain') return 'unclassified'
   if (legacyClassification === 'awareness') return 'fyi'
   if (legacyClassification === 'ignore') return 'ignored'
   return 'needs_action'
@@ -561,9 +563,9 @@ function EmailsContent() {
   }
 
   const { data: res, isLoading } = useQuery({
-    queryKey: ['emails', page],
+    queryKey: ['emails', page, tab],
     queryFn: () =>
-      fetch(`/api/emails?page=${page}&limit=2000`).then((r) => r.json()),
+      fetch(`/api/emails?page=${page}&limit=2000&bucket=${tab}`).then((r) => r.json()),
     staleTime: CACHE_TIME.list,
     placeholderData: (previous) => previous,
   })
@@ -826,7 +828,7 @@ function EmailsContent() {
                 disabled={reviewModeMutation.isPending}
                 title={
                   manualReviewMode
-                    ? 'Manual Review is on. Switching to Auto will process pending review emails.'
+                    ? 'Manual Review is on. Switching to Auto will process Unclassified emails.'
                     : 'Auto is on. Click to switch new action emails into Manual Review.'
                 }
                 className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
@@ -912,7 +914,7 @@ function EmailsContent() {
         </div>
       )}
 
-      {/* Pending review banner - clicking switches to Needs Action tab where
+      {/* Unclassified banner - clicking switches to Needs Action tab where
           the user can triage with the same batch UI (Generate Tasks / Ignore /
           Change Project). The dedicated review modal was removed; the tab is
           now the single source of truth. */}
@@ -964,13 +966,11 @@ function EmailsContent() {
 
       {/* Batch action bar */}
       {selectedIds.size > 0 && (() => {
-        // Generate Tasks only operates on action emails - uncertain emails
-        // need a human classification before task extraction.
-        // the button when none of the selected items qualify so the user
+        // Generate Tasks operates on Needs Action and Unclassified emails.
+        // Disable the button when none of the selected items qualify so the user
         // doesn't fire a request that's a 100% no-op.
         const selectedEmails = filtered.filter((e) => selectedIds.has(e.id))
         const eligibleForGenerate = selectedEmails.filter(canGenerateTaskFromEmail).length
-        const uncertainSelected = selectedEmails.filter(isUncertainEmail).length
         const generating = bulkGenerateTasksMutation.isPending
         const ignoring = bulkIgnoreMutation.isPending
         const classifying = bulkClassifyMutation.isPending
@@ -996,11 +996,6 @@ function EmailsContent() {
               {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
               Generate Tasks{eligibleForGenerate > 0 && eligibleForGenerate < selectedIds.size ? ` (${eligibleForGenerate})` : ''}
             </Button>
-            {uncertainSelected > 0 && (
-              <span className="text-xs text-warning-700">
-                {uncertainSelected} uncertain email{uncertainSelected === 1 ? '' : 's'} skipped until you confirm the classification.
-              </span>
-            )}
             <Button
               size="sm"
               variant="utility"
@@ -1084,7 +1079,7 @@ function EmailsContent() {
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-xl border border-warning-200 bg-warning-100/60 px-3 py-2 text-sm text-warning-700">
-            This may create tasks from pending review emails in the background.
+            This may create tasks from Unclassified emails in the background.
           </div>
           <div className="flex justify-end gap-2">
             <Button
@@ -1622,10 +1617,10 @@ function ClassBadge({
     )
   }
   // Only the two "attention" buckets earn a chip — Needs Action (red) and
-  // Uncertain (amber). Tracked / FYI / Ignored rows stay clean: title aligns
+  // Unclassified. Tracked / FYI / Ignored rows stay clean: title aligns
   // straight after the checkbox with no phantom spacer column.
   const state = getEmailDisplayState({ classification, actioned })
-  if (state !== 'needs_action' && state !== 'uncertain') {
+  if (state !== 'needs_action' && state !== 'unclassified') {
     return null
   }
   const cfg = EMAIL_DISPLAY_CONFIG[state]

@@ -12,9 +12,9 @@ export async function POST(
 
     const email = await emailRepo.findEmailById(user.id, emailId)
     if (!email) return error('NOT_FOUND', 'Email not found', 404)
-    const canExtract = email.classification === 'action' || email.classification === 'uncertain'
+    const canExtract = email.classification === 'action' || email.classification === 'uncertain' || !email.classification
     if (!canExtract) {
-      return error('INVALID_STATE', 'Only Needs Action or Uncertain emails can be extracted into tasks', 400)
+      return error('INVALID_STATE', 'Only Needs Action or Unclassified emails can be extracted into tasks', 400)
     }
 
     // The click itself is the user's intent to track this email; the bucket move
@@ -25,7 +25,7 @@ export async function POST(
     if (email.awaitingReview) {
       // Atomic-claim path used by the manual-review modal. Returns the same
       // result shape so the UI can render a single toast.
-      const result = await createTaskFromClassifiedEmail(user.id, emailId, 'pending')
+      const result = await createTaskFromClassifiedEmail(user.id, emailId, 'ai_suggestion')
       if (!result) {
         // Another concurrent click already claimed it; nothing for us to do.
         return success({ created: 0, deduped: 0, noCandidates: false, alreadyClaimed: true })
@@ -47,7 +47,7 @@ export async function POST(
       labels: email.labels,
       threadId: email.threadId,
       awaitingReview: false,
-      taskStatus: 'pending',
+      taskStatus: 'ai_suggestion',
       forceAction: true,
     })
 

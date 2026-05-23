@@ -92,7 +92,7 @@ type DashboardStats = {
     tracked: number
     unclassified?: number
   }
-  tasks: { total: number; pending: number; confirmed: number; completed: number; dismissed: number }
+  tasks: { total: number; pending: number; active: number; completed: number }
   sync: {
     lastSyncAt?: string | null
     emailConnected?: boolean
@@ -101,11 +101,10 @@ type DashboardStats = {
 }
 
 type DashboardTasksSummary = {
-  confirmedPreview: DashboardTask[]
+  activePreview: DashboardTask[]
   pendingPreview: DashboardTask[]
-  confirmedCount: number
+  activeCount: number
   pendingCount: number
-  dismissedCount: number
   priorityCounts: { critical: number; high: number; medium: number; low: number }
   upcomingCount: number
   aiAcceptance: { accepted: number; rejected: number; rate: number | null }
@@ -580,13 +579,13 @@ function DashboardContent() {
 
   const completedTasks = s?.tasks?.completed ?? 0
   const pendingTaskCount = summary?.tasks.pendingCount ?? 0
-  const confirmedTaskCount = summary?.tasks.confirmedCount ?? 0
-  const totalTasks = completedTasks + pendingTaskCount + confirmedTaskCount
+  const activeTaskCount = summary?.tasks.activeCount ?? 0
+  const totalTasks = completedTasks + pendingTaskCount + activeTaskCount
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
   const emailData = s?.emails ?? { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, linkedAction: 0, needsReview: 0, tracked: 0 }
   const allTimeCompletedTasks = allTimeStats?.tasks.completed ?? completedTasks
-  const allTimeOpenTasks = (allTimeTasks?.confirmedCount ?? confirmedTaskCount) + (allTimeTasks?.pendingCount ?? pendingTaskCount)
-  const confirmedTasks = summary?.tasks.confirmedPreview ?? []
+  const allTimeOpenTasks = (allTimeTasks?.activeCount ?? activeTaskCount) + (allTimeTasks?.pendingCount ?? pendingTaskCount)
+  const activeTasks = summary?.tasks.activePreview ?? []
   const pendingTasks = summary?.tasks.pendingPreview ?? []
   const attentionEmails = summary?.attentionEmails ?? []
   const attentionEmailCount = summary?.attentionEmailCount ?? attentionEmails.length
@@ -730,7 +729,7 @@ function DashboardContent() {
       )}
 
       {pendingTaskCount > 0 && (
-        <Link href={dashboardLink('/dashboard/tasks', { status: 'pending' })} className="group animate-fade-in-up stagger-2 block">
+        <Link href={dashboardLink('/dashboard/tasks', { status: 'ai_suggestion' })} className="group animate-fade-in-up stagger-2 block">
           {/* Banner colour pairs with "X emails need your review" above —
               both are alert banners, both warning-amber. AI Suggestions's
               AI identity lives in compact spots (donut legend, status
@@ -785,7 +784,7 @@ function DashboardContent() {
             />
             <StatCard
               title="Open Tasks"
-              value={confirmedTaskCount + pendingTaskCount}
+              value={activeTaskCount + pendingTaskCount}
               icon={<CheckSquare className="h-4 w-4 text-brand-600" />}
               detail={`${completedTasks} completed ${periodLabel.toLowerCase()}, ${allTimeOpenTasks} open total`}
               href={dashboardLink('/dashboard/tasks')}
@@ -831,7 +830,7 @@ function DashboardContent() {
                   />
                   <div className="space-y-1.5 text-sm">
                     <LegendDot color="bg-success" label={`Completed: ${completedTasks}`} />
-                    <LegendDot color="bg-brand-600" label={`Active: ${confirmedTaskCount}`} />
+                    <LegendDot color="bg-brand-600" label={`Active: ${activeTaskCount}`} />
                     <LegendDot color="bg-ai" label={`AI Suggestions: ${pendingTaskCount}`} />
                   </div>
                 </div>
@@ -928,7 +927,7 @@ function DashboardContent() {
                 </div>
               ))}
             </div>
-          ) : confirmedTasks.length === 0 ? (
+          ) : activeTasks.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center">
               <CheckSquare className="h-8 w-8 text-gray-200" />
               <p className="text-sm text-gray-400">No active tasks yet.</p>
@@ -938,7 +937,7 @@ function DashboardContent() {
             </div>
           ) : (
             <div className="space-y-3">
-              {confirmedTasks.map((task: DashboardTask) => {
+              {activeTasks.map((task: DashboardTask) => {
                 const band = getPriorityBand(task.priorityScore || 0)
                 return (
                   <Link

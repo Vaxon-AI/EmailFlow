@@ -8,7 +8,7 @@
 
 export type DemoEmailCategory = 'action' | 'awareness' | 'ignore' | 'uncertain'
 
-export type DemoTaskStatus = 'pending' | 'confirmed' | 'completed' | 'dismissed'
+export type DemoTaskStatus = 'ai_suggestion' | 'active' | 'completed'
 
 export interface DemoIdentity {
   id: string

@@ -90,15 +90,19 @@ export async function POST(req: Request) {
     }
 
     if (action === 'generate_tasks') {
-      // Only action emails can generate tasks. Uncertain emails need a human
-      // classification first; client UI also disables/skips them, but we
-      // button for those, but we double-check to be safe.
+      // Needs Action and Unclassified emails can generate tasks. Anything with
+      // an existing task link is already tracked and is skipped.
       const eligible = await prisma.email.findMany({
         where: {
           id: { in: ids },
           userId: user.id,
-          classification: 'action',
           actioned: false,
+          taskLinks: { none: {} },
+          OR: [
+            { classification: 'action' },
+            { classification: 'uncertain' },
+            { classification: null },
+          ],
         },
         select: {
           id: true,
@@ -147,7 +151,8 @@ export async function POST(req: Request) {
               labels: email.labels,
               threadId: email.threadId,
               awaitingReview: false,
-              taskStatus: 'pending',
+              taskStatus: 'ai_suggestion',
+              forceAction: true,
             })
           } catch (err) {
             console.error(`[batch generate_tasks] processEmail failed for ${email.id}:`, err)

@@ -5,18 +5,16 @@ import { getEmailLinkedTaskState } from '../email-linked-task-status'
 describe('getEmailLinkedTaskState', () => {
   it('returns null when there are no effective linked tasks', () => {
     expect(getEmailLinkedTaskState()).toBeNull()
-    expect(getEmailLinkedTaskState([{ task: null }])).toBeNull()
-    expect(getEmailLinkedTaskState([{ task: { status: 'dismissed' } }])).toBeNull()
-  })
+    expect(getEmailLinkedTaskState([{ task: null }])).toBeNull()  })
 
   it('prioritizes unfinished task states over completed tasks', () => {
     expect(getEmailLinkedTaskState([
       { task: { status: 'completed' } },
-      { task: { status: 'pending' } },
+      { task: { status: 'ai_suggestion' } },
     ])).toBe('ai_suggestion')
     expect(getEmailLinkedTaskState([
       { task: { status: 'completed' } },
-      { task: { status: 'confirmed' } },
+      { task: { status: 'active' } },
     ])).toBe('active')
   })
 

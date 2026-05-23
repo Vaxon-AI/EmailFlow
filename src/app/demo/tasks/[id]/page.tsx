@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Calendar,
@@ -53,10 +53,17 @@ function shortDate(iso: string): string {
 
 export default function DemoTaskDetailPage() {
   const params = useParams<{ id: string }>()
+  const router = useRouter()
   const store = useDemoStore()
   const task = store.getTask(params.id)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<number | null>(null)
+
+  const deleteTask = () => {
+    store.deleteTask(params.id)
+    toast.success('Task deleted')
+    router.push('/demo/tasks')
+  }
 
   if (!task) {
     return (
@@ -169,7 +176,7 @@ export default function DemoTaskDetailPage() {
                   )}
                 </div>
 
-                {task.status === 'pending' && (
+                {task.status === 'ai_suggestion' && (
                   <InlineNotice variant="warning">
                     <div className="flex w-full items-center gap-3">
                       <span className="min-w-0 flex-1 text-left">
@@ -180,19 +187,14 @@ export default function DemoTaskDetailPage() {
                           size="sm"
                           variant="brandSoft"
                           className="h-8 gap-1.5"
-                          onClick={() => setStatus('confirmed', 'Task moved to Active')}
+                          onClick={() => setStatus('active', 'Task moved to Active')}
                         >
                           <ThumbsUp className="h-3.5 w-3.5" />
                           Activate
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="utility"
-                          className="h-8 gap-1.5"
-                          onClick={() => setStatus('dismissed', 'Task dismissed')}
-                        >
+                        <Button size="sm" variant="utility" className="h-8 gap-1.5" onClick={deleteTask}>
                           <X className="h-3.5 w-3.5" />
-                          Dismiss
+                          Delete
                         </Button>
                       </div>
                     </div>
@@ -208,7 +210,7 @@ export default function DemoTaskDetailPage() {
                         size="sm"
                         variant="success"
                         className="ml-auto h-8 shrink-0 gap-1.5"
-                        onClick={() => setStatus('confirmed', 'Task reopened')}
+                        onClick={() => setStatus('active', 'Task reopened')}
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
                         Reopen
@@ -216,25 +218,6 @@ export default function DemoTaskDetailPage() {
                     </div>
                   </InlineNotice>
                 )}
-                {task.status === 'dismissed' && (
-                  <InlineNotice className="border-gray-200 bg-gray-50 text-gray-700">
-                    <div className="flex w-full items-center gap-3">
-                      <span className="min-w-0 flex-1 text-left">
-                        This task is dismissed. Bring it back if it turns into real work later.
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="utility"
-                        className="ml-auto h-8 shrink-0 gap-1.5"
-                        onClick={() => setStatus('pending', 'Back to AI Suggestions')}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Back to AI Suggestions
-                      </Button>
-                    </div>
-                  </InlineNotice>
-                )}
-
                 <div className="rounded-xl border bg-white/70 px-4 py-3 backdrop-blur-sm">
                   <p className="text-sm leading-relaxed text-gray-700">{task.summary || '—'}</p>
                   <p className="mt-2 text-[11px] text-gray-400">
@@ -458,10 +441,9 @@ export default function DemoTaskDetailPage() {
                     }}
                     className="mt-1.5 h-9 w-48 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-700 shadow-sm outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
                   >
-                    <option value="pending">AI Suggestion</option>
-                    <option value="confirmed">Active</option>
+                    <option value="ai_suggestion">AI Suggestion</option>
+                    <option value="active">Active</option>
                     <option value="completed">Completed</option>
-                    <option value="dismissed">Dismissed</option>
                   </select>
                 </Field>
               </CardContent>

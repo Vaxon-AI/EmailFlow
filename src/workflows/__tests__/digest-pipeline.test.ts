@@ -45,7 +45,7 @@ function makeEmail(subject: string, sender = 'sender@example.com') {
   return { subject, sender }
 }
 
-function makeTask(title: string, status: 'confirmed' | 'pending' | 'completed', priorityScore: number | null = null) {
+function makeTask(title: string, status: 'active' | 'ai_suggestion' | 'completed', priorityScore: number | null = null) {
   return { title, status, priorityScore, userSetDeadline: null, explicitDeadline: null, inferredDeadline: null }
 }
 
@@ -112,21 +112,21 @@ describe('createDailyDigest', () => {
     expect(content).toContain('### Unclassified (1)')
   })
 
-  it('shows confirmed and pending task counts in the header line', async () => {
+  it('shows active and pending task counts in the header line', async () => {
     mockTaskRepo.findTasksByDateRange.mockResolvedValue([
-      makeTask('Write report', 'confirmed', 15) as never,
-      makeTask('Review PR', 'confirmed', 8) as never,
-      makeTask('AI suggestion', 'pending') as never,
+      makeTask('Write report', 'active', 15) as never,
+      makeTask('Review PR', 'active', 8) as never,
+      makeTask('AI suggestion', 'ai_suggestion') as never,
     ])
     await createDailyDigest(USER_ID)
     const content = mockDigestRepo.createDigest.mock.calls[0][0].content
     expect(content).toContain('2 active · 1 AI suggestions')
   })
 
-  it('sorts confirmed tasks by priorityScore descending', async () => {
+  it('sorts active tasks by priorityScore descending', async () => {
     mockTaskRepo.findTasksByDateRange.mockResolvedValue([
-      makeTask('Low priority', 'confirmed', 3) as never,
-      makeTask('High priority', 'confirmed', 18) as never,
+      makeTask('Low priority', 'active', 3) as never,
+      makeTask('High priority', 'active', 18) as never,
     ])
     await createDailyDigest(USER_ID)
     const content = mockDigestRepo.createDigest.mock.calls[0][0].content
@@ -149,8 +149,8 @@ describe('createDailyDigest', () => {
     })
     mockEmailRepo.findActionedEmails.mockResolvedValue([makeEmail('D')])
     mockTaskRepo.findTasksByDateRange.mockResolvedValue([
-      makeTask('T1', 'confirmed') as never,
-      makeTask('T2', 'pending') as never,
+      makeTask('T1', 'active') as never,
+      makeTask('T2', 'ai_suggestion') as never,
       makeTask('T3', 'completed') as never,
     ])
     await createDailyDigest(USER_ID)
@@ -171,7 +171,7 @@ describe('createDailyDigest', () => {
   it('shows task deadline in content when userSetDeadline is provided', async () => {
     const deadline = new Date('2026-06-15')
     mockTaskRepo.findTasksByDateRange.mockResolvedValue([
-      { ...makeTask('Deadline task', 'confirmed', 10), userSetDeadline: deadline } as never,
+      { ...makeTask('Deadline task', 'active', 10), userSetDeadline: deadline } as never,
     ])
     await createDailyDigest(USER_ID)
     const content = mockDigestRepo.createDigest.mock.calls[0][0].content
@@ -182,8 +182,8 @@ describe('createDailyDigest', () => {
 describe('previewDigest', () => {
   it('builds a live digest without saving it', async () => {
     mockTaskRepo.findTasksByDateRange.mockResolvedValue([
-      makeTask('Active task', 'confirmed') as never,
-      makeTask('AI suggestion', 'pending') as never,
+      makeTask('Active task', 'active') as never,
+      makeTask('AI suggestion', 'ai_suggestion') as never,
       makeTask('Done task', 'completed') as never,
     ])
 

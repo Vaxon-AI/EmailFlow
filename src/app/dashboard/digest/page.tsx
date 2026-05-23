@@ -260,7 +260,7 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       icon: CheckCircle2,
       color: 'text-brand-700',
       bg: 'bg-brand-50',
-      href: digestPeriodLink('/dashboard/tasks', digest, { status: 'confirmed' }),
+      href: digestPeriodLink('/dashboard/tasks', digest, { status: 'active' }),
     },
     {
       label: 'AI Suggestions',
@@ -268,7 +268,7 @@ function DigestHighlight({ digest }: { digest: DigestRecord }) {
       icon: AlertTriangle,
       color: 'text-ai-700',
       bg: 'bg-ai-50',
-      href: digestPeriodLink('/dashboard/tasks', digest, { status: 'pending' }),
+      href: digestPeriodLink('/dashboard/tasks', digest, { status: 'ai_suggestion' }),
     },
     {
       label: 'Completed',

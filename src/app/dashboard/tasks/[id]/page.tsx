@@ -193,10 +193,9 @@ function areAllChildrenCompleted(items: ChecklistItem[], itemId: string): boolea
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
-  pending: { label: 'AI Suggestion', color: 'bg-ai-50 text-ai-700 border-ai-100', bg: 'from-ai-50/50 to-white', icon: AlertTriangle },
-  confirmed: { label: 'Active', color: 'bg-brand-50 text-brand-700 border-brand-200', bg: 'from-brand-50/50 to-white', icon: ThumbsUp },
+  ai_suggestion: { label: 'AI suggestion', color: 'bg-ai-50 text-ai-700 border-ai-100', bg: 'from-ai-50/50 to-white', icon: AlertTriangle },
+  active: { label: 'Active', color: 'bg-brand-50 text-brand-700 border-brand-200', bg: 'from-brand-50/50 to-white', icon: ThumbsUp },
   completed: { label: 'Completed', color: 'bg-success-50 text-success border-success-100', bg: 'from-green-50/50 to-white', icon: CheckCircle2 },
-  dismissed: { label: 'Dismissed', color: 'bg-gray-50 text-gray-500 border-gray-200', bg: 'from-gray-50/50 to-white', icon: X },
 }
 
 export default function TaskDetailPage() {
@@ -221,7 +220,7 @@ export default function TaskDetailPage() {
   const [editUrgency, setEditUrgency] = useState(3)
   const [editImpact, setEditImpact] = useState(3)
   const [editNotes, setEditNotes] = useState('')
-  const [editStatus, setEditStatus] = useState('pending')
+  const [editStatus, setEditStatus] = useState('ai_suggestion')
   const [actionCooldown, setActionCooldown] = useState(false)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
@@ -280,7 +279,7 @@ export default function TaskDetailPage() {
       setEditUrgency(task.urgency || 3)
       setEditImpact(task.impact || 3)
       setEditNotes(task.userNotes || '')
-      setEditStatus(task.status || 'pending')
+      setEditStatus(task.status || 'ai_suggestion')
 
       // Parse checklist items and mark completed ones
       const items = parseActionItems(task.actionItems)
@@ -437,7 +436,7 @@ export default function TaskDetailPage() {
 
     // All items done and task not yet complete → show completion confirmation dialog
     const allDone = next.length > 0 && next.every(i => i.completed)
-    const taskNotDone = editStatus !== 'completed' && editStatus !== 'dismissed'
+    const taskNotDone = editStatus !== 'completed'
     if (allDone && taskNotDone) {
       setShowChecklistCompleteDialog(true)
     }
@@ -602,7 +601,7 @@ export default function TaskDetailPage() {
   const deadline = getDueDateValue(task)
   const startDate = task.startDate || ''
   const scheduleDuration = getScheduleDuration(startDate, deadline)
-  const sts = statusConfig[task.status] || statusConfig.pending
+  const sts = statusConfig[task.status] || statusConfig.ai_suggestion
   const StsIcon = sts.icon
   const project = task.project ?? null
   const matter = task.matter ?? null
@@ -697,12 +696,12 @@ export default function TaskDetailPage() {
               ) : null}
 
               {/* Quick actions for pending */}
-              {task.status === 'pending' && (
+              {task.status === 'ai_suggestion' && (
                 <InlineNotice variant="warning">
                   <div className="flex w-full items-center gap-3">
                     <span className="min-w-0 flex-1 text-left">This AI suggestion is waiting for you before it becomes active work.</span>
                     <div className="ml-auto flex shrink-0 items-center gap-2">
-                      <Button size="sm" variant="brandSoft" className="h-8 gap-1.5" onClick={() => handleStatusChange('confirmed')}>
+                      <Button size="sm" variant="brandSoft" className="h-8 gap-1.5" onClick={() => handleStatusChange('active')}>
                         <ThumbsUp className="h-3.5 w-3.5" />
                         Activate
                       </Button>
@@ -721,27 +720,13 @@ export default function TaskDetailPage() {
                 <InlineNotice variant="success">
                   <div className="flex w-full items-center gap-3">
                     <span className="min-w-0 flex-1 text-left">This task is marked complete. Reopen it if more work shows up.</span>
-                    <Button size="sm" variant="success" className="ml-auto h-8 shrink-0 gap-1.5" onClick={() => handleStatusChange('confirmed')}>
+                    <Button size="sm" variant="success" className="ml-auto h-8 shrink-0 gap-1.5" onClick={() => handleStatusChange('active')}>
                       <RotateCcw className="h-3.5 w-3.5" />
                       Reopen
                     </Button>
                   </div>
                 </InlineNotice>
               )}
-
-              {/* Quick actions for dismissed */}
-              {task.status === 'dismissed' && (
-                <InlineNotice className="border-gray-200 bg-gray-50 text-gray-700">
-                  <div className="flex w-full items-center gap-3">
-                    <span className="min-w-0 flex-1 text-left">This task is currently dismissed. Bring it back if the email turns into real work later.</span>
-                    <Button size="sm" variant="utility" className="ml-auto h-8 shrink-0 gap-1.5" onClick={() => handleStatusChange('pending')}>
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      Back to AI Suggestions
-                    </Button>
-                  </div>
-                </InlineNotice>
-              )}
-
               {/* Summary */}
               <div className="rounded-xl bg-white/70 backdrop-blur-sm border px-4 py-3">
                 <p className="text-sm text-gray-700 leading-relaxed">{task.summary}</p>
@@ -974,10 +959,9 @@ export default function TaskDetailPage() {
                       const cfg = statusConfig[editStatus]
                       const Icon = cfg?.icon ?? AlertTriangle
                       const iconColor: Record<string, string> = {
-                        pending: 'text-ai',
-                        confirmed: 'text-brand-500',
+                        ai_suggestion: 'text-ai',
+                        active: 'text-brand-500',
                         completed: 'text-success',
-                        dismissed: 'text-gray-400',
                       }
                       return (
                         <div className="flex items-center gap-1.5">
@@ -989,12 +973,11 @@ export default function TaskDetailPage() {
                   </SelectTrigger>
                   <SelectContent align="start">
                     {Object.entries(statusConfig)
-                      .filter(([value]) => value !== 'dismissed')
                       .map(([value, opt]) => {
                         const Icon = opt.icon
                         const iconColor: Record<string, string> = {
-                          pending: 'text-ai',
-                          confirmed: 'text-brand-500',
+                          ai_suggestion: 'text-ai',
+                          active: 'text-brand-500',
                           completed: 'text-success',
                         }
                         return (

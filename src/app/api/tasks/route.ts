@@ -5,6 +5,7 @@ import * as taskRepo from '@/repositories/task-repo'
 import * as emailRepo from '@/repositories/email-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { prisma } from '@/lib/prisma'
+import { isTaskStatus } from '@/lib/task-status'
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,7 +14,11 @@ export async function GET(req: NextRequest) {
     const url = req.nextUrl
     const page = parseInt(url.searchParams.get('page') || '1')
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 2000)
-    const status = url.searchParams.get('status') || undefined
+    const statusParam = url.searchParams.get('status')
+    if (statusParam && !isTaskStatus(statusParam)) {
+      return error('BAD_REQUEST', 'Invalid task status', 400)
+    }
+    const status = statusParam || undefined
     const scope = url.searchParams.get('scope') === 'open' ? 'open' : undefined
     const priorityParam = url.searchParams.get('priority')
     const priority = isPriorityFilter(priorityParam) ? priorityParam : undefined
@@ -49,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     const { title, summary, actionItems, userSetDeadline, startDate, urgency, impact, priorityScore, projectId, source, emailIds } = await req.json()
     const taskSource = source ?? 'manual'
-    const taskStatus = taskSource === 'copy_text' ? 'pending' : 'confirmed'
+    const taskStatus = taskSource === 'copy_text' ? 'ai_suggestion' : 'active'
 
     if (!title) {
       return error('BAD_REQUEST', 'Title is required', 400)
@@ -83,7 +88,7 @@ export async function POST(req: NextRequest) {
         title,
         summary: summary || '',
         status: taskStatus,
-        confirmedAt: taskStatus === 'confirmed' ? new Date() : null,
+        activeAt: taskStatus === 'active' ? new Date() : null,
         urgency: urgency ?? 3,
         impact: impact ?? 3,
         priorityScore: priorityScore ?? 9,

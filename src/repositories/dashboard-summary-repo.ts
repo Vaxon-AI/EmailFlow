@@ -23,7 +23,7 @@ type DashboardStats = {
     tracked: number      // actioned=true (regardless of classification)
     unclassified: number // classification=null (quota_skipped) — surfaced separately
   }
-  tasks: { total: number; pending: number; confirmed: number; completed: number; dismissed: number }
+  tasks: { total: number; pending: number; active: number; completed: number }
   sync: {
     lastSyncAt: Date | null | undefined
     emailConnected: boolean | undefined
@@ -66,7 +66,7 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
   const momentumStart = startOfUtcDay(addUtcDays(period?.start ?? now, -(momentumDays - 1)))
 
   // Needs Action page (now action-only): high-confidence action emails ready
-  // for extraction. Uncertain emails moved to the unified "Needs Review"
+  // for extraction. Uncertain emails moved to the unified "Unclassified"
   // bucket (alongside quota_skipped) so the user-facing tabs separate
   // confidence levels cleanly.
   const attentionEmailWhere: Prisma.EmailWhereInput = {
@@ -129,19 +129,19 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       where: {
         ...taskWhere,
         source: 'ai_auto',
-        status: { in: ['confirmed', 'completed', 'dismissed'] },
+        status: { in: ['active', 'completed'] },
       },
       _count: { id: true },
     }),
     prisma.task.count({
       where: andWhere(baseTaskWhere, {
-        status: { in: ['pending', 'confirmed'] },
+        status: { in: ['ai_suggestion', 'active'] },
         OR: dueDateConditions(period ? { lte: period.end } : { gte: now, lte: addUtcDays(now, 7) }),
       }),
     }),
     prisma.task.count({
       where: andWhere(baseTaskWhere, {
-        status: { in: ['pending', 'confirmed'] },
+        status: { in: ['ai_suggestion', 'active'] },
         OR: dueDateConditions({ lt: period?.start ?? now }),
       }),
     }),
@@ -235,7 +235,7 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       ? Promise.resolve(null)
       : prisma.task.groupBy({
           by: ['status'],
-          where: { ...baseTaskWhere, source: 'ai_auto', status: { in: ['confirmed', 'completed', 'dismissed'] } },
+          where: { ...baseTaskWhere, source: 'ai_auto', status: { in: ['active', 'completed'] } },
           _count: { id: true },
         }),
     isAllView
@@ -347,7 +347,7 @@ function applyTaskPeriod(where: Prisma.TaskWhereInput, period: DateRange | null,
     OR: [
       { completedAt: { gte: period.start, lt: period.end } },
       {
-        status: { in: ['pending', 'confirmed'] },
+        status: { in: ['ai_suggestion', 'active'] },
         OR: [
           { createdAt: { gte: period.start, lt: period.end } },
           { updatedAt: { gte: period.start, lt: period.end } },
@@ -432,13 +432,12 @@ function buildStats(
   // Header chip and Inbox's Unclassified tab exactly.
   const unclassifiedTotal = awaitingReviewCount
   // Classified emails (action / awareness / ignore) are visible in the inbox
-  // tabs; unclassified + uncertain sit in the Needs Review tab. Keep them
+  // tabs; unclassified + uncertain sit in the Unclassified tab. Keep them
   // out of the headline "total" so it matches what's visible in the bars.
   const emailTotal = emailGroups.reduce((sum, group) => sum + group._count.id, 0) - unclassifiedTotal
   const taskTotal = taskGroups.reduce((sum, group) => sum + group._count.id, 0)
-  const pending = taskCount('pending')
+  const pending = taskCount('ai_suggestion')
   const completed = taskCount('completed')
-  const dismissed = taskCount('dismissed')
 
   return {
     emails: {
@@ -455,9 +454,8 @@ function buildStats(
     tasks: {
       total: taskTotal,
       pending,
-      confirmed: Math.max(0, taskTotal - pending - completed - dismissed),
+      active: taskCount('active'),
       completed,
-      dismissed,
     },
     sync: {
       lastSyncAt: userInfo?.lastSyncAt,
@@ -503,23 +501,22 @@ function buildTaskSummary(
     if (!deadline) continue
 
     const deadlineTime = deadline.getTime()
-    const isActive = task.status === 'pending' || task.status === 'confirmed'
+    const isActive = task.status === 'ai_suggestion' || task.status === 'active'
     if (isActive && deadlineTime >= now && deadlineTime <= upcomingEnd) {
       upcomingCount += 1
     }
   }
 
   const aiAccepted = aiTaskGroups
-    .filter((group) => group.status === 'confirmed' || group.status === 'completed')
+    .filter((group) => group.status === 'active' || group.status === 'completed')
     .reduce((sum, group) => sum + group._count.id, 0)
-  const aiRejected = aiTaskGroups.find((group) => group.status === 'dismissed')?._count.id ?? 0
+  const aiRejected = 0
 
   return {
-    confirmedPreview: tasks.filter((task) => task.status === 'confirmed').slice(0, 5),
-    pendingPreview: tasks.filter((task) => task.status === 'pending').slice(0, 5),
-    confirmedCount: taskStats.confirmed,
+    activePreview: tasks.filter((task) => task.status === 'active').slice(0, 5),
+    pendingPreview: tasks.filter((task) => task.status === 'ai_suggestion').slice(0, 5),
+    activeCount: taskStats.active,
     pendingCount: taskStats.pending,
-    dismissedCount: taskStats.dismissed,
     priorityCounts,
     upcomingCount,
     aiAcceptance: {
@@ -572,7 +569,7 @@ function buildFeedback(
   overdueOpenTasks: number,
   allTimeTaskStats: DashboardStats['tasks']
 ) {
-  const allTimeOpenTasks = allTimeTaskStats.pending + allTimeTaskStats.confirmed
+  const allTimeOpenTasks = allTimeTaskStats.pending + allTimeTaskStats.active
   const relevantTasks = openDueOrOverdueTasks + completedInPeriod
   const completionRate = relevantTasks > 0 ? completedInPeriod / relevantTasks : 1
 

@@ -83,7 +83,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
       'user-1',
       expect.objectContaining({
         id: 'email-1',
-        taskStatus: 'pending',
+        taskStatus: 'ai_suggestion',
         forceAction: true,
       })
     )
@@ -102,7 +102,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
       'user-1',
       expect.objectContaining({
         id: 'email-1',
-        taskStatus: 'pending',
+        taskStatus: 'ai_suggestion',
         forceAction: true,
       })
     )
@@ -116,7 +116,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
     })
 
     expect(res.status).toBe(200)
-    expect(mockCreateTaskFromClassifiedEmail).toHaveBeenCalledWith('user-1', 'email-1', 'pending')
+    expect(mockCreateTaskFromClassifiedEmail).toHaveBeenCalledWith('user-1', 'email-1', 'ai_suggestion')
     expect(mockProcessEmail).not.toHaveBeenCalled()
   })
 
@@ -134,7 +134,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
   it('reprocesses when an active task is already linked so workflow can dedupe', async () => {
     mockFindEmailById.mockResolvedValue(
       makeEmail({
-        taskLinks: [{ task: { id: 'task-1', status: 'pending' } }],
+        taskLinks: [{ task: { id: 'task-1', status: 'ai_suggestion' } }],
       }) as never
     )
 
@@ -148,7 +148,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
       'user-1',
       expect.objectContaining({
         id: 'email-1',
-        taskStatus: 'pending',
+        taskStatus: 'ai_suggestion',
         forceAction: true,
       })
     )

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 
-type BatchAction = 'complete' | 'confirm' | 'delete' | 'reassign'
+type BatchAction = 'complete' | 'activate' | 'delete' | 'reassign'
 
 export async function POST(req: Request) {
   try {
@@ -24,10 +24,10 @@ export async function POST(req: Request) {
         })
         break
 
-      case 'confirm':
+      case 'activate':
         await prisma.task.updateMany({
           where: { id: { in: ids }, userId: user.id },
-          data: { status: 'confirmed', confirmedAt: now, dismissedAt: null, completedAt: null },
+          data: { status: 'active', activeAt: now, dismissedAt: null, completedAt: null },
         })
         break
 

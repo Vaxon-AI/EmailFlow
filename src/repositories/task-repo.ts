@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { TaskCandidate, PriorityResult } from '@/ai'
 import * as Sentry from '@sentry/nextjs'
+import type { TaskStatus } from '@/lib/task-status'
 
 // ============================================================
 // Task Repository — all task database operations
@@ -12,7 +13,7 @@ export interface CreateTaskData {
   emailId: string
   extraction: TaskCandidate
   priority: PriorityResult
-  status?: 'pending' | 'confirmed'
+  status?: Extract<TaskStatus, 'ai_suggestion' | 'active'>
 }
 
 export async function createTask(data: CreateTaskData) {
@@ -23,9 +24,9 @@ export async function createTask(data: CreateTaskData) {
       title: data.extraction.title,
       summary: data.extraction.summary,
       actionItems: JSON.stringify(data.extraction.actionItems),
-      status: data.status ?? 'pending',
+      status: data.status ?? 'ai_suggestion',
       source: 'ai_auto',
-      confirmedAt: data.status === 'confirmed' ? new Date() : null,
+      activeAt: data.status === 'active' ? new Date() : null,
 
       urgency: data.priority.urgency,
       impact: data.priority.impact,
@@ -86,7 +87,7 @@ export async function findTasksPaginated(
   if (options.status) {
     where.status = options.status
   } else if (options.scope === 'open') {
-    where.status = { in: ['pending', 'confirmed'] }
+    where.status = { in: ['ai_suggestion', 'active'] }
   }
   if (options.priority) {
     if (options.priority === 'low') {
