@@ -1625,6 +1625,10 @@ function DangerZoneCard({ onDeleted }: { onDeleted: () => void }) {
             This will permanently delete your account, all emails, tasks, and connected data.
             There is <strong>no way to undo this</strong>.
           </p>
+          <p className="text-sm text-gray-600">
+            Your free-quota usage history will be retained. Re-registering with the same email,
+            or rebinding the same Gmail account, will <strong>not reset your quota</strong>.
+          </p>
           <div className="space-y-2 pt-1">
             <p className="text-sm text-gray-600">
               Type <strong>delete my account</strong> to confirm.

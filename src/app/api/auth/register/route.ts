@@ -4,6 +4,7 @@ import { hashPassword } from '@/lib/auth-password'
 import { createToken, setSessionCookie } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
 import { isAppError } from '@/lib/app-errors'
+import { getInheritedQuotaForEmail } from '@/repositories/quota-ledger-repo'
 
 export async function POST(req: Request) {
   try {
@@ -32,11 +33,16 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await hashPassword(password)
+    const inherited = await getInheritedQuotaForEmail(email, 'email')
     const user = await prisma.user.create({
       data: {
         email,
         name: name || email.split('@')[0],
         passwordHash,
+        classifyUsed: inherited.classifyUsed,
+        extractUsed: inherited.extractUsed,
+        pasteTextUsed: inherited.pasteTextUsed,
+        quotaResetAt: inherited.quotaResetAt,
       },
     })
 

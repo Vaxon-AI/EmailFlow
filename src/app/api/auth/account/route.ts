@@ -3,6 +3,7 @@ import { requireCurrentSessionContext } from '@/lib/auth-session'
 import { errorFromException, error as apiError } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 import { clearSessionCookie } from '@/lib/auth-token'
+import { snapshotForUser } from '@/repositories/quota-ledger-repo'
 
 const CONFIRMATION_PHRASE = 'delete my account'
 
@@ -39,9 +40,16 @@ export async function DELETE(req: Request) {
       )
     }
 
-    // Delete the user — cascade will remove sessions, emails, tasks, digests,
-    // and the per-user memory tables (see schema onDelete: Cascade).
-    await prisma.user.delete({ where: { id: userId } })
+    // Snapshot quota usage into the persistent ledger so that re-registering
+    // with the same email (or rebinding the same Gmail OAuth address) does not
+    // reset the free-tier limits. Snapshot and delete share a transaction so
+    // we never end up with one without the other.
+    await prisma.$transaction(async (tx) => {
+      await snapshotForUser(userId, tx)
+      // cascade removes sessions, emails, tasks, digests, and per-user memory
+      // tables (see schema onDelete: Cascade).
+      await tx.user.delete({ where: { id: userId } })
+    })
 
     // Clear the session cookie so the browser doesn't hold a dangling token
     await clearSessionCookie()

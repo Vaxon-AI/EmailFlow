@@ -6,6 +6,9 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       create: vi.fn(),
     },
+    quotaLedger: {
+      findUnique: vi.fn(),
+    },
   },
 }))
 
@@ -83,13 +86,15 @@ describe('POST /api/auth/register', () => {
 
     const res = await POST(postRequest({ email: 'alice@example.com', password: 'password123', name: 'Alice' }))
 
-    expect(mockUser.create).toHaveBeenCalledWith({
-      data: {
-        email: 'alice@example.com',
-        name: 'Alice',
-        passwordHash: '$2b$hash',
-      },
-    })
+    expect(mockUser.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: 'alice@example.com',
+          name: 'Alice',
+          passwordHash: '$2b$hash',
+        }),
+      }),
+    )
     expect(mockSetSessionCookie).toHaveBeenCalledWith('tok123', true)
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -108,6 +113,36 @@ describe('POST /api/auth/register', () => {
 
     expect(mockUser.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ name: 'bob' }) })
+    )
+  })
+
+  it('inherits quota usage from the persistent ledger when re-registering same email', async () => {
+    mockUser.findUnique.mockResolvedValue(null)
+    mockHashPassword.mockResolvedValue('$2b$hash' as never)
+    mockUser.create.mockResolvedValue({ id: 'user-2', email: 'returning@example.com', name: 'returning' } as never)
+    mockCreateUserSession.mockResolvedValue({ rawToken: 'tok' } as never)
+    mockSetSessionCookie.mockResolvedValue(undefined as never)
+    const previousResetAt = new Date('2026-05-10')
+    vi.mocked(prisma.quotaLedger.findUnique)
+      .mockResolvedValueOnce({
+        classifyUsed: 75,
+        extractUsed: 6,
+        pasteTextUsed: 2,
+        quotaResetAt: previousResetAt,
+      } as never)
+      .mockResolvedValueOnce(null)
+
+    await POST(postRequest({ email: 'returning@example.com', password: 'password123' }))
+
+    expect(mockUser.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          classifyUsed: 75,
+          extractUsed: 6,
+          pasteTextUsed: 2,
+          quotaResetAt: previousResetAt,
+        }),
+      }),
     )
   })
 })

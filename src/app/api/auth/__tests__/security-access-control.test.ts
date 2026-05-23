@@ -27,15 +27,22 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
   return { ...actual }
 })
 
-vi.mock('@/lib/prisma', () => ({
-  prisma: {
+vi.mock('@/lib/prisma', () => {
+  const prismaMock = {
     user: {
       findUnique: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
     },
-  },
-}))
+    quotaLedger: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+    $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(prismaMock)),
+  }
+  return { prisma: prismaMock }
+})
 
 import { AppError } from '@/lib/app-errors'
 import { requireCurrentSessionContext } from '@/lib/auth-session'
@@ -62,6 +69,10 @@ const ATTACKER_CONTEXT = {
 beforeEach(() => {
   vi.clearAllMocks()
   mockRequireContext.mockResolvedValue(ATTACKER_CONTEXT as never)
+  // Default: no user record so the quota-ledger snapshot is a no-op for the
+  // IDOR/confirmation tests below. Tests that exercise the snapshot itself
+  // override this.
+  vi.mocked(prisma.user.findUnique).mockResolvedValue(null as never)
 })
 
 // ─── IDOR: Session revocation ─────────────────────────────────────────────────
@@ -124,6 +135,43 @@ describe('IDOR: account deletion', () => {
     const res = await deleteAccount(req)
     expect(res.status).toBe(400)
     expect(prisma.user.delete).not.toHaveBeenCalled()
+  })
+
+  // Quota persistence: ensure the ledger snapshot fires inside the same
+  // transaction as the user.delete, otherwise users could circumvent the
+  // free-tier limit by deleting and re-registering.
+  it('snapshots the quota ledger before deleting the user', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      email: 'attacker@example.com',
+      classifyUsed: 99,
+      extractUsed: 7,
+      pasteTextUsed: 1,
+      quotaResetAt: new Date('2026-05-10'),
+      accounts: [],
+    } as never)
+    vi.mocked(prisma.quotaLedger.findUnique).mockResolvedValue(null)
+    vi.mocked(prisma.user.delete).mockResolvedValue({} as never)
+
+    const req = new Request('http://localhost', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmation: 'delete my account' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await deleteAccount(req)
+    expect(res.status).toBe(200)
+    expect(prisma.quotaLedger.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          identifierType: 'email',
+          identifier: 'attacker@example.com',
+          classifyUsed: 99,
+          extractUsed: 7,
+          pasteTextUsed: 1,
+        }),
+      }),
+    )
+    expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-attacker' } })
   })
 })
 

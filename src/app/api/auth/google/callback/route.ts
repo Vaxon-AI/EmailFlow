@@ -5,6 +5,10 @@ import { getCurrentUser } from '@/lib/auth-session'
 import { createUserSession } from '@/lib/auth-sessions'
 import { setSessionCookie } from '@/lib/auth-token'
 import { isAppError } from '@/lib/app-errors'
+import {
+  getInheritedQuotaForEmail,
+  mergeGmailLedgerIntoUser,
+} from '@/repositories/quota-ledger-repo'
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
@@ -164,9 +168,9 @@ export async function GET(req: NextRequest) {
         )
       }
 
-      await prisma.$transaction([
-        prisma.user.update({ where: { id: user.id }, data: userTokenFields }),
-        prisma.account.upsert({
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: user.id }, data: userTokenFields })
+        await tx.account.upsert({
           where: { provider_providerAccountId: { provider: 'google', providerAccountId } },
           create: {
             userId: user.id,
@@ -176,8 +180,11 @@ export async function GET(req: NextRequest) {
             ...accountTokenFields,
           },
           update: accountTokenFields,
-        }),
-      ])
+        })
+        if (googleEmail) {
+          await mergeGmailLedgerIntoUser(user.id, googleEmail, tx)
+        }
+      })
 
       return NextResponse.redirect(await dashboardRedirectFor(user.id))
     }
@@ -204,14 +211,16 @@ export async function GET(req: NextRequest) {
 
     if (existingAccount) {
       targetUserId = existingAccount.userId
+      const boundUserId = targetUserId
 
-      await prisma.$transaction([
-        prisma.user.update({ where: { id: targetUserId }, data: userTokenFields }),
-        prisma.account.update({
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: boundUserId }, data: userTokenFields })
+        await tx.account.update({
           where: { provider_providerAccountId: { provider: 'google', providerAccountId } },
           data: accountTokenFields,
-        }),
-      ])
+        })
+        await mergeGmailLedgerIntoUser(boundUserId, googleEmail, tx)
+      })
     } else {
       // Case 2: No Account binding, but a User with this email already exists
       const emailUser = await prisma.user.findFirst({
@@ -221,27 +230,36 @@ export async function GET(req: NextRequest) {
 
       if (emailUser) {
         targetUserId = emailUser.id
+        const boundUserId = targetUserId
 
-        await prisma.$transaction([
-          prisma.user.update({ where: { id: targetUserId }, data: userTokenFields }),
-          prisma.account.create({
+        await prisma.$transaction(async (tx) => {
+          await tx.user.update({ where: { id: boundUserId }, data: userTokenFields })
+          await tx.account.create({
             data: {
-              userId: targetUserId,
+              userId: boundUserId,
               type: 'oauth',
               provider: 'google',
               providerAccountId,
               ...accountTokenFields,
             },
-          }),
-        ])
+          })
+          await mergeGmailLedgerIntoUser(boundUserId, googleEmail, tx)
+        })
       } else {
-        // Case 3: Brand-new user — create User + Account atomically
+        // Case 3: Brand-new user — create User + Account atomically. Inherit any
+        // ledger entry for this Google email so a deleted-then-rejoining user
+        // does not get a fresh free-tier window.
+        const inherited = await getInheritedQuotaForEmail(googleEmail, 'gmail')
         const newUser = await prisma.$transaction(async (tx) => {
           const u = await tx.user.create({
             data: {
               email: googleEmail,
               name: (profileData.name as string | undefined) || googleEmail.split('@')[0],
               image: (profileData.picture as string | undefined) ?? null,
+              classifyUsed: inherited.classifyUsed,
+              extractUsed: inherited.extractUsed,
+              pasteTextUsed: inherited.pasteTextUsed,
+              quotaResetAt: inherited.quotaResetAt,
               ...userTokenFields,
             },
             select: { id: true },
