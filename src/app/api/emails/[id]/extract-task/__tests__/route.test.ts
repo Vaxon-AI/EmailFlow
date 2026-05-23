@@ -78,7 +78,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
     })
 
     expect(res.status).toBe(200)
-    expect(mockSetEmailBucket).not.toHaveBeenCalled()
+    expect(mockSetEmailBucket).toHaveBeenCalledWith('email-1', 'tracked')
     expect(mockProcessEmail).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({
@@ -131,7 +131,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
     expect(mockProcessEmail).not.toHaveBeenCalled()
   })
 
-  it('returns 409 when an active task is already linked', async () => {
+  it('reprocesses when an active task is already linked so workflow can dedupe', async () => {
     mockFindEmailById.mockResolvedValue(
       makeEmail({
         taskLinks: [{ task: { id: 'task-1', status: 'pending' } }],
@@ -142,7 +142,15 @@ describe('POST /api/emails/[id]/extract-task', () => {
       params: Promise.resolve({ id: 'email-1' }),
     })
 
-    expect(res.status).toBe(409)
-    expect(mockProcessEmail).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    expect(mockSetEmailBucket).toHaveBeenCalledWith('email-1', 'tracked')
+    expect(mockProcessEmail).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        id: 'email-1',
+        taskStatus: 'pending',
+        forceAction: true,
+      })
+    )
   })
 })
