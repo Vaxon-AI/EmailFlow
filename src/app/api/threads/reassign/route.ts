@@ -1,5 +1,6 @@
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
+import { ensureMatterForProject } from '@/services/project-matter-service'
 
 export async function POST(req: Request) {
   try {
@@ -19,27 +20,8 @@ export async function POST(req: Request) {
 
     if (!threadId || !projectId) return error('BAD_REQUEST', 'threadId and projectId are required', 400)
 
-    const project = await prisma.projectContext.findFirst({
-      where: { id: projectId, userId: user.id },
-    })
-    if (!project) return error('NOT_FOUND', 'Project not found', 404)
-
-    // Find or create a MatterMemory for this project
-    let matter = await prisma.matterMemory.findFirst({
-      where: { userId: user.id, projectContextId: projectId },
-    })
-    if (!matter) {
-      matter = await prisma.matterMemory.create({
-        data: {
-          userId: user.id,
-          projectContextId: projectId,
-          title: project.name,
-          summary: 'Manually assigned to this project',
-          status: 'open',
-          topic: 'other',
-        },
-      })
-    }
+    const matter = await ensureMatterForProject(user.id, projectId)
+    if (!matter) return error('NOT_FOUND', 'Project not found', 404)
 
     const ops: Promise<unknown>[] = []
 
@@ -49,14 +31,14 @@ export async function POST(req: Request) {
         prisma.threadMemory.upsert({
           where: { userId_threadId: { userId: user.id, threadId } },
           update: { matterId: matter.id },
-          create: {
-            userId: user.id,
-            threadId,
-            matterId: matter.id,
-            title: project.name,
-            summary: 'Manually assigned',
-          },
-        })
+            create: {
+              userId: user.id,
+              threadId,
+              matterId: matter.id,
+              title: matter.projectName,
+              summary: 'Manually assigned',
+            },
+          })
       )
     }
 

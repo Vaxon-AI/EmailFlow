@@ -2,10 +2,9 @@ export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
-import * as emailRepo from '@/repositories/email-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
-import { prisma } from '@/lib/prisma'
 import { isTaskStatus } from '@/lib/task-status'
+import { createManualTask } from '@/services/manual-task-service'
 
 export async function GET(req: NextRequest) {
   try {
@@ -54,65 +53,27 @@ export async function POST(req: NextRequest) {
 
     const { title, summary, actionItems, userSetDeadline, startDate, urgency, impact, priorityScore, projectId, source, emailIds } = await req.json()
     const taskSource = source ?? 'manual'
-    const taskStatus = taskSource === 'copy_text' ? 'ai_suggestion' : 'active'
 
     if (!title) {
       return error('BAD_REQUEST', 'Title is required', 400)
     }
 
-    // If projectId provided, find or create a MatterMemory to link the task
-    let matterId: string | undefined
-    if (projectId) {
-      const project = await prisma.projectContext.findFirst({ where: { id: projectId, userId: user.id } })
-      if (project) {
-        let matter = await prisma.matterMemory.findFirst({ where: { userId: user.id, projectContextId: projectId } })
-        if (!matter) {
-          matter = await prisma.matterMemory.create({
-            data: {
-              userId: user.id,
-              projectContextId: projectId,
-              title: project.name,
-              summary: 'Manually assigned to this project',
-              status: 'open',
-              topic: 'other',
-            },
-          })
-        }
-        matterId = matter.id
-      }
-    }
-
-    const task = await prisma.task.create({
-      data: {
-        userId: user.id,
-        title,
-        summary: summary || '',
-        status: taskStatus,
-        activeAt: taskStatus === 'active' ? new Date() : null,
-        urgency: urgency ?? 3,
-        impact: impact ?? 3,
-        priorityScore: priorityScore ?? 9,
-        actionItems: actionItems ?? '[]',
-        userSetDeadline: userSetDeadline ? new Date(userSetDeadline) : undefined,
-        startDate: startDate ? new Date(startDate) : undefined,
-        source: taskSource,
-        matterId,
-      },
+    const task = await createManualTask({
+      userId: user.id,
+      title,
+      summary,
+      actionItems,
+      userSetDeadline,
+      startDate,
+      urgency,
+      impact,
+      priorityScore,
+      projectId,
+      source: taskSource,
+      emailIds: Array.isArray(emailIds) ? emailIds : [],
+      markLinkedEmailsActioned: true,
+      emptyActionItemsValue: '[]',
     })
-
-    if (Array.isArray(emailIds) && emailIds.length > 0) {
-      const ownedEmails = await prisma.email.findMany({
-        where: { id: { in: emailIds }, userId: user.id },
-        select: { id: true },
-      })
-      if (ownedEmails.length > 0) {
-        await prisma.taskEmail.createMany({
-          data: ownedEmails.map((e) => ({ taskId: task.id, emailId: e.id, relationship: 'source' })),
-          skipDuplicates: true,
-        })
-        await emailRepo.bulkMarkActioned(user.id, ownedEmails.map((e) => e.id))
-      }
-    }
 
     invalidateStatsCache(user.id)
     return success(task)

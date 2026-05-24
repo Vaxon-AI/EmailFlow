@@ -15,33 +15,22 @@ vi.mock('@/lib/quota', () => ({
   FREE_EXTRACT_LIMIT: 10,
 }))
 
-vi.mock('@/lib/prisma', () => ({
-  prisma: {
-    projectContext: {
-      findFirst: vi.fn(),
-    },
-    matterMemory: {
-      findFirst: vi.fn(),
-      create: vi.fn(),
-    },
-    task: {
-      create: vi.fn(),
-    },
-    taskEmail: {
-      create: vi.fn(),
-    },
-  },
+vi.mock('@/services/manual-task-service', () => ({
+  createManualTask: vi.fn(),
+}))
+
+vi.mock('@/repositories/email-repo', () => ({
+  setEmailBucket: vi.fn(),
 }))
 
 import { getAuthUser } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { setEmailBucket } from '@/repositories/email-repo'
+import { createManualTask } from '@/services/manual-task-service'
 import { POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
-const mockProjectContext = vi.mocked(prisma.projectContext)
-const mockMatterMemory = vi.mocked(prisma.matterMemory)
-const mockTask = vi.mocked(prisma.task)
-const mockTaskEmail = vi.mocked(prisma.taskEmail)
+const mockSetEmailBucket = vi.mocked(setEmailBucket)
+const mockCreateManualTask = vi.mocked(createManualTask)
 
 function postRequest(body: object): NextRequest {
   return new NextRequest('http://localhost/api/emails/create-task', {
@@ -55,8 +44,8 @@ describe('POST /api/emails/create-task', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'pro' } as never)
-    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'T' } as never)
-    mockTaskEmail.create.mockResolvedValue({} as never)
+    mockCreateManualTask.mockResolvedValue({ id: 'task-1', title: 'T' } as never)
+    mockSetEmailBucket.mockResolvedValue(undefined as never)
   })
 
   it('returns 400 when title or sourceEmailId is missing', async () => {
@@ -67,71 +56,50 @@ describe('POST /api/emails/create-task', () => {
   it('creates task without matter when no projectId is provided', async () => {
     await POST(postRequest({ title: 'T', sourceEmailId: 'e1' }))
 
-    expect(mockProjectContext.findFirst).not.toHaveBeenCalled()
-    expect(mockMatterMemory.create).not.toHaveBeenCalled()
-    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        matterId: undefined,
-        status: 'active',
-        activeAt: expect.any(Date),
-        source: 'manual',
-      }),
-    }))
+    expect(mockCreateManualTask).toHaveBeenCalledWith({
+      userId: 'user-1',
+      title: 'T',
+      summary: undefined,
+      actionItems: undefined,
+      userSetDeadline: undefined,
+      startDate: undefined,
+      urgency: undefined,
+      impact: undefined,
+      priorityScore: undefined,
+      projectId: undefined,
+      source: 'manual',
+      emailIds: ['e1'],
+      markLinkedEmailsActioned: false,
+      emptyActionItemsValue: undefined,
+    })
   })
 
-  it('creates a matter and links the task when a valid projectId is provided', async () => {
-    mockProjectContext.findFirst.mockResolvedValue({ id: 'p1', name: 'Project A' } as never)
-    mockMatterMemory.findFirst.mockResolvedValue(null)
-    mockMatterMemory.create.mockResolvedValue({ id: 'matter-1' } as never)
-
+  it('delegates creation with linked email ids and project id', async () => {
     await POST(postRequest({ title: 'T', sourceEmailId: 'e1', projectId: 'p1' }))
 
-    expect(mockProjectContext.findFirst).toHaveBeenCalledWith({
-      where: { id: 'p1', userId: 'user-1' },
+    expect(mockCreateManualTask).toHaveBeenCalledWith({
+      userId: 'user-1',
+      title: 'T',
+      summary: undefined,
+      actionItems: undefined,
+      userSetDeadline: undefined,
+      startDate: undefined,
+      urgency: undefined,
+      impact: undefined,
+      priorityScore: undefined,
+      projectId: 'p1',
+      source: 'manual',
+      emailIds: ['e1'],
+      markLinkedEmailsActioned: false,
+      emptyActionItemsValue: undefined,
     })
-    expect(mockMatterMemory.create).toHaveBeenCalledWith({
-      data: {
-        userId: 'user-1',
-        projectContextId: 'p1',
-        title: 'Project A',
-        summary: 'Manually assigned to this project',
-        status: 'open',
-        topic: 'other',
-      },
-    })
-    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ matterId: 'matter-1' }),
-    }))
-  })
-
-  it('reuses an existing matter for the project instead of creating one', async () => {
-    mockProjectContext.findFirst.mockResolvedValue({ id: 'p1', name: 'Project A' } as never)
-    mockMatterMemory.findFirst.mockResolvedValue({ id: 'matter-existing' } as never)
-
-    await POST(postRequest({ title: 'T', sourceEmailId: 'e1', projectId: 'p1' }))
-
-    expect(mockMatterMemory.create).not.toHaveBeenCalled()
-    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ matterId: 'matter-existing' }),
-    }))
-  })
-
-  it('skips matter linking when the project does not belong to the user', async () => {
-    mockProjectContext.findFirst.mockResolvedValue(null)
-
-    await POST(postRequest({ title: 'T', sourceEmailId: 'e1', projectId: 'p-foreign' }))
-
-    expect(mockMatterMemory.create).not.toHaveBeenCalled()
-    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ matterId: undefined }),
-    }))
   })
 
   it('writes startDate when provided', async () => {
     await POST(postRequest({ title: 'T', sourceEmailId: 'e1', startDate: '2026-05-10' }))
 
-    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ startDate: new Date('2026-05-10') }),
+    expect(mockCreateManualTask).toHaveBeenCalledWith(expect.objectContaining({
+      startDate: '2026-05-10',
     }))
   })
 })

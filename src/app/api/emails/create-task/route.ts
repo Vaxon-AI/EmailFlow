@@ -1,9 +1,9 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
 import * as emailRepo from '@/repositories/email-repo'
 import { getExtractRemaining, incrementExtractUsed, FREE_EXTRACT_LIMIT } from '@/lib/quota'
+import { createManualTask } from '@/services/manual-task-service'
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,65 +21,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If projectId provided, find or create a MatterMemory to link the task
-    let matterId: string | undefined
-    if (projectId) {
-      const project = await prisma.projectContext.findFirst({ where: { id: projectId, userId: user.id } })
-      if (project) {
-        let matter = await prisma.matterMemory.findFirst({ where: { userId: user.id, projectContextId: projectId } })
-        if (!matter) {
-          matter = await prisma.matterMemory.create({
-            data: {
-              userId: user.id,
-              projectContextId: projectId,
-              title: project.name,
-              summary: 'Manually assigned to this project',
-              status: 'open',
-              topic: 'other',
-            },
-          })
-        }
-        matterId = matter.id
-      }
-    }
-
-    // Create task
-    const task = await prisma.task.create({
-      data: {
-        userId: user.id,
-        title,
-        summary: summary || '',
-        status: 'active',
-        activeAt: new Date(),
-        urgency: urgency ?? 3,
-        impact: impact ?? 3,
-        priorityScore: priorityScore ?? 9,
-        userSetDeadline: userSetDeadline || undefined,
-        startDate: startDate ? new Date(startDate) : undefined,
-        actionItems: actionItems ? JSON.stringify(actionItems) : undefined,
-        source: 'manual',
-        matterId,
-      },
-    })
-
-    // Link emails
     const emailIds = linkedEmailIds && linkedEmailIds.length > 0
       ? linkedEmailIds
       : [sourceEmailId]
-
-    await Promise.all(
-      emailIds.map((emailId: string) =>
-        prisma.taskEmail.create({
-          data: {
-            taskId: task.id,
-            emailId,
-            relationship: 'source',
-          },
-        }).catch(() => {
-          // Ignore if email doesn't exist or already linked
-        })
-      )
-    )
+    const task = await createManualTask({
+      userId: user.id,
+      title,
+      summary,
+      actionItems,
+      userSetDeadline,
+      startDate,
+      urgency,
+      impact,
+      priorityScore,
+      projectId,
+      source: 'manual',
+      emailIds,
+      markLinkedEmailsActioned: false,
+      emptyActionItemsValue: undefined,
+    })
 
     // Manually creating a task is an explicit "I'm handling this" signal —
     // move every linked email into the Tracked bucket so it stops showing up

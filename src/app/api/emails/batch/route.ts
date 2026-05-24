@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import * as emailRepo from '@/repositories/email-repo'
 import { processEmail } from '@/workflows'
 import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
+import { ensureMatterForProject } from '@/services/project-matter-service'
 
 type BatchAction = 'reassign' | 'ignore' | 'generate_tasks' | 'classify'
 
@@ -25,27 +26,8 @@ export async function POST(req: Request) {
 
     if (action === 'reassign') {
       if (!projectId) return error('BAD_REQUEST', 'projectId is required for reassign', 400)
-
-      const project = await prisma.projectContext.findFirst({
-        where: { id: projectId, userId: user.id },
-      })
-      if (!project) return error('NOT_FOUND', 'Project not found', 404)
-
-      let matter = await prisma.matterMemory.findFirst({
-        where: { userId: user.id, projectContextId: projectId },
-      })
-      if (!matter) {
-        matter = await prisma.matterMemory.create({
-          data: {
-            userId: user.id,
-            projectContextId: projectId,
-            title: project.name,
-            summary: 'Manually assigned to this project',
-            status: 'open',
-            topic: 'other',
-          },
-        })
-      }
+      const matter = await ensureMatterForProject(user.id, projectId)
+      if (!matter) return error('NOT_FOUND', 'Project not found', 404)
 
       const emails = await prisma.email.findMany({
         where: { id: { in: ids }, userId: user.id },
@@ -62,7 +44,7 @@ export async function POST(req: Request) {
               userId: user.id,
               threadId,
               matterId: matter!.id,
-              title: project.name,
+              title: matter.projectName,
               summary: 'Manually assigned',
             },
           })

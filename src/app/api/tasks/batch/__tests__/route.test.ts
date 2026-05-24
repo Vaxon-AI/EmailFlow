@@ -13,14 +13,11 @@ vi.mock('@/lib/prisma', () => ({
     task: {
       updateMany: vi.fn(),
     },
-    projectContext: {
-      findFirst: vi.fn(),
-    },
-    matterMemory: {
-      findFirst: vi.fn(),
-      create: vi.fn(),
-    },
   },
+}))
+
+vi.mock('@/services/project-matter-service', () => ({
+  ensureMatterForProject: vi.fn(),
 }))
 
 vi.mock('@/repositories/task-repo', () => ({
@@ -33,14 +30,14 @@ vi.mock('@/repositories/stats-repo', () => ({
 
 import { getAuthUser } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
+import { ensureMatterForProject } from '@/services/project-matter-service'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockTaskUpdateMany = vi.mocked(prisma.task.updateMany)
-const mockProjectContext = vi.mocked(prisma.projectContext)
-const mockMatterMemory = vi.mocked(prisma.matterMemory)
+const mockEnsureMatterForProject = vi.mocked(ensureMatterForProject)
 const mockDeleteManyTasks = vi.mocked(taskRepo.deleteManyTasks)
 const mockInvalidateStatsCache = vi.mocked(invalidateStatsCache)
 
@@ -105,7 +102,7 @@ describe('POST /api/tasks/batch', () => {
   })
 
   it('returns 404 when project not found for reassign', async () => {
-    mockProjectContext.findFirst.mockResolvedValue(null)
+    mockEnsureMatterForProject.mockResolvedValue(null)
 
     const res = await POST(postRequest({ ids: ['task-1'], action: 'reassign', projectId: 'proj-404' }))
 
@@ -113,8 +110,7 @@ describe('POST /api/tasks/batch', () => {
   })
 
   it('reassigns tasks to project matter', async () => {
-    mockProjectContext.findFirst.mockResolvedValue({ id: 'proj-1', name: 'Alpha' } as never)
-    mockMatterMemory.findFirst.mockResolvedValue({ id: 'matter-1' } as never)
+    mockEnsureMatterForProject.mockResolvedValue({ id: 'matter-1', projectName: 'Alpha' } as never)
 
     const res = await POST(postRequest({ ids: ['task-1', 'task-2'], action: 'reassign', projectId: 'proj-1' }))
 

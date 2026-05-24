@@ -5,33 +5,12 @@ vi.mock('@/repositories/task-repo', () => ({
   findTasksPaginated: vi.fn(),
 }))
 
-vi.mock('@/repositories/email-repo', () => ({
-  bulkMarkActioned: vi.fn(),
-}))
-
 vi.mock('@/repositories/stats-repo', () => ({
   invalidateStatsCache: vi.fn(),
 }))
 
-vi.mock('@/lib/prisma', () => ({
-  prisma: {
-    projectContext: {
-      findFirst: vi.fn(),
-    },
-    matterMemory: {
-      findFirst: vi.fn(),
-      create: vi.fn(),
-    },
-    task: {
-      create: vi.fn(),
-    },
-    email: {
-      findMany: vi.fn(),
-    },
-    taskEmail: {
-      createMany: vi.fn(),
-    },
-  },
+vi.mock('@/services/manual-task-service', () => ({
+  createManualTask: vi.fn(),
 }))
 
 vi.mock('@/lib/api-helpers', async (importOriginal) => {
@@ -43,21 +22,15 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
 })
 
 import * as taskRepo from '@/repositories/task-repo'
-import * as emailRepo from '@/repositories/email-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
-import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/api-helpers'
+import { createManualTask } from '@/services/manual-task-service'
 import { GET, POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockFindTasksPaginated = vi.mocked(taskRepo.findTasksPaginated)
-const mockBulkMarkActioned = vi.mocked(emailRepo.bulkMarkActioned)
+const mockCreateManualTask = vi.mocked(createManualTask)
 const mockInvalidateStatsCache = vi.mocked(invalidateStatsCache)
-const mockProjectContext = vi.mocked(prisma.projectContext)
-const mockMatterMemory = vi.mocked(prisma.matterMemory)
-const mockTask = vi.mocked(prisma.task)
-const mockEmail = vi.mocked(prisma.email)
-const mockTaskEmail = vi.mocked(prisma.taskEmail)
 
 describe('GET /api/tasks', () => {
   beforeEach(() => {
@@ -137,15 +110,12 @@ describe('POST /api/tasks', () => {
         message: 'Title is required',
       },
     })
-    expect(mockTask.create).not.toHaveBeenCalled()
+    expect(mockCreateManualTask).not.toHaveBeenCalled()
   })
 
-  it('creates a linked matter for a valid project before creating the task', async () => {
+  it('delegates manual task creation with the normalized payload', async () => {
     const deadline = '2026-05-01T10:00:00.000Z'
-    mockProjectContext.findFirst.mockResolvedValue({ id: 'project-1', name: 'Matter A' } as never)
-    mockMatterMemory.findFirst.mockResolvedValue(null)
-    mockMatterMemory.create.mockResolvedValue({ id: 'matter-1' } as never)
-    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'Follow up' } as never)
+    mockCreateManualTask.mockResolvedValue({ id: 'task-1', title: 'Follow up' } as never)
 
     const req = new NextRequest('http://localhost/api/tasks', {
       method: 'POST',
@@ -165,43 +135,28 @@ describe('POST /api/tasks', () => {
 
     const res = await POST(req)
 
-    expect(mockProjectContext.findFirst).toHaveBeenCalledWith({
-      where: { id: 'project-1', userId: 'user-1' },
-    })
-    expect(mockMatterMemory.create).toHaveBeenCalledWith({
-      data: {
-        userId: 'user-1',
-        projectContextId: 'project-1',
-        title: 'Matter A',
-        summary: 'Manually assigned to this project',
-        status: 'open',
-        topic: 'other',
-      },
-    })
-    expect(mockTask.create).toHaveBeenCalledWith({
-      data: {
-        userId: 'user-1',
-        title: 'Follow up',
-        summary: 'Call the client',
-        status: 'active',
-        activeAt: expect.any(Date),
-        urgency: 4,
-        impact: 5,
-        priorityScore: 20,
-        actionItems: '["call"]',
-        userSetDeadline: new Date(deadline),
-        startDate: undefined,
-        source: 'manual',
-        matterId: 'matter-1',
-      },
+    expect(mockCreateManualTask).toHaveBeenCalledWith({
+      userId: 'user-1',
+      title: 'Follow up',
+      summary: 'Call the client',
+      actionItems: '["call"]',
+      userSetDeadline: deadline,
+      startDate: undefined,
+      urgency: 4,
+      impact: 5,
+      priorityScore: 20,
+      projectId: 'project-1',
+      source: 'manual',
+      emailIds: [],
+      markLinkedEmailsActioned: true,
+      emptyActionItemsValue: '[]',
     })
     expect(mockInvalidateStatsCache).toHaveBeenCalledWith('user-1')
     expect(res.status).toBe(200)
   })
 
-  it('creates a standalone task when the project does not belong to the user', async () => {
-    mockProjectContext.findFirst.mockResolvedValue(null)
-    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'Inbox zero' } as never)
+  it('passes through standalone tasks without project-specific branching', async () => {
+    mockCreateManualTask.mockResolvedValue({ id: 'task-1', title: 'Inbox zero' } as never)
 
     const req = new NextRequest('http://localhost/api/tasks', {
       method: 'POST',
@@ -211,29 +166,26 @@ describe('POST /api/tasks', () => {
 
     await POST(req)
 
-    expect(mockMatterMemory.findFirst).not.toHaveBeenCalled()
-    expect(mockMatterMemory.create).not.toHaveBeenCalled()
-    expect(mockTask.create).toHaveBeenCalledWith({
-      data: {
-        userId: 'user-1',
-        title: 'Inbox zero',
-        summary: '',
-        status: 'active',
-        activeAt: expect.any(Date),
-        urgency: 3,
-        impact: 3,
-        priorityScore: 9,
-        actionItems: '[]',
-        userSetDeadline: undefined,
-        startDate: undefined,
-        source: 'manual',
-        matterId: undefined,
-      },
+    expect(mockCreateManualTask).toHaveBeenCalledWith({
+      userId: 'user-1',
+      title: 'Inbox zero',
+      summary: undefined,
+      actionItems: undefined,
+      userSetDeadline: undefined,
+      startDate: undefined,
+      urgency: undefined,
+      impact: undefined,
+      priorityScore: undefined,
+      projectId: 'project-404',
+      source: 'manual',
+      emailIds: [],
+      markLinkedEmailsActioned: true,
+      emptyActionItemsValue: '[]',
     })
   })
 
   it('writes startDate when provided', async () => {
-    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'With start' } as never)
+    mockCreateManualTask.mockResolvedValue({ id: 'task-1', title: 'With start' } as never)
 
     const req = new NextRequest('http://localhost/api/tasks', {
       method: 'POST',
@@ -243,13 +195,13 @@ describe('POST /api/tasks', () => {
 
     await POST(req)
 
-    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ startDate: new Date('2026-05-10') }),
+    expect(mockCreateManualTask).toHaveBeenCalledWith(expect.objectContaining({
+      startDate: '2026-05-10',
     }))
   })
 
   it('keeps copy_text AI extraction tasks pending for review', async () => {
-    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'Drafted by AI' } as never)
+    mockCreateManualTask.mockResolvedValue({ id: 'task-1', title: 'Drafted by AI' } as never)
 
     const req = new NextRequest('http://localhost/api/tasks', {
       method: 'POST',
@@ -259,22 +211,13 @@ describe('POST /api/tasks', () => {
 
     await POST(req)
 
-    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        status: 'ai_suggestion',
-        activeAt: null,
-        source: 'copy_text',
-      }),
+    expect(mockCreateManualTask).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'copy_text',
     }))
   })
 
   it('links provided emailIds to the new task, scoped to the user', async () => {
-    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'Coordinate' } as never)
-    mockEmail.findMany.mockResolvedValue([
-      { id: 'email-1' },
-      { id: 'email-2' },
-    ] as never)
-    mockTaskEmail.createMany.mockResolvedValue({ count: 2 } as never)
+    mockCreateManualTask.mockResolvedValue({ id: 'task-1', title: 'Coordinate' } as never)
 
     const req = new NextRequest('http://localhost/api/tasks', {
       method: 'POST',
@@ -287,23 +230,15 @@ describe('POST /api/tasks', () => {
 
     const res = await POST(req)
 
-    expect(mockEmail.findMany).toHaveBeenCalledWith({
-      where: { id: { in: ['email-1', 'email-2', 'email-foreign'] }, userId: 'user-1' },
-      select: { id: true },
-    })
-    expect(mockTaskEmail.createMany).toHaveBeenCalledWith({
-      data: [
-        { taskId: 'task-1', emailId: 'email-1', relationship: 'source' },
-        { taskId: 'task-1', emailId: 'email-2', relationship: 'source' },
-      ],
-      skipDuplicates: true,
-    })
-    expect(mockBulkMarkActioned).toHaveBeenCalledWith('user-1', ['email-1', 'email-2'])
+    expect(mockCreateManualTask).toHaveBeenCalledWith(expect.objectContaining({
+      emailIds: ['email-1', 'email-2', 'email-foreign'],
+      markLinkedEmailsActioned: true,
+    }))
     expect(res.status).toBe(200)
   })
 
   it('skips email linking when emailIds is empty or omitted', async () => {
-    mockTask.create.mockResolvedValue({ id: 'task-1', title: 'Plain' } as never)
+    mockCreateManualTask.mockResolvedValue({ id: 'task-1', title: 'Plain' } as never)
 
     const req = new NextRequest('http://localhost/api/tasks', {
       method: 'POST',
@@ -313,7 +248,8 @@ describe('POST /api/tasks', () => {
 
     await POST(req)
 
-    expect(mockEmail.findMany).not.toHaveBeenCalled()
-    expect(mockTaskEmail.createMany).not.toHaveBeenCalled()
+    expect(mockCreateManualTask).toHaveBeenCalledWith(expect.objectContaining({
+      emailIds: [],
+    }))
   })
 })

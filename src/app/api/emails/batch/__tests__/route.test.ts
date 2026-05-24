@@ -22,13 +22,6 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    projectContext: {
-      findFirst: vi.fn(),
-    },
-    matterMemory: {
-      findFirst: vi.fn(),
-      create: vi.fn(),
-    },
     email: {
       findMany: vi.fn(),
     },
@@ -52,16 +45,20 @@ vi.mock('@/lib/quota', () => ({
   incrementExtractUsed: vi.fn(),
 }))
 
+vi.mock('@/services/project-matter-service', () => ({
+  ensureMatterForProject: vi.fn(),
+}))
+
 import { getAuthUser } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
+import { ensureMatterForProject } from '@/services/project-matter-service'
 import { bulkIgnoreEmails, bulkSetEmailBucket } from '@/repositories/email-repo'
 import { processEmail } from '@/workflows'
 import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 import { POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
-const mockProjectContext = vi.mocked(prisma.projectContext)
-const mockMatterMemory = vi.mocked(prisma.matterMemory)
+const mockEnsureMatterForProject = vi.mocked(ensureMatterForProject)
 const mockEmail = vi.mocked(prisma.email)
 const mockThreadMemory = vi.mocked(prisma.threadMemory)
 const mockBulkIgnore = vi.mocked(bulkIgnoreEmails)
@@ -103,7 +100,7 @@ describe('POST /api/emails/batch', () => {
   })
 
   it('returns 404 when project does not belong to user', async () => {
-    mockProjectContext.findFirst.mockResolvedValue(null)
+    mockEnsureMatterForProject.mockResolvedValue(null)
 
     const res = await POST(postRequest({ ids: ['email-1'], action: 'reassign', projectId: 'proj-404' }))
 
@@ -111,9 +108,7 @@ describe('POST /api/emails/batch', () => {
   })
 
   it('reassigns emails to project threads, creating matter if needed', async () => {
-    mockProjectContext.findFirst.mockResolvedValue({ id: 'proj-1', name: 'Project Alpha' } as never)
-    mockMatterMemory.findFirst.mockResolvedValue(null)
-    mockMatterMemory.create.mockResolvedValue({ id: 'matter-1' } as never)
+    mockEnsureMatterForProject.mockResolvedValue({ id: 'matter-1', projectName: 'Project Alpha' } as never)
     mockEmail.findMany.mockResolvedValue([
       { threadId: 'thread-1' },
       { threadId: 'thread-1' },
@@ -123,16 +118,7 @@ describe('POST /api/emails/batch', () => {
 
     const res = await POST(postRequest({ ids: ['email-1', 'email-2', 'email-3'], action: 'reassign', projectId: 'proj-1' }))
 
-    expect(mockMatterMemory.create).toHaveBeenCalledWith({
-      data: {
-        userId: 'user-1',
-        projectContextId: 'proj-1',
-        title: 'Project Alpha',
-        summary: 'Manually assigned to this project',
-        status: 'open',
-        topic: 'other',
-      },
-    })
+    expect(mockEnsureMatterForProject).toHaveBeenCalledWith('user-1', 'proj-1')
     expect(mockThreadMemory.upsert).toHaveBeenCalledTimes(2)
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -140,16 +126,17 @@ describe('POST /api/emails/batch', () => {
   })
 
   it('reuses existing matter when already linked to project', async () => {
-    mockProjectContext.findFirst.mockResolvedValue({ id: 'proj-1', name: 'Alpha' } as never)
-    mockMatterMemory.findFirst.mockResolvedValue({ id: 'matter-existing' } as never)
+    mockEnsureMatterForProject.mockResolvedValue({ id: 'matter-existing', projectName: 'Alpha' } as never)
     mockEmail.findMany.mockResolvedValue([{ threadId: 'thread-1' }] as never)
     mockThreadMemory.upsert.mockResolvedValue({} as never)
 
     await POST(postRequest({ ids: ['email-1'], action: 'reassign', projectId: 'proj-1' }))
 
-    expect(mockMatterMemory.create).not.toHaveBeenCalled()
     expect(mockThreadMemory.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: { matterId: 'matter-existing' } })
+      expect.objectContaining({
+        update: { matterId: 'matter-existing' },
+        create: expect.objectContaining({ title: 'Alpha' }),
+      })
     )
   })
 

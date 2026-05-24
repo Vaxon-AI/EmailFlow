@@ -3,6 +3,7 @@ import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpe
 import { prisma } from '@/lib/prisma'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
+import { ensureMatterForProject } from '@/services/project-matter-service'
 
 type BatchAction = 'complete' | 'activate' | 'delete' | 'reassign'
 
@@ -37,25 +38,8 @@ export async function POST(req: Request) {
 
       case 'reassign': {
         if (!projectId) return error('BAD_REQUEST', 'projectId is required for reassign', 400)
-        const project = await prisma.projectContext.findFirst({
-          where: { id: projectId, userId: user.id },
-        })
-        if (!project) return error('NOT_FOUND', 'Project not found', 404)
-        let matter = await prisma.matterMemory.findFirst({
-          where: { userId: user.id, projectContextId: projectId },
-        })
-        if (!matter) {
-          matter = await prisma.matterMemory.create({
-            data: {
-              userId: user.id,
-              projectContextId: projectId,
-              title: project.name,
-              summary: 'Manually assigned to this project',
-              status: 'open',
-              topic: 'other',
-            },
-          })
-        }
+        const matter = await ensureMatterForProject(user.id, projectId)
+        if (!matter) return error('NOT_FOUND', 'Project not found', 404)
         await prisma.task.updateMany({
           where: { id: { in: ids }, userId: user.id },
           data: { matterId: matter.id },
