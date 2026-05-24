@@ -200,4 +200,22 @@ export function renderEmailTabNewBadge(count: number, bucket: Tab) {
   )
 }
 
+export function formatEmailDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const days = Math.floor(diff / 86400000)
+
+  if (days === 0) {
+    return date.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })
+  }
+  if (days === 1) {
+    return 'Yesterday'
+  }
+  if (days < 7) {
+    return date.toLocaleDateString('en', { weekday: 'short' })
+  }
+  return date.toLocaleDateString('en', { month: 'short', day: 'numeric' })
+}
+
 export { EMAIL_DISPLAY_CONFIG }

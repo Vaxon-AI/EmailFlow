@@ -1,7 +1,6 @@
 'use client'
 
 import { useQueryClient, useMutation } from '@tanstack/react-query'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/page-header'
@@ -21,21 +20,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  CheckSquare, Paperclip, Mail,
-  Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap, Eye, EyeOff, Tag, CheckCircle2,
+  CheckSquare, Mail,
+  Search, CalendarIcon, X, ChevronDown, FolderOpen, Loader2, Zap, Eye, EyeOff, Tag,
 } from 'lucide-react'
-import { Suspense, useState, useMemo, useCallback } from 'react'
+import { Suspense, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
-import { getEmailDisplayState } from '@/lib/email-classification'
-import { getEmailLinkedTaskState } from '@/lib/email-linked-task-status'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { BatchReassignModal } from '@/components/batch-reassign-modal'
-import { InlineEditableName } from '@/components/inline-editable-name'
 import { useAuth } from '@/lib/use-auth'
 import { toast } from 'sonner'
 import {
@@ -43,16 +39,13 @@ import {
   type BatchStatus,
   type EmailBucket,
   type EmailItem,
-  EMAIL_DISPLAY_CONFIG,
-  type LinkedTask,
+  formatEmailDate,
   parseEmailTab,
   renderEmailTabNewBadge,
   type Tab,
   canGenerateTaskFromEmail,
-  isNeedsActionPageEmail,
-  isTrackedEmail,
-  isUncertainEmail,
 } from './email-page-types'
+import { EmailMatterView } from './email-matter-view'
 import { useEmailsPageData } from './use-emails-page-data'
 
 export default function EmailsPage() {
@@ -940,7 +933,7 @@ function SyncBatchModal({
                     </p>
                     <span className="text-[10px] text-gray-300">&middot;</span>
                     <p className="shrink-0 text-xs text-gray-400">
-                      {formatDate(email.receivedAt)}
+                      {formatEmailDate(email.receivedAt)}
                     </p>
                   </div>
                 </div>
@@ -964,447 +957,4 @@ function SyncBatchModal({
       </DialogContent>
     </Dialog>
   )
-}
-
-/* ========== 2-level collapsible: identity -> project ========== */
-
-type EmailProjectGroup = { id: string; name: string; items: EmailItem[] }
-type EmailIdentityGroup = { id: string; name: string; projects: EmailProjectGroup[] }
-
-function EmailMatterView({ emails, focusIdentityId, onReassign, selectedIds, onToggleSelect, onBulkToggle }: {
-  emails: EmailItem[]
-  focusIdentityId?: string
-  onReassign: (email: EmailItem) => void
-  selectedIds: Set<string>
-  onToggleSelect: (id: string) => void
-  onBulkToggle: (ids: string[], select: boolean) => void
-}) {
-  const queryClient = useQueryClient()
-  const [collapsedIdentities, setCollapsedIdentities] = useState<Set<string>>(new Set())
-  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set())
-  const [userHasToggled, setUserHasToggled] = useState(false)
-
-  const renameProject = async (projectId: string, name: string) => {
-    await fetch(`/api/projects/${projectId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    })
-    queryClient.invalidateQueries({ queryKey: ['emails'] })
-    queryClient.invalidateQueries({ queryKey: ['projects'] })
-  }
-
-  const renameIdentity = async (identityId: string, name: string) => {
-    await fetch(`/api/identities/${identityId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    })
-    queryClient.invalidateQueries({ queryKey: ['emails'] })
-    queryClient.invalidateQueries({ queryKey: ['identities'] })
-  }
-
-  const toggleIdentity = (id: string) => {
-    setUserHasToggled(true)
-    setCollapsedIdentities((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const toggleProject = (id: string) => {
-    setUserHasToggled(true)
-    setCollapsedProjects((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const { identityGroups, ungrouped } = useMemo(() => {
-    const ungrouped: EmailItem[] = []
-    const identityMap = new Map<string, { name: string; projectMap: Map<string, { name: string; items: EmailItem[] }> }>()
-
-    for (const email of emails) {
-      if (!email.project) { ungrouped.push(email); continue }
-      const iId = email.project.identity?.id || '__unassigned__'
-      const iName = email.project.identity?.name || 'Unassigned'
-      const pId = email.project.id
-      const pName = email.project.name
-      if (!identityMap.has(iId)) identityMap.set(iId, { name: iName, projectMap: new Map() })
-      const identity = identityMap.get(iId)!
-      if (!identity.projectMap.has(pId)) identity.projectMap.set(pId, { name: pName, items: [] })
-      identity.projectMap.get(pId)!.items.push(email)
-    }
-
-    const latestTime = (items: EmailItem[]) =>
-      Math.max(...items.map((e) => new Date(e.receivedAt).getTime()))
-
-    const identityGroups: EmailIdentityGroup[] = Array.from(identityMap.entries())
-      .map(([id, { name, projectMap }]) => {
-        const projects = Array.from(projectMap.entries())
-          .map(([pid, { name, items }]) => ({ id: pid, name, items }))
-          .sort((a, b) => latestTime(b.items) - latestTime(a.items))
-        return { id, name, projects }
-      })
-      .sort((a, b) => latestTime(b.projects.flatMap((p) => p.items)) - latestTime(a.projects.flatMap((p) => p.items)))
-
-    return { identityGroups, ungrouped }
-  }, [emails])
-
-  if (emails.length === 0) {
-    return (
-      <StatePanel
-        icon={<Mail className="h-5 w-5 text-gray-400" />}
-        title="No emails in this view"
-        description="Change the current filters to see more mail."
-      />
-    )
-  }
-
-  const attentionCount = (list: EmailItem[]) => list.filter(isNeedsActionPageEmail).length
-
-  const ungroupedIds = ungrouped.map((e) => e.id)
-  const allUngroupedSel = ungroupedIds.length > 0 && ungroupedIds.every((id) => selectedIds.has(id))
-  const someUngroupedSel = ungroupedIds.some((id) => selectedIds.has(id))
-
-  return (
-    <div className="space-y-2">
-      {identityGroups.map((identity) => {
-        const isIdentityCollapsed = !userHasToggled && focusIdentityId
-          ? identity.id !== focusIdentityId
-          : collapsedIdentities.has(identity.id)
-        const totalCount = identity.projects.reduce((s, p) => s + p.items.length, 0)
-        const totalAttention = identity.projects.reduce((s, p) => s + attentionCount(p.items), 0)
-        const identityEmailIds = identity.projects.flatMap((p) => p.items.map((e) => e.id))
-        const allIdentitySel = identityEmailIds.length > 0 && identityEmailIds.every((id) => selectedIds.has(id))
-        const someIdentitySel = identityEmailIds.some((id) => selectedIds.has(id))
-        return (
-          <div key={identity.id} className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-            {/* Identity row */}
-            <div className="group flex w-full items-center gap-2.5 px-4 py-3 transition-colors hover:bg-slate-50">
-              <input
-                type="checkbox"
-                checked={allIdentitySel}
-                ref={(el) => { if (el) el.indeterminate = someIdentitySel && !allIdentitySel }}
-                onChange={() => onBulkToggle(identityEmailIds, !allIdentitySel)}
-                onClick={(e) => e.stopPropagation()}
-                className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${allIdentitySel || someIdentitySel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-              />
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => toggleIdentity(identity.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    toggleIdentity(identity.id)
-                  }
-                }}
-                className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-              >
-                <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 ${isIdentityCollapsed ? '-rotate-90' : ''}`} />
-                <UserRound className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                {identity.id === '__unassigned__'
-                  ? <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">{identity.name}</span>
-                  : <InlineEditableName name={identity.name} className="text-xs font-semibold uppercase tracking-widest text-slate-500" onSave={(n) => renameIdentity(identity.id, n)} />
-                }
-                {totalAttention > 0 && (
-                  <span className="rounded-full bg-critical-50 px-2 py-0.5 text-[10px] font-semibold text-critical ring-1 ring-critical-100">
-                    {totalAttention} need action
-                  </span>
-                )}
-                <span className="ml-auto text-xs text-slate-400">{totalCount} email{totalCount !== 1 ? 's' : ''} shown</span>
-              </div>
-            </div>
-
-            {!isIdentityCollapsed && (
-              <div className="animate-soft-enter divide-y divide-slate-100 border-t border-slate-100">
-                {identity.projects.map((project) => {
-                  const isProjectCollapsed = collapsedProjects.has(project.id)
-                  const projectAttention = attentionCount(project.items)
-                  const projectEmailIds = project.items.map((e) => e.id)
-                  const allProjectSel = projectEmailIds.length > 0 && projectEmailIds.every((id) => selectedIds.has(id))
-                  const someProjectSel = projectEmailIds.some((id) => selectedIds.has(id))
-                  return (
-                    <div key={project.id}>
-                      {/* Project row */}
-                      <div className="group flex w-full items-center gap-2.5 px-5 py-2.5 transition-colors hover:bg-slate-50/70">
-                        <input
-                          type="checkbox"
-                          checked={allProjectSel}
-                          ref={(el) => { if (el) el.indeterminate = someProjectSel && !allProjectSel }}
-                          onChange={() => onBulkToggle(projectEmailIds, !allProjectSel)}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${allProjectSel || someProjectSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                        />
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => toggleProject(project.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              toggleProject(project.id)
-                            }
-                          }}
-                          className="flex flex-1 cursor-pointer items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                        >
-                          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform duration-150 ${isProjectCollapsed ? '-rotate-90' : ''}`} />
-                          <FolderOpen className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                          <InlineEditableName name={project.name} className="text-sm font-medium text-slate-700" onSave={(n) => renameProject(project.id, n)} />
-                          {projectAttention > 0 && (
-                            <span className="rounded-full bg-critical-50 px-1.5 py-0.5 text-[10px] font-semibold text-critical">
-                              {projectAttention}
-                            </span>
-                          )}
-                          <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">{project.items.length} shown</span>
-                        </div>
-                      </div>
-
-                      {!isProjectCollapsed && (
-                        <div className="animate-soft-enter space-y-1.5 px-4 pb-3 pt-1">
-                          {project.items.map((email) => (
-                            <EmailRow key={email.id} email={email} onReassign={onReassign} isSelected={selectedIds.has(email.id)} onToggleSelect={onToggleSelect} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )
-      })}
-
-      {ungrouped.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-          <div className="group flex items-center gap-2.5 px-4 py-3">
-            <input
-              type="checkbox"
-              checked={allUngroupedSel}
-              ref={(el) => { if (el) el.indeterminate = someUngroupedSel && !allUngroupedSel }}
-              onChange={() => onBulkToggle(ungroupedIds, !allUngroupedSel)}
-              className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${allUngroupedSel || someUngroupedSel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-            />
-            <FolderOpen className="h-3.5 w-3.5 text-slate-400" />
-            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">Uncategorized</span>
-            <span className="ml-auto text-xs text-slate-400">{ungrouped.length} email{ungrouped.length !== 1 ? 's' : ''}</span>
-          </div>
-          <div className="space-y-1.5 border-t border-slate-100 px-4 pb-3 pt-2">
-            {ungrouped.map((email) => (
-              <EmailRow key={email.id} email={email} onReassign={onReassign} isSelected={selectedIds.has(email.id)} onToggleSelect={onToggleSelect} />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-
-/* ========== EMAIL ROW - shows linked tasks as badges ========== */
-function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
-  email: EmailItem
-  compact?: boolean
-  onReassign?: (email: EmailItem) => void
-  isSelected?: boolean
-  onToggleSelect?: (id: string) => void
-}) {
-  const matter = email.matter ?? null
-  const linkedTasks = email.taskLinks?.map((link) => link.task).filter((t): t is LinkedTask => t != null) || []
-  const linkedTaskState = isTrackedEmail(email) ? getEmailLinkedTaskState(email.taskLinks) : null
-  const isCompletedTrackedEmail = linkedTaskState === 'completed'
-  // Left accent bar mirrors the bucket: red for action emails the user must
-  // triage, amber for uncertain emails AI couldn't classify. Tracked / FYI /
-  // ignored stay quiet (no bar) so the eye is drawn to the rows that matter.
-  const attentionBar = isNeedsActionPageEmail(email)
-    ? 'border-l-2 border-l-critical'
-    : isUncertainEmail(email)
-      ? 'border-l-2 border-l-warning'
-      : ''
-
-  return (
-    <div className={`group flex items-center gap-3 rounded-xl border px-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:shadow-sm ${
-      isSelected
-        ? 'border-brand-300 bg-brand-50/50'
-        : isCompletedTrackedEmail
-          ? 'border-slate-100 bg-slate-50/55 hover:border-slate-200 hover:bg-slate-50/80'
-          : `border-gray-200/80 bg-white hover:border-brand-200 hover:bg-brand-50/60 ${attentionBar}`
-    } ${compact ? 'py-2 opacity-75' : 'py-3'}`}>
-      {onToggleSelect && (
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={(e) => { e.stopPropagation(); onToggleSelect(email.id) }}
-          onClick={(e) => e.stopPropagation()}
-          className={`h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-600 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-        />
-      )}
-      <Link
-        href={`/dashboard/emails/${email.id}`}
-        className="flex items-center gap-3 min-w-0 flex-1"
-      >
-        <ClassBadge
-          classification={email.classification}
-          actioned={email.actioned}
-          processingStatus={email.processingStatus}
-          taskLinks={email.taskLinks}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className={`truncate font-medium ${isCompletedTrackedEmail ? 'text-slate-500' : 'text-gray-900'} ${compact ? 'text-xs' : 'text-sm'}`}>{email.subject}</p>
-            {email.hasAttachments && <Paperclip className="h-3 w-3 flex-shrink-0 text-gray-400" />}
-            {isCompletedTrackedEmail && <CompleteBadge />}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <p className={`truncate text-xs ${isCompletedTrackedEmail ? 'text-slate-400' : 'text-gray-500'}`}>{email.sender?.split('<')[0]?.trim()}</p>
-            {email.accountEmail && <AccountBadge account={email.accountEmail} />}
-            {matter ? (
-              <>
-                <span className="text-[10px] text-gray-300">&middot;</span>
-                <span className={`truncate text-[11px] ${isCompletedTrackedEmail ? 'text-slate-300' : 'text-gray-400'}`}>{matter.title}</span>
-              </>
-            ) : null}
-          </div>
-        </div>
-        <span className={`flex-shrink-0 text-xs ${isCompletedTrackedEmail ? 'text-slate-300' : 'text-gray-400'}`}>{formatDate(email.receivedAt)}</span>
-      </Link>
-
-      {/* Retention status badge */}
-      <RetentionBadge status={email.retentionStatus} />
-
-      {/* Linked task badges */}
-      {linkedTasks.length > 0 && (
-        <div className="flex items-center gap-1.5 shrink-0">
-          {linkedTasks.map((task) => (
-            <Link
-              key={task.id}
-              href={`/dashboard/tasks/${task.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-colors max-w-[140px] ${
-                task.status === 'completed'
-                  ? 'border-success-100 bg-success-50/70 text-success hover:bg-success-100/70'
-                  : 'border-brand-200 bg-brand-50 text-brand-600 hover:bg-brand-100'
-              }`}
-              title={task.title}
-            >
-              {task.status === 'completed'
-                ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
-                : <CheckSquare className="h-2.5 w-2.5 shrink-0" />}
-              <span className="truncate">{task.title}</span>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {/* Change project button (hover) */}
-      {onReassign && (
-        <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReassign(email) }}
-          title="Change project"
-          className="hidden group-hover:flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 transition-colors"
-        >
-          <FolderOpen className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
-  )
-}
-
-function CompleteBadge() {
-  return (
-    <Badge variant="outline" className="shrink-0 gap-1 border-success-100 bg-success-50/70 py-0 text-[10px] text-success">
-      <CheckCircle2 className="h-3 w-3" />
-      Complete
-    </Badge>
-  )
-}
-
-function RetentionBadge({ status }: { status?: string | null }) {
-  if (!status || status === 'ACTIVE') return null
-  const cfg = {
-    ARCHIVED:      { label: 'Archived',  className: 'border-gray-200 bg-gray-50 text-gray-500' },
-    METADATA_ONLY: { label: 'Body only', className: 'border-warning-200 bg-warning-100/60 text-warning-700' },
-    PURGED:        { label: 'Purged',    className: 'border-critical-100 bg-critical-50 text-critical' },
-  }[status] ?? null
-  if (!cfg) return null
-  return (
-    <Badge variant="outline" className={`shrink-0 text-[10px] py-0 ${cfg.className}`}>
-      {cfg.label}
-    </Badge>
-  )
-}
-
-/* ========== SHARED COMPONENTS ========== */
-function ClassBadge({
-  classification,
-  actioned,
-  processingStatus,
-  taskLinks,
-}: {
-  classification?: string | null
-  actioned?: boolean | null
-  processingStatus?: string | null
-  taskLinks?: EmailItem['taskLinks']
-}) {
-  const state = getEmailDisplayState({ classification, actioned, taskLinks })
-  if (state === 'tracked') return null
-
-  if (!classification && processingStatus === 'pending') {
-    return (
-      <Badge variant="outline" className="w-[104px] justify-center gap-1 text-[10px] bg-gray-50 text-gray-400 border-gray-200">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        Processing
-      </Badge>
-    )
-  }
-  // Only the two "attention" buckets earn a chip — Needs Action (red) and
-  // Unclassified. Tracked / FYI / Ignored rows stay clean: title aligns
-  // straight after the checkbox with no phantom spacer column.
-  if (state !== 'needs_action' && state !== 'uncertain' && state !== 'unclassified') {
-    return null
-  }
-  const cfg = EMAIL_DISPLAY_CONFIG[state]
-  const Icon = cfg.icon
-  return (
-    <Badge variant="outline" className={`w-[104px] justify-center gap-1 text-[10px] ${cfg.color}`}>
-      <Icon className="h-3 w-3" />
-      {cfg.label}
-    </Badge>
-  )
-}
-
-function AccountBadge({ account }: { account: string }) {
-  const domain = account.split('@')[1] || account
-  const isWork = !['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com'].includes(domain)
-
-  return (
-    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium ${
-      isWork ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-500'
-    }`}>
-      <Mail className="h-2.5 w-2.5" />
-      {domain}
-    </span>
-  )
-}
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  const days = Math.floor(diff / 86400000)
-
-  if (days === 0) {
-    return d.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })
-  } else if (days === 1) {
-    return 'Yesterday'
-  } else if (days < 7) {
-    return d.toLocaleDateString('en', { weekday: 'short' })
-  }
-  return d.toLocaleDateString('en', { month: 'short', day: 'numeric' })
 }
