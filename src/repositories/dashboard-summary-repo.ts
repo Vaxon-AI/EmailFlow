@@ -202,7 +202,7 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
   })
 }
 
-function resolveAllTimeSummaryData(currentPeriod: SummaryPeriodData, allTimeRaw: SummaryAllTimeData | null) {
+export function resolveAllTimeSummaryData(currentPeriod: SummaryPeriodData, allTimeRaw: SummaryAllTimeData | null) {
   return {
     emailGroups: allTimeRaw?.emailGroups ?? currentPeriod.emailGroups,
     linkedActionEmails: allTimeRaw?.linkedActionEmails ?? currentPeriod.linkedActionEmails,
@@ -725,7 +725,7 @@ function buildMomentum(
   return Array.from(buckets.values())
 }
 
-function buildFeedback(
+export function buildFeedback(
   view: DashboardView,
   completedInPeriod: number,
   openDueOrOverdueTasks: number,
@@ -807,7 +807,7 @@ function buildFeedback(
   }
 }
 
-function getPeriodRange(view: DashboardView, timezoneOffset: number, now: Date): DateRange | null {
+export function getPeriodRange(view: DashboardView, timezoneOffset: number, now: Date): DateRange | null {
   if (view === 'all') return null
 
   const localNow = new Date(now.getTime() - timezoneOffset * 60000)
@@ -824,7 +824,7 @@ function getPeriodRange(view: DashboardView, timezoneOffset: number, now: Date):
   return { start, end }
 }
 
-function getMomentumRange(view: DashboardView, momentumEnd: string | undefined, timezoneOffset: number, now: Date): DateRange {
+export function getMomentumRange(view: DashboardView, momentumEnd: string | undefined, timezoneOffset: number, now: Date): DateRange {
   const period = getPeriodRange(view, timezoneOffset, now)
   if (period) return period
 
