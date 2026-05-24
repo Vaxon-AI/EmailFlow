@@ -328,6 +328,7 @@ function EmailsContent() {
     batchStatus,
     batchBannerActive,
     isLoading,
+    isListLoading,
     meta,
     tabStateMap,
     accounts,
@@ -546,7 +547,7 @@ function EmailsContent() {
       </Dialog>
 
       {/* Content */}
-      {isLoading ? (
+      {isListLoading ? (
         <StatePanel
           loading
           title="Loading emails"

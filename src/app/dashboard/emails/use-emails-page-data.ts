@@ -90,13 +90,18 @@ export function useEmailsPageData(input: {
     queryClient,
   ])
 
-  const { data: res, isLoading } = useQuery({
+  const { data: res, isLoading, isFetching, isPlaceholderData } = useQuery({
     queryKey: ['emails', page, tab],
     queryFn: () =>
       fetch(`/api/emails?page=${page}&limit=2000&bucket=${tab}`).then((response) => response.json()),
     staleTime: CACHE_TIME.list,
     placeholderData: (previous) => previous,
   })
+  // While switching to a not-yet-cached tab, placeholderData keeps showing the
+  // previous tab's emails with isLoading=false. The list ends up empty after
+  // client-side filtering and looks like the click did nothing. Treat that
+  // window as loading so the user sees a spinner instead.
+  const isListLoading = isLoading || (isPlaceholderData && isFetching)
 
   const { data: tabStatesRes } = useQuery<{ data: EmailTabState[] }>({
     queryKey: ['emails', 'tab-states'],
@@ -192,6 +197,7 @@ export function useEmailsPageData(input: {
     batchBannerActive,
     res,
     isLoading,
+    isListLoading,
     emails,
     meta,
     tabStateMap,

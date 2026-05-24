@@ -123,14 +123,6 @@ export function isUnclassifiedEmail(email: EmailItem) {
   return false
 }
 
-export function matchesEmailTab(email: EmailItem, tab: Tab) {
-  if (tab === 'needs_action') return isNeedsActionPageEmail(email)
-  if (tab === 'tracked') return isTrackedEmail(email)
-  if (tab === 'fyi') return isFyiEmail(email)
-  if (tab === 'unclassified') return isUnclassifiedEmail(email)
-  return isIgnoredEmail(email)
-}
-
 export function filterEmails(input: {
   emails: EmailItem[]
   tab: Tab
@@ -139,7 +131,10 @@ export function filterEmails(input: {
   dateRange?: DateRange
 }) {
   const { emails, tab, accountFilter, searchQuery, dateRange } = input
-  let result = emails.filter((email) => matchesEmailTab(email, tab))
+  // Trust the server's bucket filter. Re-filtering here would drop rows when
+  // TanStack Query briefly hands us the previous tab's placeholderData during
+  // a tab switch, flashing an empty state instead of a spinner.
+  let result = emails
 
   if (accountFilter !== 'all') {
     result = result.filter((email) => email.accountEmail === accountFilter)
