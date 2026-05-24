@@ -13,16 +13,16 @@ const ALLOWED_ATTRIBUTES = {
   img: ['src', 'alt', 'width', 'height'],
   td: ['colspan', 'rowspan'],
   th: ['colspan', 'rowspan'],
-} as const
+}
 
-const ALLOWED_SCHEMES = ['http', 'https', 'mailto'] as const
+const ALLOWED_SCHEMES = ['http', 'https', 'mailto']
 
 const TRANSFORM_TAGS = {
   a: sanitizeHtml.simpleTransform('a', {
     target: '_blank',
     rel: 'noopener noreferrer nofollow',
   }, true),
-} as const
+}
 
 export function sanitizeEmailHtml(html: string): string {
   return sanitizeHtml(html, {
