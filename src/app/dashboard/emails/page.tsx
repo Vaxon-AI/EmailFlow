@@ -1597,6 +1597,7 @@ function EmailRow({ email, compact, onReassign, isSelected, onToggleSelect }: {
           classification={email.classification}
           actioned={email.actioned}
           processingStatus={email.processingStatus}
+          taskLinks={email.taskLinks}
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -1688,11 +1689,16 @@ function ClassBadge({
   classification,
   actioned,
   processingStatus,
+  taskLinks,
 }: {
   classification?: string | null
   actioned?: boolean | null
   processingStatus?: string | null
+  taskLinks?: EmailItem['taskLinks']
 }) {
+  const state = getEmailDisplayState({ classification, actioned, taskLinks })
+  if (state === 'tracked') return null
+
   if (!classification && processingStatus === 'pending') {
     return (
       <Badge variant="outline" className="w-[104px] justify-center gap-1 text-[10px] bg-gray-50 text-gray-400 border-gray-200">
@@ -1704,7 +1710,6 @@ function ClassBadge({
   // Only the two "attention" buckets earn a chip — Needs Action (red) and
   // Unclassified. Tracked / FYI / Ignored rows stay clean: title aligns
   // straight after the checkbox with no phantom spacer column.
-  const state = getEmailDisplayState({ classification, actioned })
   if (state !== 'needs_action' && state !== 'uncertain' && state !== 'unclassified') {
     return null
   }
