@@ -54,6 +54,64 @@ function expiresAtFrom(now: Date, ttlMs: number) {
   return new Date(now.getTime() + ttlMs)
 }
 
+async function invalidateExistingChallenges(userId: string, action: StepUpAction) {
+  await prisma.stepUpChallenge.updateMany({
+    where: { userId, action, usedAt: null },
+    data: { usedAt: new Date() },
+  })
+}
+
+async function assertValidEmailChallenge(
+  userId: string,
+  code: string,
+  action: StepUpAction,
+) {
+  const now = new Date()
+  const challenge = await prisma.stepUpChallenge.findFirst({
+    where: {
+      userId,
+      action,
+      otpHash: sha256(code),
+      usedAt: null,
+    },
+  })
+
+  if (!challenge) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid verification code.', 401)
+  }
+
+  if (challenge.expiresAt <= now) {
+    throw new AppError('CODE_EXPIRED', 'Your verification code has expired. Please request a new one.', 401)
+  }
+
+  return { challenge, now }
+}
+
+function assertConsumableStepUpToken(
+  token: {
+    id: string
+    userId: string
+    action: string
+    expiresAt: Date
+    usedAt: Date | null
+  } | null,
+  userId: string,
+  action: StepUpAction,
+  now: Date,
+) {
+  if (!token || token.userId !== userId || token.action !== action) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid step-up verification. Please verify again.', 403)
+  }
+
+  if (token.usedAt !== null) {
+    throw new AppError('VALIDATION_ERROR', 'This verification has already been used. Please verify again.', 403)
+  }
+
+  if (token.expiresAt <= now) {
+    throw new AppError('CODE_EXPIRED', 'Your verification has expired. Please verify again.', 403)
+  }
+}
+
 async function issueStepUpToken(userId: string, action: StepUpAction): Promise<string> {
   const rawToken = generateRawToken()
   const now = new Date()
@@ -90,10 +148,7 @@ export async function requestStepUp(
   }
 
   // Email OTP path — invalidate any existing challenges for this action first
-  await prisma.stepUpChallenge.updateMany({
-    where: { userId, action, usedAt: null },
-    data: { usedAt: new Date() },
-  })
+  await invalidateExistingChallenges(userId, action)
 
   const otp = generateOtp()
   const now = new Date()
@@ -149,23 +204,7 @@ export async function verifyStepUp(
     if (!result.valid) throw new Error('Invalid authenticator code')
   } else {
     // Email OTP path
-    const now = new Date()
-    const challenge = await prisma.stepUpChallenge.findFirst({
-      where: {
-        userId,
-        action,
-        otpHash: sha256(code),
-        usedAt: null,
-      },
-    })
-
-    if (!challenge) {
-      throw new AppError('VALIDATION_ERROR', 'Invalid verification code.', 401)
-    }
-
-    if (challenge.expiresAt <= now) {
-      throw new AppError('CODE_EXPIRED', 'Your verification code has expired. Please request a new one.', 401)
-    }
+    const { challenge, now } = await assertValidEmailChallenge(userId, code, action)
 
     // Mark OTP challenge as used
     await prisma.stepUpChallenge.update({
@@ -195,24 +234,11 @@ export async function consumeStepUpToken(
     select: { id: true, userId: true, action: true, expiresAt: true, usedAt: true },
   })
 
-  if (
-    !token ||
-    token.userId !== userId ||
-    token.action !== action
-  ) {
-    throw new AppError('VALIDATION_ERROR', 'Invalid step-up verification. Please verify again.', 403)
-  }
-
-  if (token.usedAt !== null) {
-    throw new AppError('VALIDATION_ERROR', 'This verification has already been used. Please verify again.', 403)
-  }
-
-  if (token.expiresAt <= now) {
-    throw new AppError('CODE_EXPIRED', 'Your verification has expired. Please verify again.', 403)
-  }
+  assertConsumableStepUpToken(token, userId, action, now)
+  const consumableToken = token!
 
   await prisma.stepUpToken.update({
-    where: { id: token.id },
+    where: { id: consumableToken.id },
     data: { usedAt: now },
   })
 }

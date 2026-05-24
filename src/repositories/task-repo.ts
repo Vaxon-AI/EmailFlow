@@ -26,6 +26,39 @@ export type TaskTabState = {
   lastSeenAt: Date | null
 }
 
+function activeTaskTimestamp(status: CreateTaskData['status']) {
+  return status === 'active' ? new Date() : null
+}
+
+function toTaskDeadline(value: string | null | undefined) {
+  return value ? new Date(value) : null
+}
+
+function buildCreateTaskPayload(data: CreateTaskData): Prisma.TaskUncheckedCreateInput {
+  return {
+    userId: data.userId,
+    title: data.extraction.title,
+    summary: data.extraction.summary,
+    actionItems: JSON.stringify(data.extraction.actionItems),
+    status: data.status ?? 'ai_suggestion',
+    source: 'ai_auto',
+    activeAt: activeTaskTimestamp(data.status),
+
+    urgency: data.priority.urgency,
+    impact: data.priority.impact,
+    priorityScore: data.priority.combinedScore,
+    priorityReason: data.priority.reasoning,
+
+    explicitDeadline: toTaskDeadline(data.extraction.explicitDeadline),
+    inferredDeadline: toTaskDeadline(data.extraction.inferredDeadline),
+    deadlineConfidence: data.extraction.deadlineConfidence,
+  }
+}
+
+function activeTaskListWhere(userId: string): Prisma.TaskWhereInput {
+  return { userId, archivedAt: null }
+}
+
 export function taskTabWhere(bucket: TaskTabBucket): Prisma.TaskWhereInput {
   const where: Prisma.TaskWhereInput = { archivedAt: null }
   if (bucket === 'all') where.status = { in: ['ai_suggestion', 'active'] }
@@ -91,28 +124,7 @@ export async function markTaskTabSeen(userId: string, bucket: TaskTabBucket) {
 export async function createTask(data: CreateTaskData) {
   try {
   const task = await prisma.task.create({
-    data: {
-      userId: data.userId,
-      title: data.extraction.title,
-      summary: data.extraction.summary,
-      actionItems: JSON.stringify(data.extraction.actionItems),
-      status: data.status ?? 'ai_suggestion',
-      source: 'ai_auto',
-      activeAt: data.status === 'active' ? new Date() : null,
-
-      urgency: data.priority.urgency,
-      impact: data.priority.impact,
-      priorityScore: data.priority.combinedScore,
-      priorityReason: data.priority.reasoning,
-
-      explicitDeadline: data.extraction.explicitDeadline
-        ? new Date(data.extraction.explicitDeadline)
-        : null,
-      inferredDeadline: data.extraction.inferredDeadline
-        ? new Date(data.extraction.inferredDeadline)
-        : null,
-      deadlineConfidence: data.extraction.deadlineConfidence,
-    },
+    data: buildCreateTaskPayload(data),
   })
 
   // Link task to source email
@@ -155,7 +167,7 @@ export async function findTasksPaginated(
   }
 ) {
   // Hide soft-archived tasks from list views; they remain accessible by id and via email detail.
-  const where: Prisma.TaskWhereInput = { userId, archivedAt: null }
+  const where: Prisma.TaskWhereInput = activeTaskListWhere(userId)
   if (options.status) {
     where.status = options.status
   } else if (options.scope === 'open') {
@@ -451,8 +463,7 @@ export async function findTasksByDateRange(
 ) {
   return prisma.task.findMany({
     where: {
-      userId,
-      archivedAt: null,
+      ...activeTaskListWhere(userId),
       createdAt: { gte: dateRange.start, lt: dateRange.end },
     },
     orderBy: { priorityScore: 'desc' },

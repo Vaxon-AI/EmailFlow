@@ -9,6 +9,67 @@ import { prisma } from '@/lib/prisma'
 import type { ProtectionRuleType, Prisma } from '@prisma/client'
 import type { EmailSnapshot, PolicySnapshot, ProtectionRuleSnapshot } from '@/lib/retention-engine'
 
+const RETENTION_TASK_LINK_SELECT = {
+  select: {
+    task: {
+      select: { status: true, completedAt: true },
+    },
+  },
+} as const
+
+function toProtectionRuleSnapshot(row: { ruleType: ProtectionRuleType; value: string }): ProtectionRuleSnapshot {
+  return { ruleType: row.ruleType, value: row.value }
+}
+
+function earliestCompletedTaskAt(taskLinks: Array<{ task: { status: string; completedAt: Date | null } }>): Date | null {
+  const completedDates = taskLinks
+    .filter((taskLink) => taskLink.task.status === 'completed' && taskLink.task.completedAt !== null)
+    .map((taskLink) => taskLink.task.completedAt as Date)
+
+  return completedDates.length > 0
+    ? completedDates.reduce((earliest, date) => (date < earliest ? date : earliest))
+    : null
+}
+
+function toEmailSnapshot(email: {
+  id: string
+  retentionStatus: EmailSnapshot['retentionStatus']
+  receivedAt: Date
+  sender: string
+  labels: string
+  archivedAt: Date | null
+  metadataOnlyAt: Date | null
+  restorableUntil: Date | null
+  taskLinks: Array<{ task: { status: string; completedAt: Date | null } }>
+}): EmailSnapshot {
+  return {
+    id: email.id,
+    retentionStatus: email.retentionStatus,
+    receivedAt: email.receivedAt,
+    sender: email.sender,
+    labels: email.labels,
+    archivedAt: email.archivedAt,
+    metadataOnlyAt: email.metadataOnlyAt,
+    restorableUntil: email.restorableUntil,
+    completedTaskAt: earliestCompletedTaskAt(email.taskLinks),
+  }
+}
+
+function retentionDeleteCutoff(gracePeriodDays: number, now = Date.now()): Date {
+  return new Date(now - gracePeriodDays * 24 * 60 * 60 * 1000)
+}
+
+function deletedEmailMarkerData(
+  userId: string,
+  candidates: Array<{ accountId: string | null; providerMessageId: string }>
+) {
+  return candidates.map((email) => ({
+    userId,
+    accountId: email.accountId,
+    providerMessageId: email.providerMessageId,
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // Policy
 // ---------------------------------------------------------------------------
@@ -80,7 +141,7 @@ export async function getProtectionRules(userId: string): Promise<ProtectionRule
     where: { userId },
     orderBy: { createdAt: 'asc' },
   })
-  return rules.map((r) => ({ ruleType: r.ruleType, value: r.value }))
+  return rules.map(toProtectionRuleSnapshot)
 }
 
 /** Returns full rows (including id) for the settings API. */
@@ -134,40 +195,12 @@ export async function getEmailsForRetentionCheck(userId: string): Promise<EmailS
       archivedAt: true,
       metadataOnlyAt: true,
       restorableUntil: true,
-      taskLinks: {
-        select: {
-          task: {
-            select: { status: true, completedAt: true },
-          },
-        },
-      },
+      taskLinks: RETENTION_TASK_LINK_SELECT,
     },
     orderBy: { receivedAt: 'asc' },
   })
 
-  return emails.map((email) => {
-    // Resolve completedTaskAt: earliest completedAt among completed tasks
-    const completedDates = email.taskLinks
-      .filter((tl) => tl.task.status === 'completed' && tl.task.completedAt !== null)
-      .map((tl) => tl.task.completedAt as Date)
-
-    const completedTaskAt =
-      completedDates.length > 0
-        ? completedDates.reduce((earliest, d) => (d < earliest ? d : earliest))
-        : null
-
-    return {
-      id: email.id,
-      retentionStatus: email.retentionStatus,
-      receivedAt: email.receivedAt,
-      sender: email.sender,
-      labels: email.labels,
-      archivedAt: email.archivedAt,
-      metadataOnlyAt: email.metadataOnlyAt,
-      restorableUntil: email.restorableUntil,
-      completedTaskAt,
-    }
-  })
+  return emails.map(toEmailSnapshot)
 }
 
 // ---------------------------------------------------------------------------
@@ -250,7 +283,7 @@ export async function purgeEmails(emailIds: string[], reason: string) {
  * Returns the number of email rows deleted.
  */
 export async function deleteEmailRows(userId: string, gracePeriodDays: number): Promise<number> {
-  const cutoff = new Date(Date.now() - gracePeriodDays * 24 * 60 * 60 * 1000)
+  const cutoff = retentionDeleteCutoff(gracePeriodDays)
   const candidates = await prisma.email.findMany({
     where: {
       userId,
@@ -262,11 +295,7 @@ export async function deleteEmailRows(userId: string, gracePeriodDays: number): 
   if (candidates.length === 0) return 0
 
   await prisma.deletedEmailMarker.createMany({
-    data: candidates.map((e) => ({
-      userId,
-      accountId: e.accountId,
-      providerMessageId: e.providerMessageId,
-    })),
+    data: deletedEmailMarkerData(userId, candidates),
     skipDuplicates: true,
   })
 

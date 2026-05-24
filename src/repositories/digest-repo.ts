@@ -14,13 +14,39 @@ export interface CreateDigestData {
   isPreview?: boolean
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+function periodLengthDays(period: string) {
+  return period === 'weekly' ? 7 : 1
+}
+
 function periodEndExclusive(period: string, periodStart: Date) {
-  const days = period === 'weekly' ? 7 : 1
-  return new Date(periodStart.getTime() + days * 24 * 60 * 60 * 1000)
+  return new Date(periodStart.getTime() + periodLengthDays(period) * MS_PER_DAY)
+}
+
+function serializeDigestStats(stats: Record<string, number>) {
+  return JSON.stringify(stats)
+}
+
+function buildDigestWriteData(data: CreateDigestData, isPreview: boolean) {
+  return {
+    userId: data.userId,
+    period: data.period,
+    periodStart: data.periodStart,
+    periodEnd: data.periodEnd,
+    content: data.content,
+    stats: serializeDigestStats(data.stats),
+    isPreview,
+  }
+}
+
+function retentionCutoff(retentionDays: number) {
+  return new Date(Date.now() - retentionDays * MS_PER_DAY)
 }
 
 export async function createDigest(data: CreateDigestData) {
   const isPreview = data.isPreview ?? false
+  const digestWriteData = buildDigestWriteData(data, isPreview)
   const existingDigests = await prisma.digest.findMany({
     where: {
       userId: data.userId,
@@ -39,11 +65,7 @@ export async function createDigest(data: CreateDigestData) {
       prisma.digest.update({
         where: { id: existing.id },
         data: {
-          periodStart: data.periodStart,
-          periodEnd: data.periodEnd,
-          content: data.content,
-          stats: JSON.stringify(data.stats),
-          isPreview,
+          ...digestWriteData,
           createdAt: new Date(),
         },
       }),
@@ -56,15 +78,7 @@ export async function createDigest(data: CreateDigestData) {
   }
 
   return prisma.digest.create({
-    data: {
-      userId: data.userId,
-      period: data.period,
-      periodStart: data.periodStart,
-      periodEnd: data.periodEnd,
-      content: data.content,
-      stats: JSON.stringify(data.stats),
-      isPreview,
-    },
+    data: digestWriteData,
   })
 }
 
@@ -90,10 +104,8 @@ export async function deleteExpiredDigests(
   dailyRetentionDays: number,
   weeklyRetentionDays: number
 ): Promise<{ dailyDeleted: number; weeklyDeleted: number }> {
-  const now = Date.now()
-  const dayMs = 24 * 60 * 60 * 1000
-  const dailyCutoff = new Date(now - dailyRetentionDays * dayMs)
-  const weeklyCutoff = new Date(now - weeklyRetentionDays * dayMs)
+  const dailyCutoff = retentionCutoff(dailyRetentionDays)
+  const weeklyCutoff = retentionCutoff(weeklyRetentionDays)
 
   const [daily, weekly] = await prisma.$transaction([
     prisma.digest.deleteMany({

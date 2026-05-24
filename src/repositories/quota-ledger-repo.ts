@@ -20,9 +20,32 @@ export interface InheritedQuota {
 }
 
 type DbClient = Prisma.TransactionClient | typeof prisma
+type QuotaFields = InheritedQuota
+
+const ZERO_QUOTA_COUNTS = {
+  classifyUsed: 0,
+  extractUsed: 0,
+  pasteTextUsed: 0,
+} satisfies Omit<InheritedQuota, 'quotaResetAt'>
 
 function normalize(value: string): string {
   return value.trim().toLowerCase()
+}
+
+function zeroInheritedQuota(): InheritedQuota {
+  return {
+    ...ZERO_QUOTA_COUNTS,
+    quotaResetAt: new Date(),
+  }
+}
+
+function toInheritedQuota(value: QuotaFields): InheritedQuota {
+  return {
+    classifyUsed: value.classifyUsed,
+    extractUsed: value.extractUsed,
+    pasteTextUsed: value.pasteTextUsed,
+    quotaResetAt: value.quotaResetAt,
+  }
 }
 
 function mergeQuota(a: InheritedQuota, b: InheritedQuota): InheritedQuota {
@@ -33,6 +56,19 @@ function mergeQuota(a: InheritedQuota, b: InheritedQuota): InheritedQuota {
     pasteTextUsed: Math.max(a.pasteTextUsed, b.pasteTextUsed),
     quotaResetAt: a.quotaResetAt < b.quotaResetAt ? a.quotaResetAt : b.quotaResetAt,
   }
+}
+
+function hasSameQuota(a: InheritedQuota, b: InheritedQuota): boolean {
+  return (
+    a.classifyUsed === b.classifyUsed &&
+    a.extractUsed === b.extractUsed &&
+    a.pasteTextUsed === b.pasteTextUsed &&
+    a.quotaResetAt.getTime() === b.quotaResetAt.getTime()
+  )
+}
+
+function otherIdentifierType(type: IdentifierType): IdentifierType {
+  return type === 'email' ? 'gmail' : 'email'
 }
 
 async function upsertOne(
@@ -48,12 +84,12 @@ async function upsertOne(
 
   if (!existing) {
     await db.quotaLedger.create({
-      data: { identifierType, identifier: normalized, ...current },
+      data: { identifierType, identifier: normalized, ...toInheritedQuota(current) },
     })
     return
   }
 
-  const merged = mergeQuota(current, existing)
+  const merged = mergeQuota(current, toInheritedQuota(existing))
   await db.quotaLedger.update({
     where: { identifierType_identifier: { identifierType, identifier: normalized } },
     data: merged,
@@ -84,12 +120,7 @@ export async function snapshotForUser(userId: string, db: DbClient = prisma): Pr
 
   if (!user) return
 
-  const current: InheritedQuota = {
-    classifyUsed: user.classifyUsed,
-    extractUsed: user.extractUsed,
-    pasteTextUsed: user.pasteTextUsed,
-    quotaResetAt: user.quotaResetAt,
-  }
+  const current = toInheritedQuota(user)
 
   await upsertOne(db, 'email', user.email, current)
 
@@ -121,49 +152,18 @@ export async function getInheritedQuotaForEmail(
 
   // Also check the other type — a user may have registered with email X and
   // separately OAuthed Gmail X. Both records should constrain the new account.
-  const otherType: IdentifierType = type === 'email' ? 'gmail' : 'email'
+  const otherType = otherIdentifierType(type)
   const otherRecord = await prisma.quotaLedger.findUnique({
     where: { identifierType_identifier: { identifierType: otherType, identifier: normalized } },
   })
 
-  const zero: InheritedQuota = {
-    classifyUsed: 0,
-    extractUsed: 0,
-    pasteTextUsed: 0,
-    quotaResetAt: new Date(),
-  }
+  if (!record && !otherRecord) return zeroInheritedQuota()
+  if (record && !otherRecord) return toInheritedQuota(record)
+  if (!record && otherRecord) return toInheritedQuota(otherRecord)
 
-  if (!record && !otherRecord) return zero
-  if (record && !otherRecord) {
-    return {
-      classifyUsed: record.classifyUsed,
-      extractUsed: record.extractUsed,
-      pasteTextUsed: record.pasteTextUsed,
-      quotaResetAt: record.quotaResetAt,
-    }
-  }
-  if (!record && otherRecord) {
-    return {
-      classifyUsed: otherRecord.classifyUsed,
-      extractUsed: otherRecord.extractUsed,
-      pasteTextUsed: otherRecord.pasteTextUsed,
-      quotaResetAt: otherRecord.quotaResetAt,
-    }
-  }
-  return mergeQuota(
-    {
-      classifyUsed: record!.classifyUsed,
-      extractUsed: record!.extractUsed,
-      pasteTextUsed: record!.pasteTextUsed,
-      quotaResetAt: record!.quotaResetAt,
-    },
-    {
-      classifyUsed: otherRecord!.classifyUsed,
-      extractUsed: otherRecord!.extractUsed,
-      pasteTextUsed: otherRecord!.pasteTextUsed,
-      quotaResetAt: otherRecord!.quotaResetAt,
-    },
-  )
+  const primaryRecord = record!
+  const secondaryRecord = otherRecord!
+  return mergeQuota(toInheritedQuota(primaryRecord), toInheritedQuota(secondaryRecord))
 }
 
 /**
@@ -196,13 +196,9 @@ export async function mergeGmailLedgerIntoUser(
   })
   if (!user) return
 
-  const merged = mergeQuota(user, ledger)
-  if (
-    merged.classifyUsed === user.classifyUsed &&
-    merged.extractUsed === user.extractUsed &&
-    merged.pasteTextUsed === user.pasteTextUsed &&
-    merged.quotaResetAt.getTime() === user.quotaResetAt.getTime()
-  ) {
+  const current = toInheritedQuota(user)
+  const merged = mergeQuota(current, toInheritedQuota(ledger))
+  if (hasSameQuota(merged, current)) {
     return
   }
   await db.user.update({ where: { id: userId }, data: merged })

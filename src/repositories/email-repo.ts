@@ -19,6 +19,35 @@ export type StoreEmailResult =
   | { email: StoredEmailRow; wasCreated: false; tombstoned?: false }
   | { email: null; wasCreated: false; tombstoned: true }
 
+function providerMessageWhere(data: StoreEmailData): Prisma.EmailWhereInput {
+  return {
+    userId: data.userId,
+    accountId: data.message.accountId ?? null,
+    providerMessageId: data.message.providerMessageId,
+  }
+}
+
+function buildStoredEmailFields(data: StoreEmailData) {
+  return {
+    userId: data.userId,
+    accountId: data.message.accountId ?? undefined,
+    providerMessageId: data.message.providerMessageId,
+    threadId: data.message.threadId,
+    accountEmail: data.message.accountEmail ?? '',
+    subject: data.message.subject,
+    sender: data.message.sender,
+    recipients: JSON.stringify(data.message.recipients),
+    bodyPreview: data.message.bodyPreview,
+    bodyFull: data.message.bodyFull,
+    bodyHtml: data.message.bodyHtml ?? null,
+    receivedAt: data.message.receivedAt,
+    labels: JSON.stringify(data.message.labels),
+    hasAttachments: data.message.hasAttachments,
+    processingStatus: 'pending' as const,
+    syncBatchId: data.syncBatchId,
+  }
+}
+
 export async function storeEmail(data: StoreEmailData): Promise<StoreEmailResult> {
   // Tombstone check: if this message was previously deleted by retention,
   // do not re-create the row. Sync paths should treat this as a skip.
@@ -36,30 +65,9 @@ export async function storeEmail(data: StoreEmailData): Promise<StoreEmailResult
     return { email: null, wasCreated: false, tombstoned: true }
   }
 
-  const fields = {
-    userId: data.userId,
-    accountId: data.message.accountId ?? undefined,
-    providerMessageId: data.message.providerMessageId,
-    threadId: data.message.threadId,
-    accountEmail: data.message.accountEmail ?? '',
-    subject: data.message.subject,
-    sender: data.message.sender,
-    recipients: JSON.stringify(data.message.recipients),
-    bodyPreview: data.message.bodyPreview,
-    bodyFull: data.message.bodyFull,
-    bodyHtml: data.message.bodyHtml ?? null,
-    receivedAt: data.message.receivedAt,
-    labels: JSON.stringify(data.message.labels),
-    hasAttachments: data.message.hasAttachments,
-    processingStatus: 'pending',
-    syncBatchId: data.syncBatchId,
-  }
+  const fields = buildStoredEmailFields(data)
   const existing = await prisma.email.findFirst({
-    where: {
-      userId: data.userId,
-      accountId: data.message.accountId ?? null,
-      providerMessageId: data.message.providerMessageId,
-    },
+    where: providerMessageWhere(data),
   })
   if (existing) {
     return { email: existing, wasCreated: false }
@@ -210,6 +218,15 @@ function emailBucketData(bucket: EmailBucket) {
   }
 }
 
+function buildEmailBucketUpdateData(bucket: EmailBucket) {
+  return {
+    ...emailBucketData(bucket),
+    classConfidence: null,
+    classReasoning: null,
+    processingStatus: 'done' as const,
+  }
+}
+
 export function emailBucketWhere(bucket: EmailTabBucket): Prisma.EmailWhereInput {
   switch (bucket) {
     case 'tracked':
@@ -310,15 +327,9 @@ export async function markEmailTabSeen(userId: string, bucket: EmailTabBucket) {
 }
 
 export async function setEmailBucket(emailId: string, bucket: EmailBucket) {
-  const data = emailBucketData(bucket)
   return prisma.email.update({
     where: { id: emailId },
-    data: {
-      ...data,
-      classConfidence: null,
-      classReasoning: null,
-      processingStatus: 'done',
-    },
+    data: buildEmailBucketUpdateData(bucket),
   })
 }
 
@@ -326,12 +337,7 @@ export async function bulkSetEmailBucket(userId: string, emailIds: string[], buc
   if (emailIds.length === 0) return { count: 0 }
   return prisma.email.updateMany({
     where: { id: { in: emailIds }, userId },
-    data: {
-      ...emailBucketData(bucket),
-      classConfidence: null,
-      classReasoning: null,
-      processingStatus: 'done',
-    },
+    data: buildEmailBucketUpdateData(bucket),
   })
 }
 
@@ -434,13 +440,7 @@ export async function dismissStaleReviewEmails(userId: string, olderThanDays: nu
 export async function markClassificationFailed(emailId: string) {
   return prisma.email.updateMany({
     where: { id: emailId, processingStatus: 'pending' },
-    data: {
-      classification: 'uncertain',
-      classConfidence: 0,
-      classReasoning: 'Classification failed - needs manual review',
-      processedAt: new Date(),
-      processingStatus: 'failed',
-    },
+    data: buildFailureResolutionData('Classification failed - needs manual review'),
   })
 }
 
@@ -491,15 +491,19 @@ export async function fixStuckEmails(userId: string | null, staleAfterMs = 2 * 6
   }
   const { count } = await prisma.email.updateMany({
     where,
-    data: {
-      classification: 'uncertain',
-      classConfidence: 0,
-      classReasoning: 'Classification timed out - auto-resolved',
-      processedAt: new Date(),
-      processingStatus: 'failed',
-    },
+    data: buildFailureResolutionData('Classification timed out - auto-resolved'),
   })
   return count
+}
+
+function buildFailureResolutionData(reason: string) {
+  return {
+    classification: 'uncertain' as const,
+    classConfidence: 0,
+    classReasoning: reason,
+    processedAt: new Date(),
+    processingStatus: 'failed' as const,
+  }
 }
 
 export async function findEmailsByClassification(
@@ -704,35 +708,45 @@ export async function findBatchStatus(userId: string, batchId: string) {
     orderBy: { receivedAt: 'desc' },
   })
 
-  const totalEmails = emails.length
-  const pendingEmails = emails.filter((e) => e.processingStatus === 'pending').length
-  const quotaSkippedEmails = emails.filter((e) => e.processingStatus === 'quota_skipped').length
-  const needsActionCount = emails.filter((e) => e.classification === 'action').length
-  const fyiCount = emails.filter((e) => e.classification === 'awareness').length
-  const ignoredCount = emails.filter((e) => e.classification === 'ignore').length
-  const uncertainCount = emails.filter((e) => e.classification === 'uncertain').length
-  const classifiedEmails = emails.filter((e) =>
-    e.processingStatus !== 'pending' &&
-    (e.classification !== null || e.processingStatus === 'quota_skipped')
-  ).length
+  const summary = summarizeBatchEmails(emails)
   // A batch with 0 emails means all were skipped (already stored) — treat as complete.
-  const isComplete = totalEmails === 0 || pendingEmails === 0
-  const actionEmails = emails.filter((e) => e.classification === 'action')
+  const isComplete = summary.totalEmails === 0 || summary.pendingEmails === 0
 
   return {
     isComplete,
-    totalEmails,
-    pendingEmails,
-    classifiedEmails,
-    needsActionCount,
-    fyiCount,
-    ignoredCount,
-    quotaSkippedEmails,
-    uncertainCount,
-    uncertainEmails: uncertainCount,
-    actionEmailCount: actionEmails.length,
+    totalEmails: summary.totalEmails,
+    pendingEmails: summary.pendingEmails,
+    classifiedEmails: summary.classifiedEmails,
+    needsActionCount: summary.needsActionCount,
+    fyiCount: summary.fyiCount,
+    ignoredCount: summary.ignoredCount,
+    quotaSkippedEmails: summary.quotaSkippedEmails,
+    uncertainCount: summary.uncertainCount,
+    uncertainEmails: summary.uncertainCount,
+    actionEmailCount: summary.actionEmails.length,
     // Only include email details when complete so the modal has stable data.
-    actionEmails: isComplete ? actionEmails : [],
+    actionEmails: isComplete ? summary.actionEmails : [],
   }
 }
 
+function summarizeBatchEmails(emails: Array<{
+  processingStatus: string | null
+  classification: string | null
+}>) {
+  const actionEmails = emails.filter((e) => e.classification === 'action')
+
+  return {
+    totalEmails: emails.length,
+    pendingEmails: emails.filter((e) => e.processingStatus === 'pending').length,
+    quotaSkippedEmails: emails.filter((e) => e.processingStatus === 'quota_skipped').length,
+    needsActionCount: actionEmails.length,
+    fyiCount: emails.filter((e) => e.classification === 'awareness').length,
+    ignoredCount: emails.filter((e) => e.classification === 'ignore').length,
+    uncertainCount: emails.filter((e) => e.classification === 'uncertain').length,
+    classifiedEmails: emails.filter((e) =>
+      e.processingStatus !== 'pending' &&
+      (e.classification !== null || e.processingStatus === 'quota_skipped')
+    ).length,
+    actionEmails,
+  }
+}

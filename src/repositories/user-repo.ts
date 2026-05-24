@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { getEnabledEmailProviderKeys } from '@/integrations/provider-registry'
 import { snapshotForUser } from '@/repositories/quota-ledger-repo'
 
@@ -6,11 +7,29 @@ import { snapshotForUser } from '@/repositories/quota-ledger-repo'
 // User Repository — all user database operations
 // ============================================================
 
-export async function updateLastSync(userId: string) {
+function enabledProviderFilter() {
+  return {
+    provider: { in: getEnabledEmailProviderKeys() },
+    syncEnabled: true,
+  }
+}
+
+function enabledProviderWhere(userId: string) {
+  return {
+    userId,
+    ...enabledProviderFilter(),
+  }
+}
+
+function updateUserField(userId: string, data: Prisma.UserUpdateInput) {
   return prisma.user.update({
     where: { id: userId },
-    data: { lastSyncAt: new Date() },
+    data,
   })
+}
+
+export async function updateLastSync(userId: string) {
+  return updateUserField(userId, { lastSyncAt: new Date() })
 }
 
 export async function updateAccountLastSync(accountId: string) {
@@ -21,7 +40,6 @@ export async function updateAccountLastSync(accountId: string) {
 }
 
 export async function getUserSyncInfo(userId: string) {
-  const providerKeys = getEnabledEmailProviderKeys()
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -33,7 +51,7 @@ export async function getUserSyncInfo(userId: string) {
       emailProviderReauthAt: true,
       emailProviderReauthProvider: true,
       accounts: {
-        where: { provider: { in: providerKeys }, syncEnabled: true },
+        where: enabledProviderFilter(),
         select: { id: true },
         take: 1,
       },
@@ -63,31 +81,19 @@ export async function findSyncEnabledUsersWithTimezone() {
 }
 
 export async function updateTimezone(userId: string, timezone: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { timezone },
-  })
+  return updateUserField(userId, { timezone })
 }
 
 export async function setManualReviewMode(userId: string, manualReviewMode: boolean) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { manualReviewMode },
-  })
+  return updateUserField(userId, { manualReviewMode })
 }
 
 export async function setHasSeenSyncSetup(userId: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { hasSeenSyncSetup: true },
-  })
+  return updateUserField(userId, { hasSeenSyncSetup: true })
 }
 
 export async function setSyncStartDate(userId: string, syncStartDate: Date) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { syncStartDate },
-  })
+  return updateUserField(userId, { syncStartDate })
 }
 
 export async function findPasswordHash(userId: string) {
@@ -98,17 +104,11 @@ export async function findPasswordHash(userId: string) {
 }
 
 export async function setPasswordHash(userId: string, passwordHash: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { passwordHash },
-  })
+  return updateUserField(userId, { passwordHash })
 }
 
 export async function setTotpSecret(userId: string, secret: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { totpEnabled: true, totpSecret: secret },
-  })
+  return updateUserField(userId, { totpEnabled: true, totpSecret: secret })
 }
 
 export async function findTotpEnabled(userId: string) {
@@ -119,10 +119,7 @@ export async function findTotpEnabled(userId: string) {
 }
 
 export async function disableTotp(userId: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { totpEnabled: false, totpSecret: null },
-  })
+  return updateUserField(userId, { totpEnabled: false, totpSecret: null })
 }
 
 export async function findByEmail(email: string) {
@@ -213,12 +210,9 @@ export async function deleteUserWithQuotaSnapshot(userId: string) {
 }
 
 export async function listSyncReadyAccounts(userId: string) {
-  const providerKeys = getEnabledEmailProviderKeys()
   return prisma.account.findMany({
     where: {
-      userId,
-      provider: { in: providerKeys },
-      syncEnabled: true,
+      ...enabledProviderWhere(userId),
       reauthRequired: false,
     },
     select: { id: true, provider: true },
@@ -233,9 +227,8 @@ export async function findSyncStateFields(userId: string) {
 }
 
 export async function listEnabledEmailAccounts(userId: string) {
-  const providerKeys = getEnabledEmailProviderKeys()
   return prisma.account.findMany({
-    where: { userId, provider: { in: providerKeys }, syncEnabled: true },
+    where: enabledProviderWhere(userId),
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,

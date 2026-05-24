@@ -8,6 +8,7 @@ import type { EmailMessage } from '@/integrations'
 // ============================================================
 
 export const MAX_RETRY_COUNT = 5
+const RETRYABLE_STATUSES = ['pending', 'retrying'] as const
 
 export interface FailedEmailRecord {
   providerMessageId: string
@@ -15,6 +16,38 @@ export interface FailedEmailRecord {
   receivedAt: Date | null
   subject: string | null
   sender: string | null
+}
+
+function failedEmailSyncKey(userId: string, providerMessageId: string) {
+  return { userId_providerMessageId: { userId, providerMessageId } }
+}
+
+function retryableStatusWhere(userId: string) {
+  return {
+    userId,
+    status: { in: [...RETRYABLE_STATUSES] },
+  }
+}
+
+function buildFailedEmailCreateData(
+  userId: string,
+  message: Pick<EmailMessage, 'providerMessageId' | 'threadId' | 'receivedAt' | 'subject' | 'sender'>,
+  errorReason: string,
+  now: Date,
+) {
+  return {
+    userId,
+    providerMessageId: message.providerMessageId,
+    threadId: message.threadId ?? null,
+    receivedAt: message.receivedAt ?? null,
+    subject: message.subject ?? null,
+    sender: message.sender ?? null,
+    errorReason,
+    retryCount: 0,
+    status: 'pending' as const,
+    firstFailedAt: now,
+    lastFailedAt: now,
+  }
 }
 
 /**
@@ -28,20 +61,8 @@ export async function recordFailedEmail(
 ) {
   const now = new Date()
   await prisma.failedEmailSync.upsert({
-    where: { userId_providerMessageId: { userId, providerMessageId: message.providerMessageId } },
-    create: {
-      userId,
-      providerMessageId: message.providerMessageId,
-      threadId: message.threadId ?? null,
-      receivedAt: message.receivedAt ?? null,
-      subject: message.subject ?? null,
-      sender: message.sender ?? null,
-      errorReason,
-      retryCount: 0,
-      status: 'pending',
-      firstFailedAt: now,
-      lastFailedAt: now,
-    },
+    where: failedEmailSyncKey(userId, message.providerMessageId),
+    create: buildFailedEmailCreateData(userId, message, errorReason, now),
     update: {
       errorReason,
       lastFailedAt: now,
@@ -56,10 +77,7 @@ export async function recordFailedEmail(
  */
 export async function loadPendingFailures(userId: string) {
   return prisma.failedEmailSync.findMany({
-    where: {
-      userId,
-      status: { in: ['pending', 'retrying'] },
-    },
+    where: retryableStatusWhere(userId),
     orderBy: { firstFailedAt: 'asc' },
   })
 }
@@ -69,7 +87,7 @@ export async function loadPendingFailures(userId: string) {
  */
 export async function resolveFailedEmail(userId: string, providerMessageId: string) {
   await prisma.failedEmailSync.update({
-    where: { userId_providerMessageId: { userId, providerMessageId } },
+    where: failedEmailSyncKey(userId, providerMessageId),
     data: { status: 'resolved', resolvedAt: new Date() },
   })
 }
@@ -80,7 +98,7 @@ export async function resolveFailedEmail(userId: string, providerMessageId: stri
  */
 export async function recordRetryFailure(userId: string, providerMessageId: string, errorReason: string) {
   const record = await prisma.failedEmailSync.findUnique({
-    where: { userId_providerMessageId: { userId, providerMessageId } },
+    where: failedEmailSyncKey(userId, providerMessageId),
     select: { retryCount: true },
   })
   if (!record) return
@@ -89,7 +107,7 @@ export async function recordRetryFailure(userId: string, providerMessageId: stri
   const isPermanent = newRetryCount >= MAX_RETRY_COUNT
 
   await prisma.failedEmailSync.update({
-    where: { userId_providerMessageId: { userId, providerMessageId } },
+    where: failedEmailSyncKey(userId, providerMessageId),
     data: {
       retryCount: newRetryCount,
       errorReason,
@@ -105,6 +123,6 @@ export async function recordRetryFailure(userId: string, providerMessageId: stri
  */
 export async function countPendingFailures(userId: string): Promise<number> {
   return prisma.failedEmailSync.count({
-    where: { userId, status: { in: ['pending', 'retrying'] } },
+    where: retryableStatusWhere(userId),
   })
 }

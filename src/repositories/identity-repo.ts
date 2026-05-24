@@ -21,6 +21,32 @@ export interface CreateIdentityInput {
   confidence?: number
 }
 
+const IDENTITY_CONFIRM_SELECT = { keywords: true, hints: true } as const
+
+function buildCreateIdentityData(userId: string, input: CreateIdentityInput) {
+  return {
+    userId,
+    name: input.name,
+    description: input.description ?? null,
+    keywords: normalizeStringArray(input.keywords),
+    hints: normalizeStringArray(input.hints),
+    confidence: input.confidence ?? 0.72,
+  }
+}
+
+function buildConfirmIdentityData(
+  current: { keywords: unknown; hints: unknown } | null,
+  input: { name?: string; description?: string | null; keywords?: string[]; hints?: string[] }
+) {
+  return {
+    name: input.name,
+    description: input.description,
+    keywords: mergeStringArrays(current?.keywords, input.keywords),
+    hints: mergeStringArrays(current?.hints, input.hints),
+    confidence: 1,
+  }
+}
+
 export async function findAllForUser(userId: string): Promise<UserIdentity[]> {
   const rows = await prisma.userIdentity.findMany({
     where: { userId, status: { not: 'archived' } },
@@ -45,14 +71,7 @@ export async function createSuggestion(userId: string, input: CreateIdentityInpu
   }
 
   const row = await prisma.userIdentity.create({
-    data: {
-      userId,
-      name: input.name,
-      description: input.description ?? null,
-      keywords: normalizeStringArray(input.keywords),
-      hints: normalizeStringArray(input.hints),
-      confidence: input.confidence ?? 0.72,
-    },
+    data: buildCreateIdentityData(userId, input),
   })
 
   return mapRow(row)
@@ -64,18 +83,12 @@ export async function confirmIdentity(
 ): Promise<UserIdentity> {
   const current = await prisma.userIdentity.findUnique({
     where: { id },
-    select: { keywords: true, hints: true },
+    select: IDENTITY_CONFIRM_SELECT,
   })
 
   const row = await prisma.userIdentity.update({
     where: { id },
-    data: {
-      name: input.name,
-      description: input.description,
-      keywords: mergeStringArrays(current?.keywords, input.keywords),
-      hints: mergeStringArrays(current?.hints, input.hints),
-      confidence: 1,
-    },
+    data: buildConfirmIdentityData(current, input),
   })
 
   return mapRow(row)

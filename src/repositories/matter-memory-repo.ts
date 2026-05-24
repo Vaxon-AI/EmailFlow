@@ -39,6 +39,48 @@ export type MatterMemory = {
 
 const CANDIDATE_WINDOW_DAYS = 60
 const MAX_CANDIDATES = 5
+const RECENT_CANDIDATE_LIMIT = 30
+const MATTER_WITH_PROJECT_INCLUDE = { projectContext: { include: { identity: true } } } as const
+const MATTER_PARTICIPANTS_SELECT = { participants: true } as const
+
+function candidateCutoff(now = Date.now()): Date {
+  return new Date(now - CANDIDATE_WINDOW_DAYS * 86_400_000)
+}
+
+function buildMatterFromThreadData(userId: string, thread: ThreadMemory) {
+  return {
+    userId,
+    title: thread.title,
+    topic: thread.topic,
+    summary: thread.summary,
+    status: thread.status,
+    nextAction: thread.nextAction,
+    lastEmailId: thread.lastEmailId,
+    lastMessageAt: thread.lastMessageAt,
+    lastClassification: thread.lastClassification,
+    participants: thread.participants,
+    keywords: extractKeywords(thread.title),
+    threadCount: 1,
+    emailCount: 1,
+  }
+}
+
+function buildMatterThreadUpdateData(
+  participants: string[],
+  thread: ThreadMemory,
+  increments: { threadCount?: { increment: 1 }; emailCount: { increment: 1 } }
+) {
+  return {
+    summary: thread.summary,
+    status: thread.status,
+    nextAction: thread.nextAction,
+    lastEmailId: thread.lastEmailId,
+    lastMessageAt: thread.lastMessageAt,
+    lastClassification: thread.lastClassification,
+    participants,
+    ...increments,
+  }
+}
 
 /**
  * Rule-based candidate filtering — returns matters that share
@@ -51,7 +93,7 @@ export async function findCandidates(
   userId: string,
   thread: { topic: string; participants: string[]; title: string }
 ): Promise<MatterMemory[]> {
-  const cutoff = new Date(Date.now() - CANDIDATE_WINDOW_DAYS * 86_400_000)
+  const cutoff = candidateCutoff()
 
   // Fetch recent non-completed matters (small result set in practice)
   const recent = await prisma.matterMemory.findMany({
@@ -61,7 +103,7 @@ export async function findCandidates(
       lastMessageAt: { gte: cutoff },
     },
     orderBy: { lastMessageAt: 'desc' },
-    take: 30,
+    take: RECENT_CANDIDATE_LIMIT,
   })
 
   if (recent.length === 0) return []
@@ -96,7 +138,7 @@ export async function findCandidates(
 export async function findById(matterId: string): Promise<MatterMemory | null> {
   const raw = await prisma.matterMemory.findUnique({
     where: { id: matterId },
-    include: { projectContext: { include: { identity: true } } },
+    include: MATTER_WITH_PROJECT_INCLUDE,
   })
   return raw ? mapRow(raw) : null
 }
@@ -106,7 +148,7 @@ export async function findAllForUserWithThreads(userId: string) {
     where: { userId },
     orderBy: { lastMessageAt: 'desc' },
     include: {
-      projectContext: { include: { identity: true } },
+      ...MATTER_WITH_PROJECT_INCLUDE,
       threads: { select: { threadId: true, linkedTaskId: true } },
     },
   })
@@ -122,22 +164,8 @@ export async function createFromThread(
   thread: ThreadMemory
 ): Promise<MatterMemory> {
   return mapRow(await prisma.matterMemory.create({
-    data: {
-      userId,
-      title: thread.title,
-      topic: thread.topic,
-      summary: thread.summary,
-      status: thread.status,
-      nextAction: thread.nextAction,
-      lastEmailId: thread.lastEmailId,
-      lastMessageAt: thread.lastMessageAt,
-      lastClassification: thread.lastClassification,
-      participants: thread.participants,
-      keywords: extractKeywords(thread.title),
-      threadCount: 1,
-      emailCount: 1, // the email that triggered this creation
-    },
-    include: { projectContext: { include: { identity: true } } },
+    data: buildMatterFromThreadData(userId, thread),
+    include: MATTER_WITH_PROJECT_INCLUDE,
   }))
 }
 
@@ -151,24 +179,17 @@ export async function updateFromThread(
 ): Promise<MatterMemory> {
   const matter = await prisma.matterMemory.findUnique({
     where: { id: matterId },
-    select: { participants: true },
+    select: MATTER_PARTICIPANTS_SELECT,
   })
 
   const mergedParticipants = mergeParticipants(matter?.participants as string[] | null, thread.participants)
 
   return mapRow(await prisma.matterMemory.update({
     where: { id: matterId },
-    data: {
-      summary: thread.summary,
-      status: thread.status,
-      nextAction: thread.nextAction,
-      lastEmailId: thread.lastEmailId,
-      lastMessageAt: thread.lastMessageAt,
-      lastClassification: thread.lastClassification,
-      participants: mergedParticipants,
+    data: buildMatterThreadUpdateData(mergedParticipants, thread, {
       emailCount: { increment: 1 },
-    },
-    include: { projectContext: { include: { identity: true } } },
+    }),
+    include: MATTER_WITH_PROJECT_INCLUDE,
   }))
 }
 
@@ -182,25 +203,18 @@ export async function mergeThread(
 ): Promise<MatterMemory> {
   const matter = await prisma.matterMemory.findUnique({
     where: { id: matterId },
-    select: { participants: true },
+    select: MATTER_PARTICIPANTS_SELECT,
   })
 
   const mergedParticipants = mergeParticipants(matter?.participants as string[] | null, thread.participants)
 
   return mapRow(await prisma.matterMemory.update({
     where: { id: matterId },
-    data: {
-      summary: thread.summary,
-      status: thread.status,
-      nextAction: thread.nextAction,
-      lastEmailId: thread.lastEmailId,
-      lastMessageAt: thread.lastMessageAt,
-      lastClassification: thread.lastClassification,
-      participants: mergedParticipants,
+    data: buildMatterThreadUpdateData(mergedParticipants, thread, {
       threadCount: { increment: 1 },
       emailCount: { increment: 1 },
-    },
-    include: { projectContext: { include: { identity: true } } },
+    }),
+    include: MATTER_WITH_PROJECT_INCLUDE,
   }))
 }
 
@@ -221,7 +235,7 @@ export async function setProjectContext(
   const row = await prisma.matterMemory.update({
     where: { id: matterId },
     data: { projectContextId },
-    include: { projectContext: { include: { identity: true } } },
+    include: MATTER_WITH_PROJECT_INCLUDE,
   })
 
   return mapRow(row)

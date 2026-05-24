@@ -16,25 +16,28 @@ export interface UpsertUserPreferenceInput {
   focusAreas: string[]
 }
 
+function buildPreferenceData(input: UpsertUserPreferenceInput) {
+  return {
+    roles: input.roles,
+    purposes: input.purposes,
+    focusAreas: input.focusAreas,
+  }
+}
+
 export async function findByUserId(userId: string): Promise<UserPreference | null> {
   const row = await prisma.userPreference.findUnique({ where: { userId } })
   return row ? mapRow(row) : null
 }
 
 export async function upsert(userId: string, input: UpsertUserPreferenceInput): Promise<UserPreference> {
+  const preferenceData = buildPreferenceData(input)
   const row = await prisma.userPreference.upsert({
     where: { userId },
     create: {
       userId,
-      roles: input.roles,
-      purposes: input.purposes,
-      focusAreas: input.focusAreas,
+      ...preferenceData,
     },
-    update: {
-      roles: input.roles,
-      purposes: input.purposes,
-      focusAreas: input.focusAreas,
-    },
+    update: preferenceData,
   })
   return mapRow(row)
 }
@@ -54,11 +57,22 @@ function mapRow(raw: {
   updatedAt: Date
 }): UserPreference {
   return {
-    id: raw.id,
-    userId: raw.userId,
+    ...pickBasePreferenceFields(raw),
     roles: asStringArray(raw.roles),
     purposes: asStringArray(raw.purposes),
     focusAreas: asStringArray(raw.focusAreas),
+  }
+}
+
+function pickBasePreferenceFields(raw: {
+  id: string
+  userId: string
+  createdAt: Date
+  updatedAt: Date
+}) {
+  return {
+    id: raw.id,
+    userId: raw.userId,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   }

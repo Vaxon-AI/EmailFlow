@@ -25,10 +25,45 @@ export interface CreateProjectInput {
   confidence?: number
 }
 
+const PROJECT_WITH_IDENTITY_INCLUDE = { identity: true } as const
+const PROJECT_CONFIRM_SELECT = { keywords: true, participants: true } as const
+
+function buildCreateProjectData(userId: string, input: CreateProjectInput) {
+  return {
+    userId,
+    identityId: input.identityId ?? null,
+    name: input.name,
+    description: input.description ?? null,
+    keywords: normalizeStringArray(input.keywords),
+    participants: normalizeStringArray(input.participants),
+    confidence: input.confidence ?? 0.72,
+  }
+}
+
+function buildConfirmProjectData(
+  current: { keywords: unknown; participants: unknown } | null,
+  input: {
+    name?: string
+    description?: string | null
+    keywords?: string[]
+    participants?: string[]
+    identityId?: string | null
+  }
+) {
+  return {
+    name: input.name,
+    description: input.description,
+    identityId: input.identityId,
+    keywords: mergeStringArrays(current?.keywords, input.keywords),
+    participants: mergeStringArrays(current?.participants, input.participants),
+    confidence: 1,
+  }
+}
+
 export async function findAllForUser(userId: string): Promise<ProjectContext[]> {
   const rows = await prisma.projectContext.findMany({
     where: { userId, status: { not: 'archived' } },
-    include: { identity: true },
+    include: PROJECT_WITH_IDENTITY_INCLUDE,
     orderBy: [{ confidence: 'desc' }, { updatedAt: 'desc' }],
   })
 
@@ -38,7 +73,7 @@ export async function findAllForUser(userId: string): Promise<ProjectContext[]> 
 export async function findById(id: string): Promise<ProjectContext | null> {
   const row = await prisma.projectContext.findUnique({
     where: { id },
-    include: { identity: true },
+    include: PROJECT_WITH_IDENTITY_INCLUDE,
   })
   return row ? mapRow(row) : null
 }
@@ -53,7 +88,7 @@ export async function findOwnedById(userId: string, projectId: string) {
 export async function createSuggestion(userId: string, input: CreateProjectInput): Promise<ProjectContext> {
   const existing = await prisma.projectContext.findUnique({
     where: { userId_name: { userId, name: input.name } },
-    include: { identity: true },
+    include: PROJECT_WITH_IDENTITY_INCLUDE,
   })
 
   if (existing) {
@@ -61,16 +96,8 @@ export async function createSuggestion(userId: string, input: CreateProjectInput
   }
 
   const row = await prisma.projectContext.create({
-    data: {
-      userId,
-      identityId: input.identityId ?? null,
-      name: input.name,
-      description: input.description ?? null,
-      keywords: normalizeStringArray(input.keywords),
-      participants: normalizeStringArray(input.participants),
-      confidence: input.confidence ?? 0.72,
-    },
-    include: { identity: true },
+    data: buildCreateProjectData(userId, input),
+    include: PROJECT_WITH_IDENTITY_INCLUDE,
   })
 
   return mapRow(row)
@@ -87,7 +114,7 @@ export async function assignIdentity(projectId: string, identityId: string): Pro
   const row = await prisma.projectContext.update({
     where: { id: projectId },
     data: { identityId },
-    include: { identity: true },
+    include: PROJECT_WITH_IDENTITY_INCLUDE,
   })
 
   return mapRow(row)
@@ -105,20 +132,13 @@ export async function confirmProject(
 ): Promise<ProjectContext> {
   const current = await prisma.projectContext.findUnique({
     where: { id },
-    select: { keywords: true, participants: true },
+    select: PROJECT_CONFIRM_SELECT,
   })
 
   const row = await prisma.projectContext.update({
     where: { id },
-    data: {
-      name: input.name,
-      description: input.description,
-      identityId: input.identityId,
-      keywords: mergeStringArrays(current?.keywords, input.keywords),
-      participants: mergeStringArrays(current?.participants, input.participants),
-      confidence: 1,
-    },
-    include: { identity: true },
+    data: buildConfirmProjectData(current, input),
+    include: PROJECT_WITH_IDENTITY_INCLUDE,
   })
 
   return mapRow(row)

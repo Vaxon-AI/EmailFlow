@@ -62,16 +62,17 @@ describe('COOKIE_NAME', () => {
 })
 
 describe('session cookie helpers', () => {
-  const originalNodeEnv = process.env.NODE_ENV
+  const env = process.env as Record<string, string | undefined>
+  const originalNodeEnv = env.NODE_ENV
 
   beforeEach(() => {
     vi.clearAllMocks()
-    process.env.NODE_ENV = 'test'
+    env.NODE_ENV = 'test'
     mockCookieStore.get.mockReturnValue(undefined)
   })
 
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv
+    env.NODE_ENV = originalNodeEnv
   })
 
   it('sets a session cookie without remember-me fields by default', async () => {
@@ -107,7 +108,7 @@ describe('session cookie helpers', () => {
   })
 
   it('uses secure cookies in production', async () => {
-    process.env.NODE_ENV = 'production'
+    env.NODE_ENV = 'production'
 
     await setSessionCookie('token-123')
 
