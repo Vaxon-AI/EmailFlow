@@ -25,7 +25,7 @@ import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { UpgradeModal } from '@/components/upgrade-modal'
 import { useAuth } from '@/lib/use-auth'
 import {
-  ArrowLeft, Mail, Paperclip, Clock, ArrowUpRight,
+  ArrowLeft, Mail, Paperclip, Clock, ArrowUpRight, ArrowDownLeft,
   CheckSquare, Sparkles, Shield, Plus, Tag, X,
   UserRound, ChevronRight, FolderOpen, Pencil, Loader2, Trash2,
   Copy, RefreshCw, Save, CheckCircle2, EyeOff,
@@ -472,6 +472,16 @@ export default function EmailDetailPage() {
   const senderName = email.sender?.split('<')[0]?.trim()
   const senderEmail = email.sender?.match(/<(.+?)>/)?.[1] || email.sender
   const senderInitial = (senderName || 'U')[0].toUpperCase()
+  // Gmail tags outgoing messages with the SENT label during sync; use it to
+  // distinguish authored mail from received mail in the header.
+  const isSent = (() => {
+    try {
+      const parsed = JSON.parse(email.labels || '[]')
+      return Array.isArray(parsed) && parsed.includes('SENT')
+    } catch {
+      return false
+    }
+  })()
   const project = email.project ?? null
   const matter = email.matter ?? null
   const taskLinks = (email.taskLinks ?? []) as EmailTaskLink[]
@@ -591,7 +601,20 @@ export default function EmailDetailPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900">{senderName}</p>
-                  <p className="text-xs text-gray-500">{senderEmail}</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-xs text-gray-500">{senderEmail}</p>
+                    {isSent ? (
+                      <Badge variant="outline" className="gap-1 bg-brand-50/70 text-brand-600 border-brand-200 text-[10px]">
+                        <ArrowUpRight className="h-3 w-3" />
+                        Sent
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="gap-1 bg-white/60 text-gray-500 border-gray-200 text-[10px]">
+                        <ArrowDownLeft className="h-3 w-3" />
+                        Received
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="flex items-center gap-1 text-xs text-gray-500">
