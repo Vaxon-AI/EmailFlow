@@ -12,6 +12,27 @@ export interface TokenPayload {
   remember?: boolean
 }
 
+function isProductionEnvironment() {
+  return process.env.NODE_ENV === 'production'
+}
+
+function getRememberMeCookieOptions() {
+  return {
+    maxAge: SESSION_MAX_AGE_REMEMBER_SECONDS,
+    expires: new Date(Date.now() + SESSION_MAX_AGE_REMEMBER_SECONDS * 1000),
+  }
+}
+
+function buildSessionCookieOptions(remember: boolean) {
+  return {
+    httpOnly: true,
+    secure: isProductionEnvironment(),
+    sameSite: 'lax' as const,
+    ...(remember ? getRememberMeCookieOptions() : {}),
+    path: '/',
+  }
+}
+
 export function createToken(payload: TokenPayload, expiresInSeconds = 10 * 60): string {
   return jwt.sign(payload, JWT_SECRET, {
     expiresIn: expiresInSeconds,
@@ -28,16 +49,7 @@ export function verifyToken(token: string): TokenPayload | null {
 
 export async function setSessionCookie(token: string, remember = false) {
   const cookieStore = await cookies()
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    ...(remember ? {
-      maxAge: SESSION_MAX_AGE_REMEMBER_SECONDS,
-      expires: new Date(Date.now() + SESSION_MAX_AGE_REMEMBER_SECONDS * 1000),
-    } : {}),
-    path: '/',
-  })
+  cookieStore.set(COOKIE_NAME, token, buildSessionCookieOptions(remember))
 }
 
 export async function clearSessionCookie() {

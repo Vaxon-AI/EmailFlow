@@ -10,6 +10,18 @@
 
 export type StepUpAction = 'change_password' | 'disable_totp' | 'delete_account' | 'run_cleanup'
 
+type ApiSuccessResponse<T> = {
+  success: true
+  data: T
+}
+
+type ApiFailureResponse = {
+  success: false
+  error: unknown
+}
+
+type ApiResponse<T> = ApiSuccessResponse<T> | ApiFailureResponse
+
 /**
  * Extracts a human-readable message from an API error payload.
  * Handles both shapes the API can return:
@@ -26,24 +38,34 @@ function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-export async function requestStepUp(action: StepUpAction): Promise<{ method: 'totp' | 'email' }> {
-  const res = await fetch('/api/auth/step-up/request', {
+async function postStepUpRequest<T>(
+  url: string,
+  body: Record<string, string>,
+  fallbackMessage: string,
+): Promise<T> {
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action }),
+    body: JSON.stringify(body),
   })
-  const json = await res.json()
-  if (!json.success) throw new Error(apiErrorMessage(json.error, 'Failed to start verification'))
-  return json.data as { method: 'totp' | 'email' }
+  const json = await res.json() as ApiResponse<T>
+  if (!json.success) throw new Error(apiErrorMessage(json.error, fallbackMessage))
+  return json.data
+}
+
+export async function requestStepUp(action: StepUpAction): Promise<{ method: 'totp' | 'email' }> {
+  return postStepUpRequest<{ method: 'totp' | 'email' }>(
+    '/api/auth/step-up/request',
+    { action },
+    'Failed to start verification',
+  )
 }
 
 export async function verifyStepUp(action: StepUpAction, code: string): Promise<string> {
-  const res = await fetch('/api/auth/step-up/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, code }),
-  })
-  const json = await res.json()
-  if (!json.success) throw new Error(apiErrorMessage(json.error, 'Verification failed'))
-  return (json.data as { stepUpToken: string }).stepUpToken
+  const data = await postStepUpRequest<{ stepUpToken: string }>(
+    '/api/auth/step-up/verify',
+    { action, code },
+    'Verification failed',
+  )
+  return data.stepUpToken
 }

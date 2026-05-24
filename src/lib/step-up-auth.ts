@@ -50,6 +50,26 @@ function generateRawToken(): string {
   return crypto.randomBytes(32).toString('base64url')
 }
 
+function expiresAtFrom(now: Date, ttlMs: number) {
+  return new Date(now.getTime() + ttlMs)
+}
+
+async function issueStepUpToken(userId: string, action: StepUpAction): Promise<string> {
+  const rawToken = generateRawToken()
+  const now = new Date()
+
+  await prisma.stepUpToken.create({
+    data: {
+      userId,
+      tokenHash: sha256(rawToken),
+      action,
+      expiresAt: expiresAtFrom(now, STEP_UP_TOKEN_TTL_MS),
+    },
+  })
+
+  return rawToken
+}
+
 /**
  * Determines which verification method the user should use and, for the 'email'
  * method, sends the OTP and stores the challenge.
@@ -83,7 +103,7 @@ export async function requestStepUp(
       userId,
       otpHash: sha256(otp),
       action,
-      expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+      expiresAt: expiresAtFrom(now, OTP_TTL_MS),
     },
   })
 
@@ -154,20 +174,7 @@ export async function verifyStepUp(
     })
   }
 
-  // Issue step-up authorization token
-  const rawToken = generateRawToken()
-  const now = new Date()
-
-  await prisma.stepUpToken.create({
-    data: {
-      userId,
-      tokenHash: sha256(rawToken),
-      action,
-      expiresAt: new Date(now.getTime() + STEP_UP_TOKEN_TTL_MS),
-    },
-  })
-
-  return rawToken
+  return issueStepUpToken(userId, action)
 }
 
 /**

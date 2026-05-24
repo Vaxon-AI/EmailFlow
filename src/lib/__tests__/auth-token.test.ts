@@ -1,12 +1,31 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import jwt from 'jsonwebtoken'
-import { createToken, verifyToken, COOKIE_NAME } from '../auth-token'
 
-// Only testing createToken / verifyToken — pure JWT logic, no Next.js deps.
-// Cookie helpers (setSessionCookie, clearSessionCookie, getSessionToken) require
-// the Next.js request context and are covered by integration/e2e tests.
+const mockCookieStore = {
+  set: vi.fn(),
+  delete: vi.fn(),
+  get: vi.fn(),
+}
+
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(async () => mockCookieStore),
+}))
+
+import {
+  COOKIE_NAME,
+  SESSION_MAX_AGE_REMEMBER_SECONDS,
+  clearSessionCookie,
+  createToken,
+  getSessionToken,
+  setSessionCookie,
+  verifyToken,
+} from '../auth-token'
 
 describe('createToken / verifyToken', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('round-trips a minimal payload', () => {
     const token = createToken({ userId: 'user-123' })
     const payload = verifyToken(token)
@@ -39,5 +58,78 @@ describe('createToken / verifyToken', () => {
 describe('COOKIE_NAME', () => {
   it('is defined', () => {
     expect(COOKIE_NAME).toBe('ef-session')
+  })
+})
+
+describe('session cookie helpers', () => {
+  const originalNodeEnv = process.env.NODE_ENV
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.NODE_ENV = 'test'
+    mockCookieStore.get.mockReturnValue(undefined)
+  })
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv
+  })
+
+  it('sets a session cookie without remember-me fields by default', async () => {
+    await setSessionCookie('token-123')
+
+    expect(mockCookieStore.set).toHaveBeenCalledWith(
+      COOKIE_NAME,
+      'token-123',
+      expect.objectContaining({
+        httpOnly: true,
+        secure: false,
+        sameSite: 'lax',
+        path: '/',
+      }),
+    )
+
+    const options = mockCookieStore.set.mock.calls[0][2]
+    expect(options.maxAge).toBeUndefined()
+    expect(options.expires).toBeUndefined()
+  })
+
+  it('sets remember-me expiry fields when requested', async () => {
+    await setSessionCookie('token-123', true)
+
+    expect(mockCookieStore.set).toHaveBeenCalledWith(
+      COOKIE_NAME,
+      'token-123',
+      expect.objectContaining({
+        maxAge: SESSION_MAX_AGE_REMEMBER_SECONDS,
+        expires: expect.any(Date),
+      }),
+    )
+  })
+
+  it('uses secure cookies in production', async () => {
+    process.env.NODE_ENV = 'production'
+
+    await setSessionCookie('token-123')
+
+    expect(mockCookieStore.set).toHaveBeenCalledWith(
+      COOKIE_NAME,
+      'token-123',
+      expect.objectContaining({ secure: true }),
+    )
+  })
+
+  it('clears the session cookie by name', async () => {
+    await clearSessionCookie()
+    expect(mockCookieStore.delete).toHaveBeenCalledWith(COOKIE_NAME)
+  })
+
+  it('returns the stored session token value when present', async () => {
+    mockCookieStore.get.mockReturnValue({ value: 'stored-token' })
+    await expect(getSessionToken()).resolves.toBe('stored-token')
+  })
+
+  it('returns null when the session cookie is absent', async () => {
+    mockCookieStore.get.mockReturnValue(undefined)
+    await expect(getSessionToken()).resolves.toBeNull()
   })
 })
