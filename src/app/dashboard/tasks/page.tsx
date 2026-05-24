@@ -51,135 +51,29 @@ import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
-
-type ViewMode = 'list' | 'timeline' | 'calendar'
-type TaskStatus = 'ai_suggestion' | 'active' | 'completed'
-type StatusFilter = 'all' | 'ai_suggestion' | 'active' | 'completed'
-
-type TaskTabState = {
-  bucket: StatusFilter
-  totalCount: number
-  newCount: number
-  lastSeenAt: string | null
-}
-
-type TaskEmailLink = {
-  email?: {
-    sender?: string | null
-    threadId?: string | null
-  } | null
-}
-
-type TaskProject = {
-  id: string
-  name: string
-  identity: { id: string; name: string } | null
-} | null
-
-type TaskItem = {
-  id: string
-  title: string
-  summary?: string | null
-  status: TaskStatus
-  startDate?: string | null
-  priorityScore?: number | null
-  explicitDeadline?: string | null
-  inferredDeadline?: string | null
-  userSetDeadline?: string | null
-  emailLinks?: TaskEmailLink[]
-  project?: TaskProject
-  matter?: { id: string; title: string } | null
-  source?: string | null
-  createdAt?: string
-}
-
-type TaskUpdateData = {
-  status?: TaskStatus
-  startDate?: string | null
-  userSetDeadline?: string | null
-}
-
-type TaskUpdateVars = {
-  id: string
-  data: TaskUpdateData
-}
-
-type MutationLike = {
-  mutate: (vars: TaskUpdateVars, options?: { onSuccess?: () => void; onError?: () => void }) => void
-}
-
-type QueryResponse<T> = {
-  data?: T
-  meta?: {
-    totalCount?: number
-  }
-}
-
-type CreateTaskResponse = {
-  data: {
-    id: string
-  }
-}
-
-type TaskDraft = {
-  title: string
-  summary: string
-  actionItems: string[]
-  explicitDeadline: string | null
-  inferredDeadline: string | null
-  deadlineConfidence: number
-  urgency: number
-  impact: number
-  priorityScore: number
-  priorityReason?: string
-  splitReason: string | null
-}
-
-type QuotaStatus = {
-  pasteText?: {
-    used: number
-    limit: number | null
-    resetAt: string
-  }
-}
-
-const PRIORITY_LEVELS: Record<string, { urgency: number; impact: number; score: number }> = {
-  critical: { urgency: 5, impact: 4, score: 20 },
-  high: { urgency: 4, impact: 4, score: 16 },
-  medium: { urgency: 3, impact: 3, score: 9 },
-  low: { urgency: 2, impact: 2, score: 4 },
-}
-
-function priorityBucketFromScore(score: number): 'critical' | 'high' | 'medium' | 'low' {
-  if (score >= 20) return 'critical'
-  if (score >= 12) return 'high'
-  if (score >= 6) return 'medium'
-  return 'low'
-}
-
-const PRIORITY_LABELS: Record<'critical' | 'high' | 'medium' | 'low', string> = {
-  critical: 'Critical',
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-}
-
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All' },
-  { value: 'ai_suggestion', label: 'AI Suggestions' },
-  { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
-]
-
-const PRIORITY_OPTIONS = [
-  { value: 'all', label: 'All priorities' },
-  { value: 'critical', label: 'Critical' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-]
-
-type PriorityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low'
+import {
+  type CreateTaskResponse,
+  type MutationLike,
+  type PriorityFilter,
+  PRIORITY_LABELS,
+  PRIORITY_LEVELS,
+  PRIORITY_OPTIONS,
+  type QueryResponse,
+  renderTaskTabNewBadge,
+  parsePriorityFilter,
+  parseStatusFilter,
+  type QuotaStatus,
+  type StatusFilter,
+  STATUS_OPTIONS,
+  type TaskDraft,
+  type TaskItem,
+  type TaskTabState,
+  type TaskUpdateVars,
+  type ViewMode,
+  priorityBucketFromScore,
+  matchesPriorityFilter,
+} from './task-page-types'
+import { useTaskComposer } from './use-task-composer'
 
 export default function TasksPage() {
   return (
@@ -207,10 +101,6 @@ function TasksContent() {
   })
   const [sortBy, setSortBy] = useState('priority')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showPasteTextModal, setShowPasteTextModal] = useState(false)
-  const [taskTitle, setTaskTitle] = useState('')
-  const [taskSummary, setTaskSummary] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
   const [reassignTask, setReassignTask] = useState<TaskItem | null>(null)
   const [selection, setSelection] = useState<{ status: StatusFilter; ids: Set<string> }>({
@@ -229,27 +119,56 @@ function TasksContent() {
     })
   }, [statusFilter])
   const [showBatchReassign, setShowBatchReassign] = useState(false)
-  // Paste Text AI extraction state
-  const [extractText, setExtractText] = useState('')
-  const [extracting, setExtracting] = useState(false)
-  const [draftActionItems, setDraftActionItems] = useState<string[]>([])
-  const [draftDeadline, setDraftDeadline] = useState('')
-  const [draftStartDate, setDraftStartDate] = useState('')
-  const [suggestingDates, setSuggestingDates] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
-  const [draftUrgency, setDraftUrgency] = useState(3)
-  const [draftImpact, setDraftImpact] = useState(3)
-  const [draftPriorityScore, setDraftPriorityScore] = useState(9)
-  const [draftSource, setDraftSource] = useState('manual')
-  const [selectedIdentityId, setSelectedIdentityId] = useState('')
-  const [selectedProjectId, setSelectedProjectId] = useState('')
-  const [linkedEmailIds, setLinkedEmailIds] = useState<string[]>([])
-  const [emailPickerOpen, setEmailPickerOpen] = useState(false)
-  const [emailPickerQuery, setEmailPickerQuery] = useState('')
-  const [draftCards, setDraftCards] = useState<TaskDraft[]>([])
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const isPro = Boolean(user?.plan && user.plan !== 'free')
+  const {
+    showCreateModal,
+    showPasteTextModal,
+    taskTitle,
+    taskSummary,
+    extractText,
+    extracting,
+    draftActionItems,
+    draftDeadline,
+    draftStartDate,
+    suggestingDates,
+    draftUrgency,
+    draftImpact,
+    draftPriorityScore,
+    draftSource,
+    selectedIdentityId,
+    selectedProjectId,
+    linkedEmailIds,
+    emailPickerOpen,
+    emailPickerQuery,
+    draftCards,
+    setShowCreateModal,
+    setShowPasteTextModal,
+    setTaskTitle,
+    setTaskSummary,
+    setExtractText,
+    setExtracting,
+    setDraftActionItems,
+    setDraftDeadline,
+    setDraftStartDate,
+    setSuggestingDates,
+    setDraftUrgency,
+    setDraftImpact,
+    setDraftPriorityScore,
+    setDraftSource,
+    setSelectedIdentityId,
+    setSelectedProjectId,
+    setLinkedEmailIds,
+    setEmailPickerOpen,
+    setEmailPickerQuery,
+    setDraftCards,
+    resetComposer,
+    handleCreateModalOpenChange,
+    handlePasteTextOpenChange,
+    openManualTaskModal,
+  } = useTaskComposer()
   const priorityFilterLabel = PRIORITY_OPTIONS.find((option) => option.value === priorityFilter)?.label ?? 'All priorities'
 
   const { data: quotaRes } = useQuery<{ data: QuotaStatus }>({
@@ -413,43 +332,6 @@ function TasksContent() {
   const selectedProjectName = selectedProjectId
     ? projects.find((p) => p.id === selectedProjectId)?.name
     : undefined
-
-
-  const resetCreateModal = () => {
-    setTaskTitle('')
-    setTaskSummary('')
-    setExtractText('')
-    setExtracting(false)
-    setDraftActionItems([])
-    setDraftDeadline('')
-    setDraftStartDate('')
-    setSuggestingDates(false)
-    setDraftUrgency(3)
-    setDraftImpact(3)
-    setDraftPriorityScore(9)
-    setDraftSource('manual')
-    setSelectedIdentityId('')
-    setSelectedProjectId('')
-    setLinkedEmailIds([])
-    setEmailPickerOpen(false)
-    setEmailPickerQuery('')
-    setDraftCards([])
-  }
-
-  const handleModalOpenChange = (open: boolean) => {
-    setShowCreateModal(open)
-    if (!open) resetCreateModal()
-  }
-
-  const handlePasteTextOpenChange = (open: boolean) => {
-    setShowPasteTextModal(open)
-    if (open) {
-      setDraftSource('copy_text')
-    } else {
-      resetCreateModal()
-    }
-  }
-
   const handleGenerateTask = async () => {
     if (!extractText.trim()) return
     setExtracting(true)
@@ -598,7 +480,7 @@ function TasksContent() {
       if (failedCards.length === 0) {
         toast.success(`${succeededCount} task${succeededCount === 1 ? '' : 's'} created`)
         setShowPasteTextModal(false)
-        resetCreateModal()
+        resetComposer()
       } else if (succeededCount === 0) {
         showError('Failed to create tasks')
       } else {
@@ -630,7 +512,7 @@ function TasksContent() {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'tab-states'] })
       toast.success('Task created')
       setShowCreateModal(false)
-      resetCreateModal()
+      resetComposer()
       router.push(`/dashboard/tasks/${data.data.id}`)
     } catch {
       showError('Failed to create task')
@@ -951,8 +833,7 @@ function TasksContent() {
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
                   onClick={() => {
-                    setDraftSource('manual')
-                    setShowCreateModal(true)
+                    openManualTaskModal()
                   }}
                   className="cursor-pointer"
                 >
@@ -1267,7 +1148,7 @@ function TasksContent() {
       </Dialog>
 
       {/* Create Task Modal */}
-      <Dialog open={showCreateModal} onOpenChange={handleModalOpenChange}>
+      <Dialog open={showCreateModal} onOpenChange={handleCreateModalOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Create Task</DialogTitle>
@@ -1436,28 +1317,6 @@ function TasksContent() {
       </Dialog>
     </div>
   )
-}
-
-function parsePriorityFilter(value: string | null): PriorityFilter {
-  return value === 'critical' || value === 'high' || value === 'medium' || value === 'low' ? value : 'all'
-}
-
-function parseStatusFilter(value: string | null): StatusFilter {
-  return value === 'ai_suggestion' || value === 'active' || value === 'completed' ? value : 'all'
-}
-
-function renderTaskTabNewBadge(count: number, bucket: StatusFilter) {
-  if (bucket === 'completed' || count <= 0) return undefined
-  return (
-    <span className="rounded-full bg-critical px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
-      +{count}
-    </span>
-  )
-}
-
-function matchesPriorityFilter(task: TaskItem, priority: unknown) {
-  if (priority !== 'critical' && priority !== 'high' && priority !== 'medium' && priority !== 'low') return true
-  return getPriorityBand(task.priorityScore || 0) === priority
 }
 
 /* ========== DRAFT CARD - one suggested task in the multi-candidate review list ========== */
