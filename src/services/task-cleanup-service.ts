@@ -17,6 +17,11 @@
 
 import { prisma } from '@/lib/prisma'
 
+type CleanupCandidate = {
+  id: string
+  _count: { emailLinks: number }
+}
+
 export type TaskCleanupResult = {
   /** Standalone (no email link) tasks hard-deleted in pass 1 */
   hardDeleted: number
@@ -26,14 +31,12 @@ export type TaskCleanupResult = {
   purgedFromArchive: number
 }
 
-export async function cleanupTasksForUser(
-  userId: string,
-  retainAfterDays: number
-): Promise<TaskCleanupResult> {
-  const cutoff = new Date(Date.now() - retainAfterDays * 24 * 60 * 60 * 1000)
+function getRetentionCutoff(retainAfterDays: number) {
+  return new Date(Date.now() - retainAfterDays * 24 * 60 * 60 * 1000)
+}
 
-  // Pass 1 — completed past cutoff and not yet archived
-  const candidates = await prisma.task.findMany({
+async function findCleanupCandidates(userId: string, cutoff: Date): Promise<CleanupCandidate[]> {
+  return prisma.task.findMany({
     where: {
       userId,
       status: 'completed',
@@ -45,28 +48,38 @@ export async function cleanupTasksForUser(
       _count: { select: { emailLinks: true } },
     },
   })
+}
 
-  const noEmailIds = candidates.filter((t) => t._count.emailLinks === 0).map((t) => t.id)
-  const withEmailIds = candidates.filter((t) => t._count.emailLinks > 0).map((t) => t.id)
+function partitionCandidateIds(candidates: CleanupCandidate[]) {
+  return candidates.reduce(
+    (groups, candidate) => {
+      if (candidate._count.emailLinks === 0) {
+        groups.noEmailIds.push(candidate.id)
+      } else {
+        groups.withEmailIds.push(candidate.id)
+      }
+      return groups
+    },
+    { noEmailIds: [] as string[], withEmailIds: [] as string[] }
+  )
+}
 
-  let hardDeleted = 0
-  if (noEmailIds.length > 0) {
-    const { count } = await prisma.task.deleteMany({ where: { id: { in: noEmailIds } } })
-    hardDeleted = count
-  }
+async function hardDeleteStandaloneTasks(taskIds: string[]) {
+  if (taskIds.length === 0) return 0
+  const { count } = await prisma.task.deleteMany({ where: { id: { in: taskIds } } })
+  return count
+}
 
-  let softArchived = 0
-  if (withEmailIds.length > 0) {
-    const { count } = await prisma.task.updateMany({
-      where: { id: { in: withEmailIds } },
-      data: { archivedAt: new Date() },
-    })
-    softArchived = count
-  }
+async function softArchiveLinkedTasks(taskIds: string[]) {
+  if (taskIds.length === 0) return 0
+  const { count } = await prisma.task.updateMany({
+    where: { id: { in: taskIds } },
+    data: { archivedAt: new Date() },
+  })
+  return count
+}
 
-  // Pass 2 — already-archived tasks whose linked emails were all DELETEd
-  // (TaskEmail rows cascade-removed when their email rows go).
-  // $executeRaw returns the affected row count.
+async function purgeArchivedTasksWithoutEmails(userId: string) {
   const purgedFromArchive = await prisma.$executeRaw`
     DELETE FROM "Task" t
     WHERE t."userId" = ${userId}
@@ -76,5 +89,25 @@ export async function cleanupTasksForUser(
       )
   `
 
-  return { hardDeleted, softArchived, purgedFromArchive: Number(purgedFromArchive) }
+  return Number(purgedFromArchive)
+}
+
+export async function cleanupTasksForUser(
+  userId: string,
+  retainAfterDays: number
+): Promise<TaskCleanupResult> {
+  const cutoff = getRetentionCutoff(retainAfterDays)
+
+  // Pass 1 — completed past cutoff and not yet archived
+  const candidates = await findCleanupCandidates(userId, cutoff)
+  const { noEmailIds, withEmailIds } = partitionCandidateIds(candidates)
+  const hardDeleted = await hardDeleteStandaloneTasks(noEmailIds)
+  const softArchived = await softArchiveLinkedTasks(withEmailIds)
+
+  // Pass 2 — already-archived tasks whose linked emails were all DELETEd
+  // (TaskEmail rows cascade-removed when their email rows go).
+  // $executeRaw returns the affected row count.
+  const purgedFromArchive = await purgeArchivedTasksWithoutEmails(userId)
+
+  return { hardDeleted, softArchived, purgedFromArchive }
 }

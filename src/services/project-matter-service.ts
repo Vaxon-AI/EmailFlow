@@ -7,40 +7,53 @@ type EnsuredMatter = {
 
 const MANUAL_PROJECT_SUMMARY = 'Manually assigned to this project'
 
-export async function ensureMatterForProject(userId: string, projectId: string): Promise<EnsuredMatter | null> {
-  const project = await prisma.projectContext.findFirst({
+async function findOwnedProject(userId: string, projectId: string) {
+  return prisma.projectContext.findFirst({
     where: { id: projectId, userId },
     select: { id: true, name: true },
   })
+}
 
-  if (!project) return null
-
-  const existingMatter = await prisma.matterMemory.findFirst({
+async function findExistingMatter(userId: string, projectId: string) {
+  return prisma.matterMemory.findFirst({
     where: { userId, projectContextId: projectId },
     select: { id: true },
   })
+}
 
-  if (existingMatter) {
-    return {
-      ...existingMatter,
-      projectName: project.name,
-    }
-  }
-
-  const createdMatter = await prisma.matterMemory.create({
+async function createMatterForProject(userId: string, projectId: string, projectName: string) {
+  return prisma.matterMemory.create({
     data: {
       userId,
       projectContextId: projectId,
-      title: project.name,
+      title: projectName,
       summary: MANUAL_PROJECT_SUMMARY,
       status: 'open',
       topic: 'other',
     },
     select: { id: true },
   })
+}
 
+function toEnsuredMatter(matter: { id: string }, projectName: string): EnsuredMatter {
   return {
-    ...createdMatter,
-    projectName: project.name,
+    ...matter,
+    projectName,
   }
+}
+
+export async function ensureMatterForProject(userId: string, projectId: string): Promise<EnsuredMatter | null> {
+  const project = await findOwnedProject(userId, projectId)
+
+  if (!project) return null
+
+  const existingMatter = await findExistingMatter(userId, projectId)
+
+  if (existingMatter) {
+    return toEnsuredMatter(existingMatter, project.name)
+  }
+
+  const createdMatter = await createMatterForProject(userId, projectId, project.name)
+
+  return toEnsuredMatter(createdMatter, project.name)
 }

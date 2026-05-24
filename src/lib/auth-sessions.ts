@@ -187,6 +187,14 @@ function sessionTokenHash(token: string) {
   return crypto.createHash('sha256').update(token).digest('hex')
 }
 
+function buildActiveSessionFilter(now: Date) {
+  return {
+    status: ACTIVE_STATUS,
+    revokedAt: null,
+    expiresAt: { gt: now },
+  } as const
+}
+
 function deviceKey(session: Pick<ActiveSessionDevice, 'id' | 'deviceName' | 'browser' | 'os' | 'userAgent' | 'deviceFingerprint'>) {
   return session.deviceFingerprint || [
     session.deviceName,
@@ -257,6 +265,16 @@ function isInactiveExpired(lastActiveAt: Date, now: Date) {
   return now.getTime() - lastActiveAt.getTime() >= SESSION_INACTIVITY_TIMEOUT_MS
 }
 
+function isRevokedSession(session: { status: string; revokedAt: Date | null }) {
+  return Boolean(session.revokedAt) || session.status === REVOKED_STATUS
+}
+
+async function expireSessionIfActive(session: { id: string; status: string }) {
+  if (session.status === ACTIVE_STATUS) {
+    await markSessionExpired(session.id)
+  }
+}
+
 function toSessionUser(user: {
   id: string
   email: string
@@ -272,6 +290,30 @@ function toSessionUser(user: {
     isAdmin: user.isAdmin,
     manualReviewMode: user.manualReviewMode,
     plan: user.plan,
+  }
+}
+
+function toSessionContext(session: SessionWithUser): SessionContext {
+  return {
+    session: {
+      id: session.id,
+      userId: session.userId,
+      deviceName: session.deviceName,
+      deviceType: session.deviceType,
+      browser: session.browser,
+      os: session.os,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      isNewDevice: session.isNewDevice,
+      remember: session.remember,
+      lastActiveAt: session.lastActiveAt,
+      expiresAt: session.expiresAt,
+      revokedAt: session.revokedAt,
+      status: session.status,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    },
+    user: toSessionUser(session.user),
   }
 }
 
@@ -294,9 +336,7 @@ export async function createUserSession(input: {
     const activeSessions = await tx.session.findMany({
       where: {
         userId: input.userId,
-        status: ACTIVE_STATUS,
-        revokedAt: null,
-        expiresAt: { gt: now },
+        ...buildActiveSessionFilter(now),
       },
       orderBy: [{ lastActiveAt: 'asc' }, { createdAt: 'asc' }],
       select: {
@@ -498,7 +538,7 @@ export async function requireSessionToken(token: string | null): Promise<Session
   }
 
   if (session.status !== ACTIVE_STATUS || session.revokedAt) {
-    const code = session.revokedAt || session.status === REVOKED_STATUS ? 'SESSION_REVOKED' : 'UNAUTHORIZED'
+    const code = isRevokedSession(session) ? 'SESSION_REVOKED' : 'UNAUTHORIZED'
     const message =
       code === 'SESSION_REVOKED'
         ? 'This session has been revoked. Please sign in again.'
@@ -507,16 +547,12 @@ export async function requireSessionToken(token: string | null): Promise<Session
   }
 
   if (session.expiresAt <= now) {
-    if (session.status === ACTIVE_STATUS) {
-      await markSessionExpired(session.id)
-    }
+    await expireSessionIfActive(session)
     throw new AppError('SESSION_EXPIRED', 'Your session has expired. Please sign in again.', 401)
   }
 
   if (isInactiveExpired(session.lastActiveAt, now)) {
-    if (session.status === ACTIVE_STATUS) {
-      await markSessionExpired(session.id)
-    }
+    await expireSessionIfActive(session)
     throw new AppError('SESSION_INACTIVE_EXPIRED', 'Your session expired after inactivity. Please sign in again.', 401)
   }
 
@@ -529,27 +565,7 @@ export async function requireSessionToken(token: string | null): Promise<Session
     session.updatedAt = updated.updatedAt
   }
 
-  return {
-    session: {
-      id: session.id,
-      userId: session.userId,
-      deviceName: session.deviceName,
-      deviceType: session.deviceType,
-      browser: session.browser,
-      os: session.os,
-      ipAddress: session.ipAddress,
-      userAgent: session.userAgent,
-      isNewDevice: session.isNewDevice,
-      remember: session.remember,
-      lastActiveAt: session.lastActiveAt,
-      expiresAt: session.expiresAt,
-      revokedAt: session.revokedAt,
-      status: session.status,
-      createdAt: session.createdAt,
-      updatedAt: session.updatedAt,
-    },
-    user: toSessionUser(session.user),
-  }
+  return toSessionContext(session)
 }
 
 /**
@@ -577,8 +593,7 @@ export async function rotateSessionToken(
     const recentlyRotated = await prisma.session.findFirst({
       where: {
         previousTokenHash: oldHash,
-        status: ACTIVE_STATUS,
-        expiresAt: { gt: now },
+        ...buildActiveSessionFilter(now),
         rotatedAt: { gt: new Date(now.getTime() - ROTATION_GRACE_PERIOD_MS) },
       },
     })
@@ -640,18 +655,16 @@ export async function revokeSessionById(sessionId: string, userId: string) {
   const fingerprintFilter = target.deviceFingerprint
     ? { deviceFingerprint: target.deviceFingerprint }
     : {
-        deviceName: target.deviceName,
-        browser: target.browser,
-        os: target.os,
-        userAgent: target.userAgent,
-      }
+      deviceName: target.deviceName,
+      browser: target.browser,
+      os: target.os,
+      userAgent: target.userAgent,
+    }
 
   const result = await prisma.session.updateMany({
     where: {
       userId,
-      status: ACTIVE_STATUS,
-      revokedAt: null,
-      expiresAt: { gt: now },
+      ...buildActiveSessionFilter(now),
       ...fingerprintFilter,
     },
     data: {
@@ -670,9 +683,7 @@ export async function revokeSessionByToken(token: string | null) {
   const result = await prisma.session.updateMany({
     where: {
       tokenHash: sessionTokenHash(token),
-      status: ACTIVE_STATUS,
-      revokedAt: null,
-      expiresAt: { gt: now },
+      ...buildActiveSessionFilter(now),
     },
     data: {
       status: REVOKED_STATUS,
@@ -689,9 +700,7 @@ export async function revokeOtherSessions(userId: string, currentSessionId: stri
     where: {
       userId,
       id: { not: currentSessionId },
-      status: ACTIVE_STATUS,
-      revokedAt: null,
-      expiresAt: { gt: now },
+      ...buildActiveSessionFilter(now),
     },
     data: {
       status: REVOKED_STATUS,
@@ -721,9 +730,7 @@ export async function listActiveSessions(userId: string) {
   const sessions = await prisma.session.findMany({
     where: {
       userId,
-      status: ACTIVE_STATUS,
-      revokedAt: null,
-      expiresAt: { gt: now },
+      ...buildActiveSessionFilter(now),
       lastActiveAt: { gt: new Date(now.getTime() - SESSION_INACTIVITY_TIMEOUT_MS) },
     },
     orderBy: [{ lastActiveAt: 'desc' }, { createdAt: 'desc' }],

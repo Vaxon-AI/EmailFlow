@@ -51,6 +51,14 @@ export type RetentionResult = {
   errorCount: number
 }
 
+type RetentionBuckets = {
+  toArchive: string[]
+  toMetaOnly: Array<{ id: string; restorableUntil: Date }>
+  toPurge: string[]
+  protectedCount: number
+  alreadyProcessedCount: number
+}
+
 // ---------------------------------------------------------------------------
 // Batch sizes — keeps individual DB transactions manageable
 // ---------------------------------------------------------------------------
@@ -59,6 +67,45 @@ const BATCH_SIZE = 100
 
 const DIGEST_DAILY_RETENTION_DAYS = 30
 const DIGEST_WEEKLY_RETENTION_DAYS = 90
+
+function classifyEmailsForRetention(
+  emails: EmailSnapshot[],
+  policy: PolicySnapshot,
+  rules: Awaited<ReturnType<typeof retentionRepo.getProtectionRules>>,
+  now: Date
+): RetentionBuckets {
+  const buckets: RetentionBuckets = {
+    toArchive: [],
+    toMetaOnly: [],
+    toPurge: [],
+    protectedCount: 0,
+    alreadyProcessedCount: 0,
+  }
+
+  for (const email of emails) {
+    const result = getRetentionAction(email, policy, rules, now)
+    switch (result.action) {
+      case 'archive':
+        buckets.toArchive.push(email.id)
+        break
+      case 'metadataOnly':
+        buckets.toMetaOnly.push({ id: email.id, restorableUntil: result.restorableUntil })
+        break
+      case 'purge':
+        buckets.toPurge.push(email.id)
+        break
+      case 'none':
+        if (email.retentionStatus !== 'ACTIVE') {
+          buckets.alreadyProcessedCount++
+        } else {
+          buckets.protectedCount++
+        }
+        break
+    }
+  }
+
+  return buckets
+}
 
 // ---------------------------------------------------------------------------
 // Preview (read-only)
@@ -76,45 +123,22 @@ export async function previewRetention(userId: string): Promise<RetentionPreview
   ])
 
   const now = new Date()
+  const retentionBuckets = classifyEmailsForRetention(emails, policy, rules, now)
   const preview: RetentionPreview = {
-    willArchive: 0,
-    willBeMetadataOnly: 0,
-    willPurge: 0,
+    willArchive: retentionBuckets.toArchive.length,
+    willBeMetadataOnly: retentionBuckets.toMetaOnly.length,
+    willPurge: retentionBuckets.toPurge.length,
     attachmentsAffected: 0,
     estimatedBytesFreed: 0,
-    protected: 0,
-    alreadyProcessed: 0,
-  }
-
-  const metaOnlyEmailIds: string[] = []
-  const purgeEmailIds: string[] = []
-
-  for (const email of emails) {
-    const result = getRetentionAction(email, policy, rules, now)
-    switch (result.action) {
-      case 'archive':
-        preview.willArchive++
-        break
-      case 'metadataOnly':
-        preview.willBeMetadataOnly++
-        metaOnlyEmailIds.push(email.id)
-        break
-      case 'purge':
-        preview.willPurge++
-        purgeEmailIds.push(email.id)
-        break
-      case 'none':
-        if (email.retentionStatus !== 'ACTIVE') {
-          preview.alreadyProcessed++
-        } else {
-          preview.protected++
-        }
-        break
-    }
+    protected: retentionBuckets.protectedCount,
+    alreadyProcessed: retentionBuckets.alreadyProcessedCount,
   }
 
   // Estimate attachment impact (emails moving to METADATA_ONLY or PURGED)
-  const affectedEmailIds = [...metaOnlyEmailIds, ...purgeEmailIds]
+  const affectedEmailIds = [
+    ...retentionBuckets.toMetaOnly.map((email) => email.id),
+    ...retentionBuckets.toPurge,
+  ]
   if (affectedEmailIds.length > 0) {
     // Also include emails that will hit attachment purge threshold
     const attachmentPurgeIds = getAttachmentPurgeCandidates(emails, policy, now)
@@ -167,31 +191,10 @@ export async function executeRetention(
     ])
 
     const now = new Date()
-
-    // Classify every email
-    const toArchive: string[] = []
-    const toMetaOnly: Array<{ id: string; restorableUntil: Date }> = []
-    const toPurge: string[] = []
-
-    for (const email of emails) {
-      const result = getRetentionAction(email, policy, rules, now)
-      switch (result.action) {
-        case 'archive':
-          toArchive.push(email.id)
-          break
-        case 'metadataOnly':
-          toMetaOnly.push({ id: email.id, restorableUntil: result.restorableUntil })
-          break
-        case 'purge':
-          toPurge.push(email.id)
-          break
-        case 'none':
-          break
-      }
-    }
+    const retentionBuckets = classifyEmailsForRetention(emails, policy, rules, now)
 
     // Apply: archive
-    for (const batch of chunk(toArchive, BATCH_SIZE)) {
+    for (const batch of chunk(retentionBuckets.toArchive, BATCH_SIZE)) {
       try {
         await retentionRepo.archiveEmails(batch, 'retention policy')
         emailsArchived += batch.length
@@ -203,7 +206,7 @@ export async function executeRetention(
 
     // Apply: metadata-only (clears bodyFull)
     // Per-email errors don't abort the batch — setMetadataOnly returns counts.
-    for (const batch of chunk(toMetaOnly, BATCH_SIZE)) {
+    for (const batch of chunk(retentionBuckets.toMetaOnly, BATCH_SIZE)) {
       try {
         const { succeeded, failed } = await retentionRepo.setMetadataOnly(batch, 'retention policy')
         emailsMetaOnly += succeeded
@@ -218,7 +221,7 @@ export async function executeRetention(
     }
 
     // Apply: purge
-    for (const batch of chunk(toPurge, BATCH_SIZE)) {
+    for (const batch of chunk(retentionBuckets.toPurge, BATCH_SIZE)) {
       try {
         await retentionRepo.purgeEmails(batch, 'retention policy')
         emailsPurged += batch.length
