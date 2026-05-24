@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -37,7 +37,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Suspense, useState, useMemo, useCallback, useEffect } from 'react'
+import { Suspense, useState, useMemo, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { GanttTimeline } from '@/components/gantt-timeline'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
@@ -50,7 +50,6 @@ import { TaskDueBadge } from '@/components/task-due-badge'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
-import { CACHE_TIME } from '@/lib/query-cache'
 import {
   type CreateTaskResponse,
   type MutationLike,
@@ -58,22 +57,20 @@ import {
   PRIORITY_LABELS,
   PRIORITY_LEVELS,
   PRIORITY_OPTIONS,
-  type QueryResponse,
   renderTaskTabNewBadge,
   parsePriorityFilter,
   parseStatusFilter,
-  type QuotaStatus,
   type StatusFilter,
   STATUS_OPTIONS,
   type TaskDraft,
   type TaskItem,
-  type TaskTabState,
   type TaskUpdateVars,
   type ViewMode,
   priorityBucketFromScore,
   matchesPriorityFilter,
 } from './task-page-types'
 import { useTaskComposer } from './use-task-composer'
+import { useTasksPageData } from './use-tasks-page-data'
 
 export default function TasksPage() {
   return (
@@ -170,168 +167,34 @@ function TasksContent() {
     openManualTaskModal,
   } = useTaskComposer()
   const priorityFilterLabel = PRIORITY_OPTIONS.find((option) => option.value === priorityFilter)?.label ?? 'All priorities'
-
-  const { data: quotaRes } = useQuery<{ data: QuotaStatus }>({
-    queryKey: ['quota'],
-    queryFn: () => fetch('/api/settings/quota').then((r) => r.json()),
-    enabled: user?.plan === 'free',
-    staleTime: CACHE_TIME.list,
+  const {
+    res,
+    isLoading,
+    tasks: rawTasks,
+    pasteTextQuota,
+    tabStateMap,
+    projects,
+    identities,
+    recentEmails,
+    taskRetainAfterDays,
+    updateTaskRetainMutation,
+    filteredProjects,
+    filteredEmails,
+    linkedEmails,
+    selectedIdentityName,
+    selectedProjectName,
+  } = useTasksPageData({
+    statusFilter,
+    priorityFilter,
+    sortBy,
+    showCreateModal,
+    showPasteTextModal,
+    selectedIdentityId,
+    selectedProjectId,
+    linkedEmailIds,
+    emailPickerQuery,
+    plan: user?.plan,
   })
-  const pasteTextQuota = quotaRes?.data?.pasteText
-
-  // "All" means all currently actionable tasks. Completed tasks stay in the
-  // dedicated Completed tab.
-  const apiStatus = statusFilter === 'all' ? '' : statusFilter
-  const apiScope = statusFilter === 'all' ? 'open' : ''
-  const apiPriority = priorityFilter === 'all' ? '' : priorityFilter
-  const { data: res, isLoading } = useQuery({
-    queryKey: ['tasks', apiScope || apiStatus, sortBy, apiPriority],
-    queryFn: () =>
-      fetch(`/api/tasks?${apiScope ? `scope=${apiScope}` : `status=${apiStatus}`}&sort=${sortBy}&limit=2000${apiPriority ? `&priority=${apiPriority}` : ''}`).then((r) => r.json()),
-    staleTime: CACHE_TIME.list,
-    placeholderData: (previous) => previous,
-  })
-
-  const { data: tabStatesRes } = useQuery<{ data: TaskTabState[] }>({
-    queryKey: ['tasks', 'tab-states'],
-    queryFn: () => fetch('/api/tasks/tab-states').then((r) => r.json()),
-    staleTime: 0,
-  })
-
-  const markTabSeenMutation = useMutation({
-    mutationFn: async (bucket: StatusFilter) => {
-      const res = await fetch('/api/tasks/tab-states/seen', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bucket }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to mark tab seen')
-      return bucket
-    },
-    onSuccess: (bucket) => {
-      queryClient.setQueryData<{ data: TaskTabState[] }>(['tasks', 'tab-states'], (current) => {
-        if (!current?.data) return current
-        return {
-          ...current,
-          data: current.data.map((state) =>
-            state.bucket === bucket ? { ...state, newCount: 0, lastSeenAt: new Date().toISOString() } : state
-          ),
-        }
-      })
-    },
-  })
-
-  const tabStateMap = useMemo(() => {
-    const map = new Map<StatusFilter, TaskTabState>()
-    for (const state of tabStatesRes?.data ?? []) map.set(state.bucket, state)
-    return map
-  }, [tabStatesRes?.data])
-  const activeTabNewCount = tabStateMap.get(statusFilter)?.newCount ?? 0
-
-  useEffect(() => {
-    if (!tabStatesRes?.data || activeTabNewCount <= 0) return
-    markTabSeenMutation.mutate(statusFilter)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, activeTabNewCount, tabStatesRes?.data])
-
-  const { data: projectsRes } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => fetch('/api/projects').then((r) => r.json()),
-    staleTime: CACHE_TIME.list,
-  })
-  const projects = useMemo<{ id: string; name: string; identity: { id: string; name: string } | null }[]>(
-    () => projectsRes?.data ?? [],
-    [projectsRes]
-  )
-
-  const { data: identitiesRes } = useQuery({
-    queryKey: ['identities'],
-    queryFn: () => fetch('/api/identities').then((r) => r.json()),
-    staleTime: CACHE_TIME.list,
-    enabled: showCreateModal || showPasteTextModal,
-  })
-  const identities = useMemo<{ id: string; name: string }[]>(
-    () => identitiesRes?.data ?? [],
-    [identitiesRes]
-  )
-
-  const { data: recentEmailsRes } = useQuery({
-    queryKey: ['recent-emails-for-link'],
-    queryFn: () => fetch('/api/emails?page=1&limit=50').then((r) => r.json()),
-    staleTime: CACHE_TIME.list,
-    enabled: showCreateModal,
-  })
-
-  // Cleanup retention shared with settings page — same query key, same cache.
-  const { data: retentionPolicyRes } = useQuery({
-    queryKey: ['retention-policy'],
-    queryFn: () => fetch('/api/settings/retention-policy').then((r) => r.json()),
-    staleTime: CACHE_TIME.list,
-  })
-  const taskRetainAfterDays: number =
-    retentionPolicyRes?.data?.taskRetainAfterDays ?? 30
-  const updateTaskRetainMutation = useMutation({
-    mutationFn: async (days: number) => {
-      const res = await fetch('/api/settings/retention-policy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskRetainAfterDays: days }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error?.message || 'Failed to update auto-cleanup')
-      return json
-    },
-    onSuccess: () => {
-      toast.success('Auto-cleanup updated')
-      queryClient.invalidateQueries({ queryKey: ['retention-policy'] })
-    },
-    onError: (err: Error) => showError(err.message),
-  })
-  const recentEmails = useMemo<{
-    id: string
-    subject: string
-    sender: string
-    receivedAt: string
-    project: { id: string; name: string } | null
-  }[]>(
-    () => recentEmailsRes?.data ?? [],
-    [recentEmailsRes]
-  )
-
-  const filteredProjects = useMemo(() => {
-    if (!selectedIdentityId) return projects
-    return projects.filter((p) => p.identity?.id === selectedIdentityId)
-  }, [projects, selectedIdentityId])
-
-  const filteredEmails = useMemo(() => {
-    let list = recentEmails
-    if (selectedProjectId) {
-      list = list.filter((e) => e.project?.id === selectedProjectId)
-    } else if (selectedIdentityId) {
-      const projectIdsInIdentity = new Set(filteredProjects.map((p) => p.id))
-      list = list.filter((e) => e.project && projectIdsInIdentity.has(e.project.id))
-    }
-    const q = emailPickerQuery.trim().toLowerCase()
-    if (q) {
-      list = list.filter((e) =>
-        e.subject?.toLowerCase().includes(q) || e.sender?.toLowerCase().includes(q)
-      )
-    }
-    return list
-  }, [recentEmails, emailPickerQuery, selectedProjectId, selectedIdentityId, filteredProjects])
-
-  const linkedEmails = useMemo(
-    () => recentEmails.filter((e) => linkedEmailIds.includes(e.id)),
-    [recentEmails, linkedEmailIds]
-  )
-
-  const selectedIdentityName = selectedIdentityId
-    ? identities.find((i) => i.id === selectedIdentityId)?.name
-    : undefined
-  const selectedProjectName = selectedProjectId
-    ? projects.find((p) => p.id === selectedProjectId)?.name
-    : undefined
   const handleGenerateTask = async () => {
     if (!extractText.trim()) return
     setExtracting(true)
@@ -635,9 +498,8 @@ function TasksContent() {
   }
 
   const tasks = useMemo(() => {
-    const raw = ((res as QueryResponse<TaskItem[]>)?.data || []) as TaskItem[]
-    if (!dateFilter) return raw
-    return raw.filter((t) => {
+    if (!dateFilter) return rawTasks
+    return rawTasks.filter((t) => {
       if (!t.createdAt) return true
       const created = new Date(t.createdAt)
       if (dateFilter.from && created < dateFilter.from) return false
@@ -648,7 +510,7 @@ function TasksContent() {
       }
       return true
     })
-  }, [res, dateFilter])
+  }, [rawTasks, dateFilter])
 
   const clearDateFilter = useCallback(() => {
     setDateFilter(null)
