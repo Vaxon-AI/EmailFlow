@@ -353,6 +353,98 @@ export async function deleteManyTasks(taskIds: string[], userId: string) {
   return prisma.task.deleteMany({ where: { id: { in: taskIds }, userId } })
 }
 
+export async function bulkComplete(userId: string, taskIds: string[], at: Date) {
+  return prisma.task.updateMany({
+    where: { id: { in: taskIds }, userId },
+    data: { status: 'completed', completedAt: at, dismissedAt: null },
+  })
+}
+
+export async function bulkActivate(userId: string, taskIds: string[], at: Date) {
+  return prisma.task.updateMany({
+    where: { id: { in: taskIds }, userId },
+    data: { status: 'active', activeAt: at, dismissedAt: null, completedAt: null },
+  })
+}
+
+export async function setMatter(userId: string, taskId: string, matterId: string) {
+  return prisma.task.update({
+    where: { id: taskId, userId },
+    data: { matterId },
+  })
+}
+
+export async function findTaskOwnedBy(userId: string, taskId: string) {
+  return prisma.task.findFirst({ where: { id: taskId, userId } })
+}
+
+export async function linkEmailToTask(taskId: string, emailId: string) {
+  return prisma.taskEmail.createMany({
+    data: [{ taskId, emailId, relationship: 'source' }],
+    skipDuplicates: true,
+  })
+}
+
+export async function findRecentDatedTasksForProject(input: {
+  userId: string
+  projectContextId: string
+  since: Date
+  take: number
+}) {
+  const { userId, projectContextId, since, take } = input
+  return prisma.task.findMany({
+    where: {
+      userId,
+      archivedAt: null,
+      matter: { projectContextId },
+      createdAt: { gte: since },
+      OR: [
+        { userSetDeadline: { not: null } },
+        { explicitDeadline: { not: null } },
+        { inferredDeadline: { not: null } },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take,
+    select: {
+      title: true,
+      startDate: true,
+      userSetDeadline: true,
+      explicitDeadline: true,
+      inferredDeadline: true,
+    },
+  })
+}
+
+export async function bulkSetMatter(userId: string, taskIds: string[], matterId: string) {
+  return prisma.task.updateMany({
+    where: { id: { in: taskIds }, userId },
+    data: { matterId },
+  })
+}
+
+export async function unlinkTaskFromEmail(emailId: string, taskId: string) {
+  return prisma.taskEmail.deleteMany({ where: { emailId, taskId } })
+}
+
+export async function findActiveTasksLinkedToThread(userId: string, threadId: string) {
+  return prisma.task.findMany({
+    where: {
+      userId,
+      archivedAt: null,
+      emailLinks: { some: { email: { threadId } } },
+    },
+    select: {
+      id: true,
+      title: true,
+      matterId: true,
+      matter: {
+        include: { projectContext: { include: { identity: true } } },
+      },
+    },
+  })
+}
+
 export async function findTasksByDateRange(
   userId: string,
   dateRange: { start: Date; end: Date }

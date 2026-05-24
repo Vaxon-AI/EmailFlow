@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { AppError } from '@/lib/app-errors'
 import { errorFromException } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
 import { hashPassword, verifyPassword } from '@/lib/auth-password'
 import { hashResetToken } from '@/lib/password-reset'
+import { findByTokenHashWithUser, applyResetPassword } from '@/repositories/password-reset-repo'
 
 export async function POST(req: Request) {
   try {
@@ -31,10 +31,7 @@ export async function POST(req: Request) {
     }
 
     const tokenHash = hashResetToken(token)
-    const record = await prisma.passwordResetToken.findUnique({
-      where: { tokenHash },
-      include: { user: true },
-    })
+    const record = await findByTokenHashWithUser(tokenHash)
 
     // Normalize token state errors to avoid leaking information
     if (!record) {
@@ -58,16 +55,11 @@ export async function POST(req: Request) {
 
     const newHash = await hashPassword(newPassword)
 
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: user.id },
-        data: { passwordHash: newHash },
-      }),
-      prisma.passwordResetToken.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() },
-      }),
-    ])
+    await applyResetPassword({
+      userId: user.id,
+      passwordHash: newHash,
+      tokenId: record.id,
+    })
 
     return NextResponse.json({
       success: true,

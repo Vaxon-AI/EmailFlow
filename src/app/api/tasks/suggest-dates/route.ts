@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { findOwnedById as findProjectOwnedById } from '@/repositories/project-context-repo'
+import { findRecentDatedTasksForProject } from '@/repositories/task-repo'
 import { suggestTaskDates } from '@/ai/skills/suggest-task-dates'
 import { z } from 'zod'
 
@@ -27,35 +28,16 @@ export async function POST(req: NextRequest) {
     let recentTasks: { title: string; startDate: string | null; dueDate: string | null }[] = []
 
     if (projectId && typeof projectId === 'string') {
-      const project = await prisma.projectContext.findFirst({
-        where: { id: projectId, userId: user.id },
-        select: { id: true, name: true },
-      })
+      const project = await findProjectOwnedById(user.id, projectId)
       if (project) {
         projectName = project.name
         const since = new Date()
         since.setDate(since.getDate() - 30)
-        const tasks = await prisma.task.findMany({
-          where: {
-            userId: user.id,
-            archivedAt: null,
-            matter: { projectContextId: project.id },
-            createdAt: { gte: since },
-            OR: [
-              { userSetDeadline: { not: null } },
-              { explicitDeadline: { not: null } },
-              { inferredDeadline: { not: null } },
-            ],
-          },
-          orderBy: { createdAt: 'desc' },
+        const tasks = await findRecentDatedTasksForProject({
+          userId: user.id,
+          projectContextId: project.id,
+          since,
           take: 10,
-          select: {
-            title: true,
-            startDate: true,
-            userSetDeadline: true,
-            explicitDeadline: true,
-            inferredDeadline: true,
-          },
         })
         recentTasks = tasks.map((t) => {
           const due = t.userSetDeadline ?? t.explicitDeadline ?? t.inferredDeadline

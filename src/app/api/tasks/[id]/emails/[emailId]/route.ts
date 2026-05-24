@@ -3,7 +3,6 @@ import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
 import * as emailRepo from '@/repositories/email-repo'
-import { prisma } from '@/lib/prisma'
 
 export async function POST(
   req: NextRequest,
@@ -16,16 +15,10 @@ export async function POST(
     const task = await taskRepo.findTaskById(user.id, taskId)
     if (!task) return error('NOT_FOUND', 'Task not found', 404)
 
-    const email = await prisma.email.findFirst({
-      where: { id: emailId, userId: user.id },
-      select: { id: true },
-    })
-    if (!email) return error('NOT_FOUND', 'Email not found', 404)
+    const emailExists = await emailRepo.existsForUser(user.id, emailId)
+    if (!emailExists) return error('NOT_FOUND', 'Email not found', 404)
 
-    await prisma.taskEmail.createMany({
-      data: [{ taskId, emailId, relationship: 'source' }],
-      skipDuplicates: true,
-    })
+    await taskRepo.linkEmailToTask(taskId, emailId)
     await emailRepo.bulkMarkActioned(user.id, [emailId])
 
     return success({ message: 'Email linked to task' })
@@ -46,12 +39,7 @@ export async function DELETE(
     const task = await taskRepo.findTaskById(user.id, taskId)
     if (!task) return error('NOT_FOUND', 'Task not found', 404)
 
-    await prisma.taskEmail.deleteMany({
-      where: {
-        taskId,
-        emailId,
-      },
-    })
+    await taskRepo.unlinkTaskFromEmail(emailId, taskId)
     return success({ message: 'Email unlinked from task' })
   } catch (err) {
     console.error('[api/tasks/[id]/emails/[emailId]]', err)

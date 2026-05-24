@@ -20,20 +20,15 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
   }
 })
 
-vi.mock('@/lib/prisma', () => ({
-  prisma: {
-    email: {
-      findMany: vi.fn(),
-    },
-    threadMemory: {
-      upsert: vi.fn(),
-    },
-  },
-}))
-
 vi.mock('@/repositories/email-repo', () => ({
   bulkIgnoreEmails: vi.fn(),
   bulkSetEmailBucket: vi.fn(),
+  findThreadIdsForEmails: vi.fn(),
+  findEligibleForTaskGeneration: vi.fn(),
+}))
+
+vi.mock('@/repositories/thread-memory-repo', () => ({
+  upsertManualMatterAssignment: vi.fn(),
 }))
 
 vi.mock('@/workflows', () => ({
@@ -50,17 +45,23 @@ vi.mock('@/services/project-matter-service', () => ({
 }))
 
 import { getAuthUser } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
 import { ensureMatterForProject } from '@/services/project-matter-service'
-import { bulkIgnoreEmails, bulkSetEmailBucket } from '@/repositories/email-repo'
+import {
+  bulkIgnoreEmails,
+  bulkSetEmailBucket,
+  findThreadIdsForEmails,
+  findEligibleForTaskGeneration,
+} from '@/repositories/email-repo'
+import { upsertManualMatterAssignment } from '@/repositories/thread-memory-repo'
 import { processEmail } from '@/workflows'
 import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 import { POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockEnsureMatterForProject = vi.mocked(ensureMatterForProject)
-const mockEmail = vi.mocked(prisma.email)
-const mockThreadMemory = vi.mocked(prisma.threadMemory)
+const mockFindThreadIdsForEmails = vi.mocked(findThreadIdsForEmails)
+const mockFindEligibleForTaskGeneration = vi.mocked(findEligibleForTaskGeneration)
+const mockUpsertManualMatterAssignment = vi.mocked(upsertManualMatterAssignment)
 const mockBulkIgnore = vi.mocked(bulkIgnoreEmails)
 const mockBulkSetEmailBucket = vi.mocked(bulkSetEmailBucket)
 const mockProcessEmail = vi.mocked(processEmail)
@@ -109,17 +110,13 @@ describe('POST /api/emails/batch', () => {
 
   it('reassigns emails to project threads, creating matter if needed', async () => {
     mockEnsureMatterForProject.mockResolvedValue({ id: 'matter-1', projectName: 'Project Alpha' } as never)
-    mockEmail.findMany.mockResolvedValue([
-      { threadId: 'thread-1' },
-      { threadId: 'thread-1' },
-      { threadId: 'thread-2' },
-    ] as never)
-    mockThreadMemory.upsert.mockResolvedValue({} as never)
+    mockFindThreadIdsForEmails.mockResolvedValue(['thread-1', 'thread-2'])
+    mockUpsertManualMatterAssignment.mockResolvedValue(undefined as never)
 
     const res = await POST(postRequest({ ids: ['email-1', 'email-2', 'email-3'], action: 'reassign', projectId: 'proj-1' }))
 
     expect(mockEnsureMatterForProject).toHaveBeenCalledWith('user-1', 'proj-1')
-    expect(mockThreadMemory.upsert).toHaveBeenCalledTimes(2)
+    expect(mockUpsertManualMatterAssignment).toHaveBeenCalledTimes(2)
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.data.affected).toBe(2)
@@ -127,15 +124,16 @@ describe('POST /api/emails/batch', () => {
 
   it('reuses existing matter when already linked to project', async () => {
     mockEnsureMatterForProject.mockResolvedValue({ id: 'matter-existing', projectName: 'Alpha' } as never)
-    mockEmail.findMany.mockResolvedValue([{ threadId: 'thread-1' }] as never)
-    mockThreadMemory.upsert.mockResolvedValue({} as never)
+    mockFindThreadIdsForEmails.mockResolvedValue(['thread-1'])
+    mockUpsertManualMatterAssignment.mockResolvedValue(undefined as never)
 
     await POST(postRequest({ ids: ['email-1'], action: 'reassign', projectId: 'proj-1' }))
 
-    expect(mockThreadMemory.upsert).toHaveBeenCalledWith(
+    expect(mockUpsertManualMatterAssignment).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: { matterId: 'matter-existing' },
-        create: expect.objectContaining({ title: 'Alpha' }),
+        matterId: 'matter-existing',
+        projectName: 'Alpha',
+        threadId: 'thread-1',
       })
     )
   })
@@ -208,7 +206,7 @@ describe('POST /api/emails/batch', () => {
     })
 
     it('queues processEmail for eligible action emails and burns one extract per email', async () => {
-      mockEmail.findMany.mockResolvedValue([
+      mockFindEligibleForTaskGeneration.mockResolvedValue([
         eligibleEmail('e1'),
       ] as never)
       mockGetExtractRemaining.mockResolvedValue(10)
@@ -224,13 +222,7 @@ describe('POST /api/emails/batch', () => {
         skippedQuota: 0,
         quotaExhausted: false,
       })
-      expect(mockEmail.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({
-          actioned: false,
-          taskLinks: { none: {} },
-          OR: [{ classification: 'action' }, { classification: 'uncertain' }, { classification: null }],
-        }),
-      }))
+      expect(mockFindEligibleForTaskGeneration).toHaveBeenCalledWith('user-1', ['e1', 'e2'])
       expect(mockIncrementExtractUsed).toHaveBeenCalledTimes(1)
       // Pipeline runs via after() — our mock executes the callback immediately
       expect(mockProcessEmail).toHaveBeenCalledTimes(1)
@@ -242,7 +234,7 @@ describe('POST /api/emails/batch', () => {
 
     it('skips ids that are not Needs Action (DB filtering)', async () => {
       // findMany returns only the eligible subset — the route trusts the DB filter
-      mockEmail.findMany.mockResolvedValue([eligibleEmail('e1')] as never)
+      mockFindEligibleForTaskGeneration.mockResolvedValue([eligibleEmail('e1')] as never)
       mockGetExtractRemaining.mockResolvedValue(10)
       mockProcessEmail.mockResolvedValue({} as never)
 
@@ -255,7 +247,7 @@ describe('POST /api/emails/batch', () => {
     })
 
     it('caps queue size to remaining extract quota and reports skippedQuota', async () => {
-      mockEmail.findMany.mockResolvedValue([
+      mockFindEligibleForTaskGeneration.mockResolvedValue([
         eligibleEmail('e1'),
         eligibleEmail('e2'),
         eligibleEmail('e3'),
@@ -282,7 +274,7 @@ describe('POST /api/emails/batch', () => {
     })
 
     it('does not burn quota for pro users (Infinity remaining)', async () => {
-      mockEmail.findMany.mockResolvedValue([eligibleEmail('e1')] as never)
+      mockFindEligibleForTaskGeneration.mockResolvedValue([eligibleEmail('e1')] as never)
       mockGetExtractRemaining.mockResolvedValue(Infinity)
       mockProcessEmail.mockResolvedValue({} as never)
 
@@ -299,7 +291,7 @@ describe('POST /api/emails/batch', () => {
     })
 
     it('returns success with 0 queued when nothing is eligible', async () => {
-      mockEmail.findMany.mockResolvedValue([] as never)
+      mockFindEligibleForTaskGeneration.mockResolvedValue([] as never)
       mockGetExtractRemaining.mockResolvedValue(10)
 
       const res = await POST(postRequest({ ids: ['e1'], action: 'generate_tasks' }))

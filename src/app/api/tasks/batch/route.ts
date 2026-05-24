@@ -1,6 +1,5 @@
 export const dynamic = 'force-dynamic'
 import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
@@ -21,17 +20,11 @@ export async function POST(req: Request) {
 
     switch (action) {
       case 'complete':
-        await prisma.task.updateMany({
-          where: { id: { in: ids }, userId: user.id },
-          data: { status: 'completed', completedAt: now, dismissedAt: null },
-        })
+        await taskRepo.bulkComplete(user.id, ids, now)
         break
 
       case 'activate':
-        await prisma.task.updateMany({
-          where: { id: { in: ids }, userId: user.id },
-          data: { status: 'active', activeAt: now, dismissedAt: null, completedAt: null },
-        })
+        await taskRepo.bulkActivate(user.id, ids, now)
         break
 
       case 'delete':
@@ -42,10 +35,7 @@ export async function POST(req: Request) {
         if (!projectId) return error('BAD_REQUEST', 'projectId is required for reassign', 400)
         const matter = await ensureMatterForProject(user.id, projectId)
         if (!matter) return error('NOT_FOUND', 'Project not found', 404)
-        await prisma.task.updateMany({
-          where: { id: { in: ids }, userId: user.id },
-          data: { matterId: matter.id },
-        })
+        await taskRepo.bulkSetMatter(user.id, ids, matter.id)
         break
       }
 

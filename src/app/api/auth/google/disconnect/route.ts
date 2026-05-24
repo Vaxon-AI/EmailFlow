@@ -2,17 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { errorFromException } from '@/lib/api-helpers'
 import { getEmailProvider } from '@/integrations/provider-registry'
 import { requireCurrentUser } from '@/lib/auth-sessions'
-import { prisma } from '@/lib/prisma'
+import { findPasswordHash, findOwnedAccountById } from '@/repositories/user-repo'
 
 export async function POST(req: NextRequest) {
   try {
     const user = await requireCurrentUser()
     const { accountId } = await req.json().catch(() => ({ accountId: undefined }))
 
-    const fullUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { passwordHash: true },
-    })
+    const fullUser = await findPasswordHash(user.id)
 
     if (!fullUser?.passwordHash) {
       return NextResponse.json(
@@ -26,10 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     const account = accountId
-      ? await prisma.account.findFirst({
-          where: { id: accountId, userId: user.id },
-          select: { provider: true },
-        })
+      ? await findOwnedAccountById(user.id, accountId)
       : null
 
     if (accountId && !account) {

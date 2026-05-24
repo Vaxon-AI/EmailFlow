@@ -101,6 +101,17 @@ export async function findById(matterId: string): Promise<MatterMemory | null> {
   return raw ? mapRow(raw) : null
 }
 
+export async function findAllForUserWithThreads(userId: string) {
+  return prisma.matterMemory.findMany({
+    where: { userId },
+    orderBy: { lastMessageAt: 'desc' },
+    include: {
+      projectContext: { include: { identity: true } },
+      threads: { select: { threadId: true, linkedTaskId: true } },
+    },
+  })
+}
+
 // ── Writes ────────────────────────────────────────────────────
 
 /**

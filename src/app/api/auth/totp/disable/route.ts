@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { errorFromException } from '@/lib/api-helpers'
 import { requireCurrentUser } from '@/lib/auth-sessions'
-import { prisma } from '@/lib/prisma'
+import { findTotpEnabled, disableTotp } from '@/repositories/user-repo'
 import { consumeStepUpToken } from '@/lib/step-up-auth'
 
 /**
@@ -28,19 +28,13 @@ export async function POST(req: Request) {
 
     await consumeStepUpToken(user.id, stepUpToken, 'disable_totp')
 
-    const dbUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { totpEnabled: true },
-    })
+    const dbUser = await findTotpEnabled(user.id)
 
     if (!dbUser?.totpEnabled) {
       return NextResponse.json({ success: false, error: '2FA is not currently enabled' }, { status: 400 })
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { totpEnabled: false, totpSecret: null },
-    })
+    await disableTotp(user.id)
 
     return NextResponse.json({ success: true })
   } catch (err) {

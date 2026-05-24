@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { findSyncStateFields } from '@/repositories/user-repo'
 import { classifySyncState } from '@/lib/sync-state'
 
 // Returns the user's sync recency state so the Header sync button can decide:
@@ -11,10 +11,7 @@ import { classifySyncState } from '@/lib/sync-state'
 export async function GET() {
   try {
     const user = await getAuthUser()
-    const u = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { lastSyncAt: true, syncStartDate: true },
-    })
+    const u = await findSyncStateFields(user.id)
 
     return success({
       state: classifySyncState(u?.lastSyncAt ?? null),

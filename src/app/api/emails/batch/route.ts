@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic'
 import { after } from 'next/server'
 import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
 import * as emailRepo from '@/repositories/email-repo'
+import { upsertManualMatterAssignment } from '@/repositories/thread-memory-repo'
 import { processEmail } from '@/workflows'
 import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 import { ensureMatterForProject } from '@/services/project-matter-service'
@@ -34,24 +34,15 @@ export async function POST(req: Request) {
       const matter = await ensureMatterForProject(user.id, projectId)
       if (!matter) return error('NOT_FOUND', 'Project not found', 404)
 
-      const emails = await prisma.email.findMany({
-        where: { id: { in: ids }, userId: user.id },
-        select: { threadId: true },
-      })
-      const threadIds = [...new Set(emails.map((e) => e.threadId).filter((t): t is string => !!t))]
+      const threadIds = await emailRepo.findThreadIdsForEmails(user.id, ids)
 
       await Promise.all(
         threadIds.map((threadId) =>
-          prisma.threadMemory.upsert({
-            where: { userId_threadId: { userId: user.id, threadId } },
-            update: { matterId: matter!.id },
-            create: {
-              userId: user.id,
-              threadId,
-              matterId: matter!.id,
-              title: matter.projectName,
-              summary: 'Manually assigned',
-            },
+          upsertManualMatterAssignment({
+            userId: user.id,
+            threadId,
+            matterId: matter.id,
+            projectName: matter.projectName,
           })
         )
       )
@@ -79,29 +70,7 @@ export async function POST(req: Request) {
     if (action === 'generate_tasks') {
       // Needs Action and Unclassified emails can generate tasks. Anything with
       // an existing task link is already tracked and is skipped.
-      const eligible = await prisma.email.findMany({
-        where: {
-          id: { in: ids },
-          userId: user.id,
-          actioned: false,
-          taskLinks: { none: {} },
-          OR: [
-            { classification: 'action' },
-            { classification: 'uncertain' },
-            { classification: null },
-          ],
-        },
-        select: {
-          id: true,
-          subject: true,
-          sender: true,
-          receivedAt: true,
-          bodyPreview: true,
-          bodyFull: true,
-          labels: true,
-          threadId: true,
-        },
-      })
+      const eligible = await emailRepo.findEligibleForTaskGeneration(user.id, ids)
 
       // Cap to remaining extract quota so a user with 5 extracts left can't
       // accidentally fire 50 background jobs that all error out at the AI step.

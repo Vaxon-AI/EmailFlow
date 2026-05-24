@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { error, errorFromException, getAuthUser, success } from '@/lib/api-helpers'
-import { getEmailProvider, getEnabledEmailProviderKeys } from '@/integrations/provider-registry'
+import { getEmailProvider } from '@/integrations/provider-registry'
 import { getClassifyRemaining } from '@/lib/quota'
-import { prisma } from '@/lib/prisma'
+import { listSyncReadyAccounts } from '@/repositories/user-repo'
 
 // Read-only preview of how many emails a sync window would consume from the
 // user's monthly classification quota. The dashboard's first-login dialog calls
@@ -35,11 +35,7 @@ export async function GET(req: Request) {
       since = new Date(Date.now() - days * 86_400_000)
     }
 
-    const providerKeys = getEnabledEmailProviderKeys()
-    const accounts = await prisma.account.findMany({
-      where: { userId: user.id, provider: { in: providerKeys }, syncEnabled: true, reauthRequired: false },
-      select: { id: true, provider: true },
-    })
+    const accounts = await listSyncReadyAccounts(user.id)
 
     const previewPromise = accounts.length > 0
       ? Promise.all(accounts.map((account) => getEmailProvider(account.provider).previewCount(user.id, { since, accountId: account.id })))

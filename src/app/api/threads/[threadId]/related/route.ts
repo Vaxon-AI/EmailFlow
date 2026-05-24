@@ -1,5 +1,6 @@
 import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { countEmailsByThread } from '@/repositories/email-repo'
+import { findActiveTasksLinkedToThread } from '@/repositories/task-repo'
 
 export async function GET(
   _req: Request,
@@ -10,22 +11,8 @@ export async function GET(
     const { threadId } = await params
 
     const [emailCount, tasks] = await Promise.all([
-      prisma.email.count({ where: { userId: user.id, threadId } }),
-      prisma.task.findMany({
-        where: {
-          userId: user.id,
-          archivedAt: null,
-          emailLinks: { some: { email: { threadId } } },
-        },
-        select: {
-          id: true,
-          title: true,
-          matterId: true,
-          matter: {
-            include: { projectContext: { include: { identity: true } } },
-          },
-        },
-      }),
+      countEmailsByThread(user.id, threadId),
+      findActiveTasksLinkedToThread(user.id, threadId),
     ])
 
     const enrichedTasks = tasks.map((t) => ({

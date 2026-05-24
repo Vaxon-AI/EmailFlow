@@ -1,5 +1,5 @@
 import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { setSyncStartDate } from '@/repositories/user-repo'
 import { z } from 'zod'
 
 const syncRangeSchema = z.object({
@@ -46,10 +46,7 @@ export async function POST(req: Request) {
       startDate.setDate(startDate.getDate() - lookbackDays)
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { syncStartDate: startDate },
-    })
+    await setSyncStartDate(user.id, startDate)
 
     return success({ syncStartDate: startDate })
   } catch (err) {

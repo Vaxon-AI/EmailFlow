@@ -335,6 +335,60 @@ export async function bulkSetEmailBucket(userId: string, emailIds: string[], buc
   })
 }
 
+export async function findThreadIdsForEmails(userId: string, emailIds: string[]): Promise<string[]> {
+  const rows = await prisma.email.findMany({
+    where: { id: { in: emailIds }, userId },
+    select: { threadId: true },
+  })
+  return [...new Set(rows.map((r) => r.threadId).filter((t): t is string => !!t))]
+}
+
+export async function countEmailsByThread(userId: string, threadId: string): Promise<number> {
+  return prisma.email.count({ where: { userId, threadId } })
+}
+
+export async function findEligibleForTaskGeneration(userId: string, emailIds: string[]) {
+  return prisma.email.findMany({
+    where: {
+      id: { in: emailIds },
+      userId,
+      actioned: false,
+      taskLinks: { none: {} },
+      OR: [
+        { classification: 'action' },
+        { classification: 'uncertain' },
+        { classification: null },
+      ],
+    },
+    select: {
+      id: true,
+      subject: true,
+      sender: true,
+      receivedAt: true,
+      bodyPreview: true,
+      bodyFull: true,
+      labels: true,
+      threadId: true,
+    },
+  })
+}
+
+export async function existsForUser(userId: string, emailId: string): Promise<boolean> {
+  const row = await prisma.email.findFirst({
+    where: { id: emailId, userId },
+    select: { id: true },
+  })
+  return row !== null
+}
+
+export async function findAwaitingReviewIds(userId: string): Promise<string[]> {
+  const rows = await prisma.email.findMany({
+    where: { userId, awaitingReview: true },
+    select: { id: true },
+  })
+  return rows.map((r) => r.id)
+}
+
 export async function findPendingReviewEmails(userId: string) {
   return prisma.email.findMany({
     where: { userId, awaitingReview: true, classification: 'action' },

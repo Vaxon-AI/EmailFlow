@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { prisma } from '@/lib/prisma'
 import { getAuthUser, success } from '@/lib/api-helpers'
 import { sendPasswordResetEmail } from '@/lib/mailer'
 import { hashResetToken, getTokenTtlMs, RATE_LIMIT_SECONDS } from '@/lib/password-reset'
+import { findByEmail, findById } from '@/repositories/user-repo'
+import {
+  findLatestForUser,
+  invalidateAllActiveForUser,
+  createResetToken,
+} from '@/repositories/password-reset-repo'
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +20,7 @@ export async function POST(req: Request) {
     let user: { id: string; email: string; passwordHash: string | null } | null = null
 
     if (sessionUser) {
-      user = await prisma.user.findUnique({ where: { id: sessionUser.id } })
+      user = await findById(sessionUser.id)
     } else {
       // Try to find by email from body
       let email: string | undefined
@@ -31,7 +36,7 @@ export async function POST(req: Request) {
           { status: 400 }
         )
       }
-      user = await prisma.user.findUnique({ where: { email } })
+      user = await findByEmail(email)
     }
 
     // Always return success for unauthenticated requests to prevent email enumeration
@@ -55,10 +60,7 @@ export async function POST(req: Request) {
     }
 
     // Rate limit: reject if a token was issued within the last RATE_LIMIT_SECONDS
-    const latest = await prisma.passwordResetToken.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
-    })
+    const latest = await findLatestForUser(user.id)
     if (latest) {
       const secondsSince = (Date.now() - latest.createdAt.getTime()) / 1000
       if (secondsSince < RATE_LIMIT_SECONDS) {
@@ -71,18 +73,13 @@ export async function POST(req: Request) {
     }
 
     // Invalidate all active (unused, not yet expired) tokens for this user
-    await prisma.passwordResetToken.updateMany({
-      where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
-      data: { usedAt: new Date() },
-    })
+    await invalidateAllActiveForUser(user.id)
 
     const plainToken = crypto.randomBytes(32).toString('hex')
     const tokenHash = hashResetToken(plainToken)
     const expiresAt = new Date(Date.now() + getTokenTtlMs())
 
-    await prisma.passwordResetToken.create({
-      data: { userId: user.id, tokenHash, expiresAt },
-    })
+    await createResetToken({ userId: user.id, tokenHash, expiresAt })
 
     const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
     const resetLink = `${appUrl}/reset-password?token=${plainToken}`

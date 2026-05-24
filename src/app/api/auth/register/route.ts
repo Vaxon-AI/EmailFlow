@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { findByEmail, createUser } from '@/repositories/user-repo'
 import { hashPassword } from '@/lib/auth-password'
 import { createToken, setSessionCookie } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } })
+    const existing = await findByEmail(email)
     if (existing) {
       return NextResponse.json(
         { success: false, error: 'An account with this email already exists' },
@@ -34,16 +34,14 @@ export async function POST(req: Request) {
 
     const passwordHash = await hashPassword(password)
     const inherited = await getInheritedQuotaForEmail(email, 'email')
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name: name || email.split('@')[0],
-        passwordHash,
-        classifyUsed: inherited.classifyUsed,
-        extractUsed: inherited.extractUsed,
-        pasteTextUsed: inherited.pasteTextUsed,
-        quotaResetAt: inherited.quotaResetAt,
-      },
+    const user = await createUser({
+      email,
+      name: name || email.split('@')[0],
+      passwordHash,
+      classifyUsed: inherited.classifyUsed,
+      extractUsed: inherited.extractUsed,
+      pasteTextUsed: inherited.pasteTextUsed,
+      quotaResetAt: inherited.quotaResetAt,
     })
 
     const { rawToken } = await createUserSession({

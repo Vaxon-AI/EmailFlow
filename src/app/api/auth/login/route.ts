@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { findByEmail } from '@/repositories/user-repo'
 import { verifyPassword } from '@/lib/auth-password'
 import { createToken, setSessionCookie } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const user = await prisma.user.findUnique({ where: { email } })
+    const user = await findByEmail(email)
 
     if (!user || !user.passwordHash) {
       return NextResponse.json(

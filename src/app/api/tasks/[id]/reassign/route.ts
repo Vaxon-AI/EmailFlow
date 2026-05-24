@@ -1,7 +1,6 @@
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
+import { findTaskOwnedBy, setMatter } from '@/repositories/task-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
-import { parseJsonBody } from '@/lib/api-helpers'
 import { z } from 'zod'
 
 const reassignTaskSchema = z.object({
@@ -17,12 +16,12 @@ export async function POST(
     const { id: taskId } = await params
     const { projectId } = await parseJsonBody(req, reassignTaskSchema)
 
-    const task = await prisma.task.findFirst({ where: { id: taskId, userId: user.id } })
+    const task = await findTaskOwnedBy(user.id, taskId)
     if (!task) return error('NOT_FOUND', 'Task not found', 404)
     const matter = await ensureMatterForProject(user.id, projectId)
     if (!matter) return error('NOT_FOUND', 'Project not found', 404)
 
-    await prisma.task.update({ where: { id: taskId }, data: { matterId: matter.id } })
+    await setMatter(user.id, taskId, matter.id)
 
     return success({ taskId, matterId: matter.id })
   } catch (err) {

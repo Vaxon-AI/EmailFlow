@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { errorFromException } from '@/lib/api-helpers'
 import { requireCurrentUser } from '@/lib/auth-sessions'
-import { prisma } from '@/lib/prisma'
+import { setTotpSecret } from '@/repositories/user-repo'
 
 export async function POST(req: Request) {
   try {
@@ -13,13 +13,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Missing secret' }, { status: 400 })
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        totpEnabled: true,
-        totpSecret: secret,
-      },
-    })
+    await setTotpSecret(user.id, secret)
 
     return NextResponse.json({ success: true })
   } catch (err) {

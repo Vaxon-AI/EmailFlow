@@ -1,6 +1,7 @@
 import { after } from 'next/server'
 import { getAuthUser, errorFromException, success, parseJsonBody } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { setManualReviewMode } from '@/repositories/user-repo'
+import { findAwaitingReviewIds } from '@/repositories/email-repo'
 import { createTaskFromClassifiedEmail } from '@/workflows'
 import { z } from 'zod'
 
@@ -15,20 +16,13 @@ export async function POST(req: Request) {
       code: 'INVALID_INPUT',
     })
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { manualReviewMode },
-    })
+    await setManualReviewMode(user.id, manualReviewMode)
 
     // When switching to auto, kick off task creation for all pending review emails
     if (!manualReviewMode) {
-      const pendingEmails = await prisma.email.findMany({
-        where: { userId: user.id, awaitingReview: true },
-        select: { id: true },
-      })
+      const emailIds = await findAwaitingReviewIds(user.id)
 
-      if (pendingEmails.length > 0) {
-        const emailIds = pendingEmails.map((e) => e.id)
+      if (emailIds.length > 0) {
         after(async () => {
           for (const emailId of emailIds) {
             try {

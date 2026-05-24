@@ -1,5 +1,7 @@
 import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { countEmailsByThread } from '@/repositories/email-repo'
+import { bulkSetMatter } from '@/repositories/task-repo'
+import { upsertManualMatterAssignment } from '@/repositories/thread-memory-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
 import { z } from 'zod'
 
@@ -28,34 +30,24 @@ export async function POST(req: Request) {
     // Update ThreadMemory (affects all emails in thread)
     if (includeThread) {
       ops.push(
-        prisma.threadMemory.upsert({
-          where: { userId_threadId: { userId: user.id, threadId } },
-          update: { matterId: matter.id },
-            create: {
-              userId: user.id,
-              threadId,
-              matterId: matter.id,
-              title: matter.projectName,
-              summary: 'Manually assigned',
-            },
-          })
+        upsertManualMatterAssignment({
+          userId: user.id,
+          threadId,
+          matterId: matter.id,
+          projectName: matter.projectName,
+        })
       )
     }
 
     // Explicitly set matterId on selected tasks
     if (taskIds && taskIds.length > 0) {
-      ops.push(
-        prisma.task.updateMany({
-          where: { id: { in: taskIds }, userId: user.id },
-          data: { matterId: matter.id },
-        })
-      )
+      ops.push(bulkSetMatter(user.id, taskIds, matter.id))
     }
 
     await Promise.all(ops)
 
     const affectedEmails = includeThread
-      ? await prisma.email.count({ where: { userId: user.id, threadId } })
+      ? await countEmailsByThread(user.id, threadId)
       : 0
     const affectedTasks = taskIds?.length ?? 0
 

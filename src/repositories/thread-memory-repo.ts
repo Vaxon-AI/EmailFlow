@@ -118,6 +118,30 @@ export async function linkTask(
 }
 
 /**
+ * Upsert a thread → matter binding for a manual reassignment.
+ * Used by the Reassign UI in batch and single-thread flows.
+ */
+export async function upsertManualMatterAssignment(input: {
+  userId: string
+  threadId: string
+  matterId: string
+  projectName: string
+}): Promise<void> {
+  const { userId, threadId, matterId, projectName } = input
+  await prisma.threadMemory.upsert({
+    where: { userId_threadId: { userId, threadId } },
+    update: { matterId },
+    create: {
+      userId,
+      threadId,
+      matterId,
+      title: projectName,
+      summary: 'Manually assigned',
+    },
+  })
+}
+
+/**
  * Associate a thread with a matter.
  * Called after matter matching succeeds or a new matter is created.
  */

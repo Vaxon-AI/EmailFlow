@@ -8,13 +8,9 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
   }
 })
 
-vi.mock('@/lib/prisma', () => ({
-  prisma: {
-    task: {
-      findFirst: vi.fn(),
-      update: vi.fn(),
-    },
-  },
+vi.mock('@/repositories/task-repo', () => ({
+  findTaskOwnedBy: vi.fn(),
+  setMatter: vi.fn(),
 }))
 
 vi.mock('@/services/project-matter-service', () => ({
@@ -22,12 +18,13 @@ vi.mock('@/services/project-matter-service', () => ({
 }))
 
 import { getAuthUser } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { findTaskOwnedBy, setMatter } from '@/repositories/task-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
 import { POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
-const mockTask = vi.mocked(prisma.task)
+const mockFindTaskOwnedBy = vi.mocked(findTaskOwnedBy)
+const mockSetMatter = vi.mocked(setMatter)
 const mockEnsureMatterForProject = vi.mocked(ensureMatterForProject)
 
 function postRequest(body: object): Request {
@@ -50,7 +47,7 @@ describe('POST /api/tasks/[id]/reassign', () => {
   })
 
   it('returns 404 when task does not exist', async () => {
-    mockTask.findFirst.mockResolvedValueOnce(null)
+    mockFindTaskOwnedBy.mockResolvedValueOnce(null)
 
     const res = await POST(postRequest({ projectId: 'proj-1' }), { params: Promise.resolve({ id: 'missing' }) })
 
@@ -58,7 +55,7 @@ describe('POST /api/tasks/[id]/reassign', () => {
   })
 
   it('returns 404 when project does not belong to user', async () => {
-    mockTask.findFirst.mockResolvedValueOnce({ id: 'task-1' } as never)
+    mockFindTaskOwnedBy.mockResolvedValueOnce({ id: 'task-1' } as never)
     mockEnsureMatterForProject.mockResolvedValue(null)
 
     const res = await POST(postRequest({ projectId: 'proj-404' }), { params: Promise.resolve({ id: 'task-1' }) })
@@ -67,16 +64,13 @@ describe('POST /api/tasks/[id]/reassign', () => {
   })
 
   it('reassigns task to existing matter', async () => {
-    mockTask.findFirst.mockResolvedValueOnce({ id: 'task-1' } as never)
+    mockFindTaskOwnedBy.mockResolvedValueOnce({ id: 'task-1' } as never)
     mockEnsureMatterForProject.mockResolvedValue({ id: 'matter-1', projectName: 'Alpha' } as never)
-    mockTask.update.mockResolvedValue({} as never)
+    mockSetMatter.mockResolvedValue({} as never)
 
     const res = await POST(postRequest({ projectId: 'proj-1' }), { params: Promise.resolve({ id: 'task-1' }) })
 
-    expect(mockTask.update).toHaveBeenCalledWith({
-      where: { id: 'task-1' },
-      data: { matterId: 'matter-1' },
-    })
+    expect(mockSetMatter).toHaveBeenCalledWith('user-1', 'task-1', 'matter-1')
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.data.taskId).toBe('task-1')
@@ -84,9 +78,9 @@ describe('POST /api/tasks/[id]/reassign', () => {
   })
 
   it('uses ensured matter id from the shared service', async () => {
-    mockTask.findFirst.mockResolvedValueOnce({ id: 'task-1' } as never)
+    mockFindTaskOwnedBy.mockResolvedValueOnce({ id: 'task-1' } as never)
     mockEnsureMatterForProject.mockResolvedValue({ id: 'matter-new', projectName: 'Alpha' } as never)
-    mockTask.update.mockResolvedValue({} as never)
+    mockSetMatter.mockResolvedValue({} as never)
 
     const res = await POST(postRequest({ projectId: 'proj-1' }), { params: Promise.resolve({ id: 'task-1' }) })
 

@@ -43,6 +43,13 @@ export async function findById(id: string): Promise<ProjectContext | null> {
   return row ? mapRow(row) : null
 }
 
+export async function findOwnedById(userId: string, projectId: string) {
+  return prisma.projectContext.findFirst({
+    where: { id: projectId, userId },
+    select: { id: true, name: true },
+  })
+}
+
 export async function createSuggestion(userId: string, input: CreateProjectInput): Promise<ProjectContext> {
   const existing = await prisma.projectContext.findUnique({
     where: { userId_name: { userId, name: input.name } },

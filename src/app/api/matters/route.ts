@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { getAuthUser, success } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { findAllForUserWithThreads } from '@/repositories/matter-memory-repo'
 
 // GET /api/matters
 // Returns all MatterMemory for the user, with linked thread IDs and task IDs.
@@ -10,23 +10,7 @@ export async function GET() {
     const user = await getAuthUser()
     if (!user) return success([])
 
-    const matters = await prisma.matterMemory.findMany({
-      where: { userId: user.id },
-      orderBy: { lastMessageAt: 'desc' },
-      include: {
-        projectContext: {
-          include: {
-            identity: true,
-          },
-        },
-        threads: {
-          select: {
-            threadId: true,
-            linkedTaskId: true,
-          },
-        },
-      },
-    })
+    const matters = await findAllForUserWithThreads(user.id)
 
     // Shape: { id, title, topic, status, summary, nextAction, threadCount, emailCount, threadIds, taskIds }
     const shaped = matters.map((m) => ({

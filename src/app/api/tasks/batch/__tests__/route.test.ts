@@ -8,20 +8,15 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
   }
 })
 
-vi.mock('@/lib/prisma', () => ({
-  prisma: {
-    task: {
-      updateMany: vi.fn(),
-    },
-  },
-}))
-
 vi.mock('@/services/project-matter-service', () => ({
   ensureMatterForProject: vi.fn(),
 }))
 
 vi.mock('@/repositories/task-repo', () => ({
   deleteManyTasks: vi.fn(),
+  bulkComplete: vi.fn(),
+  bulkActivate: vi.fn(),
+  bulkSetMatter: vi.fn(),
 }))
 
 vi.mock('@/repositories/stats-repo', () => ({
@@ -29,16 +24,17 @@ vi.mock('@/repositories/stats-repo', () => ({
 }))
 
 import { getAuthUser } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
 import { ensureMatterForProject } from '@/services/project-matter-service'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
-const mockTaskUpdateMany = vi.mocked(prisma.task.updateMany)
 const mockEnsureMatterForProject = vi.mocked(ensureMatterForProject)
 const mockDeleteManyTasks = vi.mocked(taskRepo.deleteManyTasks)
+const mockBulkComplete = vi.mocked(taskRepo.bulkComplete)
+const mockBulkActivate = vi.mocked(taskRepo.bulkActivate)
+const mockBulkSetMatter = vi.mocked(taskRepo.bulkSetMatter)
 const mockInvalidateStatsCache = vi.mocked(invalidateStatsCache)
 
 function postRequest(body: object): Request {
@@ -53,7 +49,9 @@ describe('POST /api/tasks/batch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthUser.mockResolvedValue({ id: 'user-1' } as never)
-    mockTaskUpdateMany.mockResolvedValue({ count: 2 } as never)
+    mockBulkComplete.mockResolvedValue({ count: 2 } as never)
+    mockBulkActivate.mockResolvedValue({ count: 2 } as never)
+    mockBulkSetMatter.mockResolvedValue({ count: 2 } as never)
     mockDeleteManyTasks.mockResolvedValue(undefined as never)
   })
 
@@ -70,10 +68,7 @@ describe('POST /api/tasks/batch', () => {
   it('marks tasks as completed with completedAt timestamp', async () => {
     const res = await POST(postRequest({ ids: ['task-1', 'task-2'], action: 'complete' }))
 
-    expect(mockTaskUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['task-1', 'task-2'] }, userId: 'user-1' },
-      data: expect.objectContaining({ status: 'completed', completedAt: expect.any(Date) }),
-    })
+    expect(mockBulkComplete).toHaveBeenCalledWith('user-1', ['task-1', 'task-2'], expect.any(Date))
     expect(mockInvalidateStatsCache).toHaveBeenCalledWith('user-1')
     expect(res.status).toBe(200)
     expect((await res.json()).data.affected).toBe(2)
@@ -82,10 +77,7 @@ describe('POST /api/tasks/batch', () => {
   it('marks tasks as active with activeAt timestamp', async () => {
     const res = await POST(postRequest({ ids: ['task-1'], action: 'activate' }))
 
-    expect(mockTaskUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['task-1'] }, userId: 'user-1' },
-      data: expect.objectContaining({ status: 'active', activeAt: expect.any(Date), dismissedAt: null }),
-    })
+    expect(mockBulkActivate).toHaveBeenCalledWith('user-1', ['task-1'], expect.any(Date))
     expect(res.status).toBe(200)
   })
 
@@ -114,10 +106,7 @@ describe('POST /api/tasks/batch', () => {
 
     const res = await POST(postRequest({ ids: ['task-1', 'task-2'], action: 'reassign', projectId: 'proj-1' }))
 
-    expect(mockTaskUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['task-1', 'task-2'] }, userId: 'user-1' },
-      data: { matterId: 'matter-1' },
-    })
+    expect(mockBulkSetMatter).toHaveBeenCalledWith('user-1', ['task-1', 'task-2'], 'matter-1')
     expect(res.status).toBe(200)
   })
 

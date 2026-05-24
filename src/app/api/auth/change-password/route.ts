@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireCurrentSessionContext } from '@/lib/auth-sessions'
 import { errorFromException } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { findPasswordHash, setPasswordHash } from '@/repositories/user-repo'
 import { hashPassword, verifyPassword } from '@/lib/auth-password'
 import { consumeStepUpToken } from '@/lib/step-up-auth'
 import { revokeOtherSessions } from '@/lib/auth-sessions'
@@ -41,10 +41,7 @@ export async function POST(req: Request) {
     // Validate step-up token first
     await consumeStepUpToken(userId, stepUpToken, 'change_password')
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { passwordHash: true },
-    })
+    const user = await findPasswordHash(userId)
 
     if (!user?.passwordHash) {
       return NextResponse.json(
@@ -75,10 +72,7 @@ export async function POST(req: Request) {
 
     const newHash = await hashPassword(newPassword)
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash: newHash },
-    })
+    await setPasswordHash(userId, newHash)
 
     // Revoke all other sessions so stolen sessions are invalidated after a password change
     await revokeOtherSessions(userId, context.session.id)

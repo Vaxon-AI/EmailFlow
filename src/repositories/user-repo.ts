@@ -69,6 +69,89 @@ export async function updateTimezone(userId: string, timezone: string) {
   })
 }
 
+export async function setManualReviewMode(userId: string, manualReviewMode: boolean) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { manualReviewMode },
+  })
+}
+
+export async function setHasSeenSyncSetup(userId: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { hasSeenSyncSetup: true },
+  })
+}
+
+export async function setSyncStartDate(userId: string, syncStartDate: Date) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { syncStartDate },
+  })
+}
+
+export async function findPasswordHash(userId: string) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true },
+  })
+}
+
+export async function setPasswordHash(userId: string, passwordHash: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  })
+}
+
+export async function setTotpSecret(userId: string, secret: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { totpEnabled: true, totpSecret: secret },
+  })
+}
+
+export async function findTotpEnabled(userId: string) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { totpEnabled: true },
+  })
+}
+
+export async function disableTotp(userId: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { totpEnabled: false, totpSecret: null },
+  })
+}
+
+export async function findByEmail(email: string) {
+  return prisma.user.findUnique({ where: { email } })
+}
+
+export async function findById(userId: string) {
+  return prisma.user.findUnique({ where: { id: userId } })
+}
+
+export async function findOwnedAccountById(userId: string, accountId: string) {
+  return prisma.account.findFirst({
+    where: { id: accountId, userId },
+    select: { provider: true },
+  })
+}
+
+export async function createUser(input: {
+  email: string
+  name: string
+  passwordHash: string
+  classifyUsed: number
+  extractUsed: number
+  pasteTextUsed: number
+  quotaResetAt: Date
+}) {
+  return prisma.user.create({ data: input })
+}
+
 export async function findForTotpVerify(userId: string) {
   return prisma.user.findUnique({
     where: { id: userId },
@@ -126,6 +209,26 @@ export async function deleteUserWithQuotaSnapshot(userId: string) {
   return prisma.$transaction(async (tx) => {
     await snapshotForUser(userId, tx)
     await tx.user.delete({ where: { id: userId } })
+  })
+}
+
+export async function listSyncReadyAccounts(userId: string) {
+  const providerKeys = getEnabledEmailProviderKeys()
+  return prisma.account.findMany({
+    where: {
+      userId,
+      provider: { in: providerKeys },
+      syncEnabled: true,
+      reauthRequired: false,
+    },
+    select: { id: true, provider: true },
+  })
+}
+
+export async function findSyncStateFields(userId: string) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { lastSyncAt: true, syncStartDate: true },
   })
 }
 
