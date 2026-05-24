@@ -28,11 +28,7 @@ import {
   Sparkles,
   Trash2,
   Unplug,
-  User,
-  Zap,
-  BarChart2,
 } from 'lucide-react'
-import { UpgradeModal } from '@/components/upgrade-modal'
 import { PersonalisationChipGroup } from '@/components/personalisation-chips'
 import {
   ONBOARDING_FOCUS_LIMIT,
@@ -43,13 +39,14 @@ import {
   ONBOARDING_ROLE_OPTIONS,
   toggleChipValue,
 } from '@/lib/onboarding-profile'
-import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
 import { requestStepUp, verifyStepUp, type StepUpAction } from '@/lib/step-up-client'
 import { RetentionPolicyCard } from '@/components/retention-policy-card'
 import { getEmailProviderAccountLabel, getEmailProviderLabel } from '@/lib/email-provider-labels'
+import { SettingsPlanUsageCard, type QuotaStatus } from './settings-plan-usage-card'
+import { SettingsSectionNav, type SettingsSection } from './settings-section-nav'
 import { SettingsTimezoneCard } from './settings-timezone-card'
 
 type CurrentUser = {
@@ -96,26 +93,12 @@ type DeviceSession = {
   isCurrent: boolean
 }
 
-type QuotaStatus = {
-  classify: { used: number; limit: number | null; resetAt: string }
-  extract: { used: number; limit: number | null; resetAt: string }
-  pasteText?: { used: number; limit: number | null; resetAt: string }
-}
-
 const SYNC_PRESETS = [7, 15, 30] as const
-type SettingsSection = 'account' | 'email' | 'privacy'
-
-const SETTINGS_SECTIONS = [
-  { id: 'account' as const, label: 'Account', icon: User },
-  { id: 'email' as const, label: 'Email', icon: Mail },
-  { id: 'privacy' as const, label: 'Security & Privacy', icon: Shield },
-]
 
 export default function SettingsPage() {
   const { user, logout } = useAuth()
   const queryClient = useQueryClient()
   const [activeSection, setActiveSection] = useState<SettingsSection>('account')
-  const [upgradeOpen, setUpgradeOpen] = useState(false)
 
   const { data: stats } = useQuery({
     queryKey: ['stats'],
@@ -179,143 +162,7 @@ export default function SettingsPage() {
             <PasswordCard />
             <PreferencesCard />
 
-            {/* Plan & Usage */}
-            <Card className="border-white/80 bg-white/95 shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <BarChart2 className="h-4 w-4 text-brand-700" />
-                  Plan &amp; Usage
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {user?.plan === 'pro' ? (
-                      <Badge className="gap-1.5 bg-brand-600 text-white hover:bg-brand-600">
-                        <Zap className="h-3 w-3" />
-                        Pro
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="border-gray-200 text-gray-600">Free</Badge>
-                    )}
-                    <span className="text-sm text-gray-500">
-                      {user?.plan === 'pro' ? 'Unlimited access to all features' : 'Monthly usage limits apply'}
-                    </span>
-                  </div>
-                  {user?.plan !== 'pro' && (
-                    <button
-                      onClick={() => setUpgradeOpen(true)}
-                      className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-700"
-                    >
-                      <Zap className="h-3.5 w-3.5" />
-                      Upgrade to Pro
-                    </button>
-                  )}
-                </div>
-
-                {quota && user?.plan !== 'pro' && (
-                  <div className="space-y-4 rounded-2xl border border-gray-200/80 bg-gray-50/70 p-4">
-                    {/* Classification quota */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">Email classification</span>
-                        <span className="text-sm tabular-nums text-gray-500">
-                          {quota.classify.used} / {quota.classify.limit}
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                        <div
-                          className={cn(
-                            'h-full rounded-full transition-all',
-                            quota.classify.used / quota.classify.limit! >= 0.9
-                              ? 'bg-critical'
-                              : quota.classify.used / quota.classify.limit! >= 0.7
-                                ? 'bg-warning'
-                                : 'bg-brand-500'
-                          )}
-                          style={{ width: `${Math.min(100, (quota.classify.used / quota.classify.limit!) * 100)}%` }}
-                        />
-                      </div>
-                      {quota.classify.used >= quota.classify.limit! && (
-                        <p className="text-xs text-critical">Limit reached. Upgrade to Pro for unlimited classification.</p>
-                      )}
-                    </div>
-
-                    {/* Extract-to-task quota */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">Extract to task</span>
-                        <span className="text-sm tabular-nums text-gray-500">
-                          {quota.extract.used} / {quota.extract.limit}
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                        <div
-                          className={cn(
-                            'h-full rounded-full transition-all',
-                            quota.extract.used / quota.extract.limit! >= 1
-                              ? 'bg-critical'
-                              : quota.extract.used / quota.extract.limit! >= 0.67
-                                ? 'bg-warning'
-                                : 'bg-brand-500'
-                          )}
-                          style={{ width: `${Math.min(100, (quota.extract.used / quota.extract.limit!) * 100)}%` }}
-                        />
-                      </div>
-                      {quota.extract.used >= quota.extract.limit! && (
-                        <p className="text-xs text-critical">Limit reached. Upgrade to Pro for unlimited extractions.</p>
-                      )}
-                    </div>
-
-                    {/* Paste Text quota */}
-                    {quota.pasteText && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700">Paste Text</span>
-                          <span className="text-sm tabular-nums text-gray-500">
-                            {quota.pasteText.used} / {quota.pasteText.limit}
-                          </span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                          <div
-                            className={cn(
-                              'h-full rounded-full transition-all',
-                              quota.pasteText.used / quota.pasteText.limit! >= 1
-                                ? 'bg-critical'
-                                : quota.pasteText.used / quota.pasteText.limit! >= 0.67
-                                  ? 'bg-warning'
-                                  : 'bg-ai'
-                            )}
-                            style={{ width: `${Math.min(100, (quota.pasteText.used / quota.pasteText.limit!) * 100)}%` }}
-                          />
-                        </div>
-                        {quota.pasteText.used >= quota.pasteText.limit! && (
-                          <p className="text-xs text-critical">Limit reached. Upgrade to Pro for unlimited Paste Text extraction.</p>
-                        )}
-                      </div>
-                    )}
-
-                    <p className="text-xs text-gray-400">
-                      Resets on {new Date(quota.classify.resetAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  </div>
-                )}
-
-                {user?.plan === 'pro' && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600">
-                      <Zap className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-brand-700">Pro plan active</p>
-                      <p className="text-xs text-brand-600">All features unlocked with no usage limits.</p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} />
-
+            <SettingsPlanUsageCard plan={user?.plan} quota={quota} />
             <SettingsTimezoneCard currentTimezone={currentUser?.timezone ?? null} />
             <RetentionPolicyCard />
           </>
@@ -377,62 +224,12 @@ export default function SettingsPage() {
 
   return (
     <div className="relative">
-      <aside className="absolute left-0 top-0 hidden h-full w-44 lg:block">
-        <div className="sticky top-6">
-          <nav>
-            <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-              Settings
-            </p>
-            <div className="space-y-0.5">
-              {SETTINGS_SECTIONS.map((section) => {
-                const Icon = section.icon
-                const isActive = activeSection === section.id
-                return (
-                  <button
-                    key={section.id}
-                    onClick={() => setActiveSection(section.id)}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                      isActive
-                        ? 'bg-gray-100 font-medium text-gray-900'
-                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                    )}
-                  >
-                    <Icon className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-gray-700' : 'text-gray-400')} />
-                    {section.label}
-                  </button>
-                )
-              })}
-            </div>
-          </nav>
-        </div>
-      </aside>
+      <SettingsSectionNav activeSection={activeSection} onSectionChange={setActiveSection} />
       <div className="mx-auto max-w-3xl space-y-5" style={{background: 'var(--background)', position: 'relative', zIndex: 1}}>
         <PageHeader
           title="Settings"
           description="Manage your account, email connections, and how the pipeline syncs your inbox."
         />
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
-          {SETTINGS_SECTIONS.map((section) => {
-            const Icon = section.icon
-            const isActive = activeSection === section.id
-            return (
-              <button
-                key={section.id}
-                onClick={() => setActiveSection(section.id)}
-                className={cn(
-                  'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
-                  isActive
-                    ? 'border-gray-900 bg-gray-900 text-white'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {section.label}
-              </button>
-            )
-          })}
-        </div>
         {renderSectionContent()}
       </div>
     </div>
