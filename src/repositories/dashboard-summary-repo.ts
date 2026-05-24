@@ -114,6 +114,34 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
   }
 
   const [
+    currentPeriod,
+    awaitingReviewCount,
+    allTimeRaw,
+  ] = await Promise.all([
+    fetchCurrentPeriodSummaryData({
+      userId,
+      now,
+      period,
+      taskWhere,
+      emailWhere,
+      baseTaskWhere,
+      attentionEmailWhere,
+      momentumRange,
+    }),
+    // Global "awaiting review" count — ignores dashboard project/identity/time
+    // filters so the dashboard agrees with the global Header chip and the
+    // Inbox's Unclassified tab.
+    countAwaitingReview(userId),
+    isAllView
+      ? Promise.resolve(null)
+      : fetchAllTimeSummaryData({
+          baseTaskWhere,
+          baseEmailWhere,
+          attentionEmailWhere,
+        }),
+  ])
+
+  const {
     emailGroups,
     linkedActionEmails,
     needsReviewCount,
@@ -125,89 +153,20 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     userInfo,
     tasks,
     attentionEmails,
-    awaitingReviewCount,
-    allTimeAttentionEmailsRaw,
-    allTimeAttentionEmailCountRaw,
     completedMomentumTasks,
     createdMomentumTasks,
     actionMomentumEmails,
-    allTimeEmailGroupsRaw,
-    allTimeLinkedActionEmailsRaw,
-    allTimeNeedsReviewCountRaw,
-    allTimeTrackedCountRaw,
-    allTimeTaskGroupsRaw,
-    allTimeAiTaskGroupsRaw,
-    allTimeTasksRaw,
-  ] = await Promise.all([
-    groupEmailsByClassification(emailWhere),
-    countLinkedActionEmails(emailWhere),
-    countNeedsReviewEmails(emailWhere, attentionEmailWhere),
-    countTrackedEmails(emailWhere),
-    groupTasksByStatus(taskWhere),
-    groupAiTasksByStatus(taskWhere),
-    countUpcomingTasks(baseTaskWhere, period, now),
-    countOverdueTasks(baseTaskWhere, period, now),
-    fetchDashboardUser(userId),
-    findTaskPreview(taskWhere),
-    findAttentionEmails({ ...emailWhere, ...attentionEmailWhere }),
-    // Global "awaiting review" count — ignores dashboard project/identity/time
-    // filters so the dashboard agrees with the global Header chip and the
-    // Inbox's Unclassified tab.
-    countAwaitingReview(userId),
-    isAllView
-      ? Promise.resolve(null)
-      : findAttentionEmails({ ...baseEmailWhere, ...attentionEmailWhere }),
-    isAllView
-      ? Promise.resolve(null)
-      : countNeedsReviewEmails(baseEmailWhere, attentionEmailWhere),
-    prisma.task.findMany({
-      where: { ...taskWhere, completedAt: { gte: momentumRange.start, lt: momentumRange.end } },
-      select: { completedAt: true },
-    }),
-    prisma.task.findMany({
-      where: { ...taskWhere, createdAt: { gte: momentumRange.start, lt: momentumRange.end } },
-      select: { createdAt: true },
-    }),
-    prisma.email.findMany({
-      where: {
-        ...emailWhere,
-        classification: 'action',
-        receivedAt: { gte: momentumRange.start, lt: momentumRange.end },
-      },
-      select: { receivedAt: true },
-    }),
-    isAllView
-      ? Promise.resolve(null)
-      : groupEmailsByClassification(baseEmailWhere),
-    isAllView
-      ? Promise.resolve(null)
-      : countLinkedActionEmails(baseEmailWhere),
-    isAllView
-      ? Promise.resolve(null)
-      : countNeedsReviewEmails(baseEmailWhere, attentionEmailWhere),
-    isAllView
-      ? Promise.resolve(null)
-      : countTrackedEmails(baseEmailWhere),
-    isAllView
-      ? Promise.resolve(null)
-      : groupTasksByStatus(baseTaskWhere),
-    isAllView
-      ? Promise.resolve(null)
-      : groupAiTasksByStatus(baseTaskWhere),
-    isAllView
-      ? Promise.resolve(null)
-      : findTaskPreview(baseTaskWhere),
-  ])
+  } = currentPeriod
 
-  const allTimeEmailGroups = allTimeEmailGroupsRaw ?? emailGroups
-  const allTimeLinkedActionEmails = allTimeLinkedActionEmailsRaw ?? linkedActionEmails
-  const allTimeNeedsReviewCount = allTimeNeedsReviewCountRaw ?? needsReviewCount
-  const allTimeTrackedCount = allTimeTrackedCountRaw ?? trackedCount
-  const allTimeTaskGroups = allTimeTaskGroupsRaw ?? taskGroups
-  const allTimeAiTaskGroups = allTimeAiTaskGroupsRaw ?? aiTaskGroups
-  const allTimeTasks = allTimeTasksRaw ?? tasks
-  const allTimeAttentionEmails = allTimeAttentionEmailsRaw ?? attentionEmails
-  const allTimeAttentionEmailCount = allTimeAttentionEmailCountRaw ?? attentionEmails.length
+  const allTimeEmailGroups = allTimeRaw?.emailGroups ?? emailGroups
+  const allTimeLinkedActionEmails = allTimeRaw?.linkedActionEmails ?? linkedActionEmails
+  const allTimeNeedsReviewCount = allTimeRaw?.needsReviewCount ?? needsReviewCount
+  const allTimeTrackedCount = allTimeRaw?.trackedCount ?? trackedCount
+  const allTimeTaskGroups = allTimeRaw?.taskGroups ?? taskGroups
+  const allTimeAiTaskGroups = allTimeRaw?.aiTaskGroups ?? aiTaskGroups
+  const allTimeTasks = allTimeRaw?.tasks ?? tasks
+  const allTimeAttentionEmails = allTimeRaw?.attentionEmails ?? attentionEmails
+  const allTimeAttentionEmailCount = allTimeRaw?.attentionEmailCount ?? attentionEmails.length
 
   const stats = buildStats(emailGroups, linkedActionEmails, needsReviewCount, trackedCount, awaitingReviewCount, taskGroups, userInfo)
   const taskSummary = {
@@ -253,6 +212,130 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       stats: allTimeStats,
       tasks: allTimeTaskSummary,
     },
+  }
+}
+
+async function fetchCurrentPeriodSummaryData(input: {
+  userId: string
+  now: Date
+  period: DateRange | null
+  taskWhere: Prisma.TaskWhereInput
+  emailWhere: Prisma.EmailWhereInput
+  baseTaskWhere: Prisma.TaskWhereInput
+  attentionEmailWhere: Prisma.EmailWhereInput
+  momentumRange: DateRange
+}) {
+  const {
+    userId,
+    now,
+    period,
+    taskWhere,
+    emailWhere,
+    baseTaskWhere,
+    attentionEmailWhere,
+    momentumRange,
+  } = input
+
+  const [
+    emailGroups,
+    linkedActionEmails,
+    needsReviewCount,
+    trackedCount,
+    taskGroups,
+    aiTaskGroups,
+    dueOrOverdueCount,
+    overdueCount,
+    userInfo,
+    tasks,
+    attentionEmails,
+    completedMomentumTasks,
+    createdMomentumTasks,
+    actionMomentumEmails,
+  ] = await Promise.all([
+    groupEmailsByClassification(emailWhere),
+    countLinkedActionEmails(emailWhere),
+    countNeedsReviewEmails(emailWhere, attentionEmailWhere),
+    countTrackedEmails(emailWhere),
+    groupTasksByStatus(taskWhere),
+    groupAiTasksByStatus(taskWhere),
+    countUpcomingTasks(baseTaskWhere, period, now),
+    countOverdueTasks(baseTaskWhere, period, now),
+    fetchDashboardUser(userId),
+    findTaskPreview(taskWhere),
+    findAttentionEmails({ ...emailWhere, ...attentionEmailWhere }),
+    prisma.task.findMany({
+      where: { ...taskWhere, completedAt: { gte: momentumRange.start, lt: momentumRange.end } },
+      select: { completedAt: true },
+    }),
+    prisma.task.findMany({
+      where: { ...taskWhere, createdAt: { gte: momentumRange.start, lt: momentumRange.end } },
+      select: { createdAt: true },
+    }),
+    prisma.email.findMany({
+      where: {
+        ...emailWhere,
+        classification: 'action',
+        receivedAt: { gte: momentumRange.start, lt: momentumRange.end },
+      },
+      select: { receivedAt: true },
+    }),
+  ])
+
+  return {
+    emailGroups,
+    linkedActionEmails,
+    needsReviewCount,
+    trackedCount,
+    taskGroups,
+    aiTaskGroups,
+    dueOrOverdueCount,
+    overdueCount,
+    userInfo,
+    tasks,
+    attentionEmails,
+    completedMomentumTasks,
+    createdMomentumTasks,
+    actionMomentumEmails,
+  }
+}
+
+async function fetchAllTimeSummaryData(input: {
+  baseTaskWhere: Prisma.TaskWhereInput
+  baseEmailWhere: Prisma.EmailWhereInput
+  attentionEmailWhere: Prisma.EmailWhereInput
+}) {
+  const { baseTaskWhere, baseEmailWhere, attentionEmailWhere } = input
+
+  const [
+    attentionEmails,
+    emailGroups,
+    linkedActionEmails,
+    needsReviewCount,
+    trackedCount,
+    taskGroups,
+    aiTaskGroups,
+    tasks,
+  ] = await Promise.all([
+    findAttentionEmails({ ...baseEmailWhere, ...attentionEmailWhere }),
+    groupEmailsByClassification(baseEmailWhere),
+    countLinkedActionEmails(baseEmailWhere),
+    countNeedsReviewEmails(baseEmailWhere, attentionEmailWhere),
+    countTrackedEmails(baseEmailWhere),
+    groupTasksByStatus(baseTaskWhere),
+    groupAiTasksByStatus(baseTaskWhere),
+    findTaskPreview(baseTaskWhere),
+  ])
+
+  return {
+    attentionEmails,
+    attentionEmailCount: needsReviewCount,
+    emailGroups,
+    linkedActionEmails,
+    needsReviewCount,
+    trackedCount,
+    taskGroups,
+    aiTaskGroups,
+    tasks,
   }
 }
 
