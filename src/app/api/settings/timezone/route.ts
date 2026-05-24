@@ -1,5 +1,6 @@
 import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { isValidTimezone } from '@/lib/timezone'
+import { updateTimezone } from '@/repositories/user-repo'
 import { z } from 'zod'
 
 const timezoneSchema = z.object({
@@ -16,17 +17,11 @@ export async function POST(req: Request) {
       code: 'INVALID_INPUT',
     })
 
-    // Validate that it's a real IANA timezone string
-    try {
-      Intl.DateTimeFormat(undefined, { timeZone: timezone })
-    } catch {
+    if (!isValidTimezone(timezone)) {
       return error('INVALID_TIMEZONE', `Unknown timezone: ${timezone}`, 400)
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { timezone },
-    })
+    await updateTimezone(user.id, timezone)
 
     return success({ timezone })
   } catch (err) {

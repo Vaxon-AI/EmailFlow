@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { requireCronAuth } from '@/lib/api-helpers'
+import { findSyncEnabledUserIds } from '@/repositories/user-repo'
 import { executeRetention } from '@/services/retention-service'
 
 // ============================================================
@@ -15,17 +16,10 @@ import { executeRetention } from '@/services/retention-service'
 // ============================================================
 
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get('authorization')
-  const secret = process.env.CRON_SECRET
+  const denied = requireCronAuth(req)
+  if (denied) return denied
 
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const users = await prisma.user.findMany({
-    where: { accounts: { some: { provider: 'google', syncEnabled: true } } },
-    select: { id: true },
-  })
+  const users = await findSyncEnabledUserIds()
 
   type UserResult = {
     userId: string

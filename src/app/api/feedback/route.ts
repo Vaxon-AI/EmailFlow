@@ -1,38 +1,34 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
-import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+import { errorFromException, getAuthUser, success, parseJsonBody } from '@/lib/api-helpers'
+import { createFeedback } from '@/repositories/feedback-repo'
 
-const ALLOWED_CATEGORIES = ['bug', 'idea', 'other'] as const
 const MAX_MESSAGE_LENGTH = 2000
 const MAX_EMAIL_LENGTH = 200
+
+const feedbackSchema = z.object({
+  category: z.enum(['bug', 'idea', 'other'], 'Invalid category'),
+  message: z
+    .string('Message is required')
+    .trim()
+    .min(1, 'Message is required')
+    .max(MAX_MESSAGE_LENGTH, `Message must be at most ${MAX_MESSAGE_LENGTH} characters`),
+  email: z.string().max(MAX_EMAIL_LENGTH, 'Invalid email').nullish(),
+})
 
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser()
-    const { category, message, email } = await req.json()
+    const { category, message, email } = await parseJsonBody(req, feedbackSchema, {
+      code: 'BAD_REQUEST',
+    })
 
-    if (typeof message !== 'string' || !message.trim()) {
-      return error('BAD_REQUEST', 'Message is required', 400)
-    }
-    if (message.length > MAX_MESSAGE_LENGTH) {
-      return error('BAD_REQUEST', `Message must be at most ${MAX_MESSAGE_LENGTH} characters`, 400)
-    }
-    if (typeof category !== 'string' || !ALLOWED_CATEGORIES.includes(category as typeof ALLOWED_CATEGORIES[number])) {
-      return error('BAD_REQUEST', 'Invalid category', 400)
-    }
-    if (email != null && (typeof email !== 'string' || email.length > MAX_EMAIL_LENGTH)) {
-      return error('BAD_REQUEST', 'Invalid email', 400)
-    }
-
-    const feedback = await prisma.feedback.create({
-      data: {
-        userId: user.id,
-        category,
-        message: message.trim(),
-        email: email?.trim() || null,
-      },
-      select: { id: true, createdAt: true },
+    const feedback = await createFeedback({
+      userId: user.id,
+      category,
+      message,
+      email: email?.trim() || null,
     })
 
     return success(feedback)

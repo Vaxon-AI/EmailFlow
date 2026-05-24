@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { requireCronAuth } from '@/lib/api-helpers'
+import { getLocalHourSafe, getLocalWeekday } from '@/lib/timezone'
+import { findSyncEnabledUsersWithTimezone } from '@/repositories/user-repo'
 import { createDailyDigest, createWeeklyDigest } from '@/workflows/digest-pipeline'
 
 // ============================================================
@@ -14,56 +16,12 @@ import { createDailyDigest, createWeeklyDigest } from '@/workflows/digest-pipeli
 //   with header: Authorization: Bearer <CRON_SECRET>
 // ============================================================
 
-function localHour(timezone: string): number {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      hour: 'numeric',
-      hour12: false,
-    }).formatToParts(new Date())
-    const hourPart = parts.find(p => p.type === 'hour')
-    return hourPart ? parseInt(hourPart.value, 10) : -1
-  } catch {
-    return -1
-  }
-}
-
-function localWeekday(timezone: string): number {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      weekday: 'short',
-    }).formatToParts(new Date())
-    const weekdayPart = parts.find((p) => p.type === 'weekday')?.value
-    const map: Record<string, number> = {
-      Sun: 0,
-      Mon: 1,
-      Tue: 2,
-      Wed: 3,
-      Thu: 4,
-      Fri: 5,
-      Sat: 6,
-    }
-    return weekdayPart ? map[weekdayPart] ?? -1 : -1
-  } catch {
-    return -1
-  }
-}
-
 export async function GET(req: NextRequest) {
-  // Verify secret
-  const auth = req.headers.get('authorization')
-  const secret = process.env.CRON_SECRET
-
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = requireCronAuth(req)
+  if (denied) return denied
 
   // Find all users with email connected
-  const users = await prisma.user.findMany({
-    where: { accounts: { some: { provider: 'google', syncEnabled: true } } },
-    select: { id: true, email: true, timezone: true },
-  })
+  const users = await findSyncEnabledUsersWithTimezone()
 
   const results: {
     userId: string
@@ -74,10 +32,12 @@ export async function GET(req: NextRequest) {
     error?: string
   }[] = []
 
+  const now = new Date()
+
   for (const user of users) {
     const tz = user.timezone || 'UTC'
-    const hour = localHour(tz)
-    const weekday = localWeekday(tz)
+    const hour = getLocalHourSafe(now, tz)
+    const weekday = getLocalWeekday(now, tz)
 
     // Only generate digests when it's 20:xx in the user's timezone.
     if (hour !== 20) {

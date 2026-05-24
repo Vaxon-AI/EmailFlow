@@ -1,19 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/auth-session', () => ({
-  requireCurrentSessionContext: vi.fn(),
-}))
-
 vi.mock('@/lib/api-helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api-helpers')>()
   return { ...actual }
 })
 
 vi.mock('@/lib/auth-sessions', () => ({
+  requireCurrentSessionContext: vi.fn(),
   revokeSessionById: vi.fn(),
 }))
 
-import { requireCurrentSessionContext } from '@/lib/auth-session'
+import { requireCurrentSessionContext } from '@/lib/auth-sessions'
 import { revokeSessionById } from '@/lib/auth-sessions'
 import { POST } from '../route'
 

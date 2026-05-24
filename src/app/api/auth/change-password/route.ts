@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireCurrentSessionContext } from '@/lib/auth-session'
+import { requireCurrentSessionContext } from '@/lib/auth-sessions'
 import { errorFromException } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 import { hashPassword, verifyPassword } from '@/lib/auth-password'

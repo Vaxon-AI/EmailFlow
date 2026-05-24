@@ -1,5 +1,4 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
 import { getAuthUser, success } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 
@@ -9,7 +8,7 @@ import { prisma } from '@/lib/prisma'
 export async function GET() {
   try {
     const user = await getAuthUser()
-    if (!user) return NextResponse.json({ success: true, data: [] })
+    if (!user) return success([])
 
     const matters = await prisma.matterMemory.findMany({
       where: { userId: user.id },
@@ -63,6 +62,6 @@ export async function GET() {
     return success(shaped)
   } catch (err) {
     console.error('[api/matters GET]', err)
-    return NextResponse.json({ success: true, data: [] })
+    return success([])
   }
 }

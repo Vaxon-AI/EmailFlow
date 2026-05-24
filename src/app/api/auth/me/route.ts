@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { requireCurrentSessionContext } from '@/lib/auth-session'
+import { requireCurrentSessionContext } from '@/lib/auth-sessions'
 import { errorFromException } from '@/lib/api-helpers'
+import { findFullProfile } from '@/repositories/user-repo'
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,47 +23,14 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const [user, googleAccounts] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: context.user.id },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          isAdmin: true,
-          syncStartDate: true,
-          timezone: true,
-          totpEnabled: true,
-          manualReviewMode: true,
-          emailProviderReauthRequired: true,
-          emailProviderReauthReason: true,
-          emailProviderReauthAt: true,
-          emailProviderReauthProvider: true,
-        },
-      }),
-      prisma.account.findMany({
-        where: { userId: context.user.id, provider: 'google' },
-        orderBy: { createdAt: 'asc' },
-        select: {
-          id: true,
-          provider: true,
-          email: true,
-          syncEnabled: true,
-          lastSyncAt: true,
-          reauthRequired: true,
-          reauthReason: true,
-          reauthAt: true,
-          reauthProvider: true,
-        },
-      }),
-    ])
-
-    if (!user) {
+    const profile = await findFullProfile(context.user.id)
+    if (!profile) {
       return NextResponse.json(
         { success: false, error: 'User not found' },
         { status: 404 }
       )
     }
+    const { user, googleAccounts } = profile
 
     return NextResponse.json({
       success: true,

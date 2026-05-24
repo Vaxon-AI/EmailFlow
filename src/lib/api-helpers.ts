@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireCurrentUser } from '@/lib/auth-session'
+import { requireCurrentUser } from '@/lib/auth-sessions'
 import { AppError, isAppError } from '@/lib/app-errors'
 import type { ApiResponse } from '@/types'
 import type { AppErrorCode } from '@/lib/app-errors'
@@ -49,6 +49,15 @@ export async function parseJsonBody<T>(
     }
     throw err
   }
+}
+
+export function requireCronAuth(req: Request): NextResponse | null {
+  const auth = req.headers.get('authorization')
+  const secret = process.env.CRON_SECRET
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return error('UNAUTHORIZED', 'Unauthorized', 401)
+  }
+  return null
 }
 
 export function errorFromException(

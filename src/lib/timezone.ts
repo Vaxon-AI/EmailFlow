@@ -99,6 +99,46 @@ export function getLocalHour(date: Date, timeZone: string): number {
   return getTimeZoneParts(date, timeZone).hour
 }
 
+export function getLocalHourSafe(date: Date, timeZone: string): number {
+  try {
+    return getLocalHour(date, timeZone)
+  } catch {
+    return -1
+  }
+}
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+}
+
+export function getLocalWeekday(date: Date, timeZone: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'short',
+    }).formatToParts(date)
+    const weekday = parts.find((p) => p.type === 'weekday')?.value
+    return weekday ? WEEKDAY_INDEX[weekday] ?? -1 : -1
+  } catch {
+    return -1
+  }
+}
+
+export function isValidTimezone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function getLocalDayRangeUtc(
   referenceDate: Date,
   timeZone: string,

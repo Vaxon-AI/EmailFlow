@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { getAuthUser } from '@/lib/api-helpers'
+import { getAuthUser, success } from '@/lib/api-helpers'
 import { sendPasswordResetEmail } from '@/lib/mailer'
 import { hashResetToken, getTokenTtlMs, RATE_LIMIT_SECONDS } from '@/lib/password-reset'
 
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
     await sendPasswordResetEmail(user.email, resetLink)
 
     return sessionUser
-      ? NextResponse.json({ success: true, data: { message: 'Password reset email sent. Check your inbox.' } })
+      ? success({ message: 'Password reset email sent. Check your inbox.' })
       : genericOk
   } catch (err) {
     console.error('[api/auth/request-password-reset]', err)

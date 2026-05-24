@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
-import { getCurrentUser } from '@/lib/auth-session'
+import { getCurrentUser } from '@/lib/auth-sessions'
 import { createUserSession } from '@/lib/auth-sessions'
 import { setSessionCookie } from '@/lib/auth-token'
 import { isAppError } from '@/lib/app-errors'

@@ -12,12 +12,12 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-vi.mock('@/lib/auth-session', () => ({
+vi.mock('@/lib/auth-sessions', () => ({
   requireCurrentSessionContext: vi.fn(),
 }))
 
 import { prisma } from '@/lib/prisma'
-import { requireCurrentSessionContext } from '@/lib/auth-session'
+import { requireCurrentSessionContext } from '@/lib/auth-sessions'
 import { GET } from '../route'
 
 const mockRequireContext = vi.mocked(requireCurrentSessionContext)

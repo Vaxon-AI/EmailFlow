@@ -1,5 +1,4 @@
 export const dynamic = "force-dynamic"
-import { NextResponse } from 'next/server'
 import { getAuthUser, success } from '@/lib/api-helpers'
 import * as statsRepo from '@/repositories/stats-repo'
 
@@ -20,12 +19,12 @@ const EMPTY_STATS = {
 export async function GET() {
   try {
     const user = await getAuthUser()
-    if (!user) return NextResponse.json({ success: true, data: EMPTY_STATS })
+    if (!user) return success(EMPTY_STATS)
 
     const stats = await statsRepo.getDashboardStats(user.id)
     return success(stats)
   } catch (err) {
     console.error('[api/stats GET]', err)
-    return NextResponse.json({ success: true, data: EMPTY_STATS })
+    return success(EMPTY_STATS)
   }
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { errorFromException } from '@/lib/api-helpers'
-import { requireCurrentSessionContext } from '@/lib/auth-session'
+import { requireCurrentSessionContext } from '@/lib/auth-sessions'
 import { revokeOtherSessions } from '@/lib/auth-sessions'
 
 export async function POST() {

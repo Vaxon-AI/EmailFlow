@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import { verify } from 'otplib'
 
 import { verifyToken, setSessionCookie, createToken } from '@/lib/auth-token'
-import { prisma } from '@/lib/prisma'
 import { createUserSession } from '@/lib/auth-sessions'
 import { isAppError } from '@/lib/app-errors'
+import { findForTotpVerify } from '@/repositories/user-repo'
 
 export async function POST(req: Request) {
   try {
@@ -25,16 +25,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        totpEnabled: true,
-        totpSecret: true,
-      },
-    })
+    const user = await findForTotpVerify(payload.userId)
 
     if (!user || !user.totpEnabled || !user.totpSecret) {
       return NextResponse.json(

@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/auth-session', () => ({
-  requireCurrentSessionContext: vi.fn(),
-}))
-
 vi.mock('@/lib/auth-sessions', () => ({
+  requireCurrentSessionContext: vi.fn(),
   revokeSessionById: vi.fn(),
   revokeOtherSessions: vi.fn(),
 }))
@@ -45,7 +42,7 @@ vi.mock('@/lib/prisma', () => {
 })
 
 import { AppError } from '@/lib/app-errors'
-import { requireCurrentSessionContext } from '@/lib/auth-session'
+import { requireCurrentSessionContext } from '@/lib/auth-sessions'
 import { revokeSessionById, revokeOtherSessions } from '@/lib/auth-sessions'
 import { consumeStepUpToken } from '@/lib/step-up-auth'
 import { verifyPassword, hashPassword } from '@/lib/auth-password'

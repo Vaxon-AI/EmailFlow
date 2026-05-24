@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client'
 import { AppError } from '@/lib/app-errors'
 import { prisma } from '@/lib/prisma'
 import { sendNewDeviceLoginEmail, sendSuspiciousActivityEmail } from '@/lib/mailer'
-import { SESSION_MAX_AGE_REMEMBER_SECONDS } from '@/lib/auth-token'
+import { getSessionToken, SESSION_MAX_AGE_REMEMBER_SECONDS } from '@/lib/auth-token'
 
 const ACTIVE_STATUS = 'active'
 const EXPIRED_STATUS = 'expired'
@@ -744,4 +744,33 @@ export async function listActiveSessions(userId: string) {
   })
 
   return uniqueLatestDevices(sessions)
+}
+
+export async function getCurrentUser(): Promise<SessionUser | null> {
+  try {
+    const token = await getSessionToken()
+    const context = await validateSessionToken(token)
+    return context?.user || null
+  } catch {
+    return null
+  }
+}
+
+export async function getCurrentSessionContext(): Promise<SessionContext | null> {
+  try {
+    const token = await getSessionToken()
+    return await validateSessionToken(token)
+  } catch {
+    return null
+  }
+}
+
+export async function requireCurrentSessionContext(): Promise<SessionContext> {
+  const token = await getSessionToken()
+  return requireSessionToken(token)
+}
+
+export async function requireCurrentUser(): Promise<SessionUser> {
+  const context = await requireCurrentSessionContext()
+  return context.user
 }

@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
 import { getDashboardSummary } from '@/repositories/dashboard-summary-repo'
 
@@ -43,7 +43,7 @@ const EMPTY_SUMMARY = {
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser()
-    if (!user) return NextResponse.json({ success: true, data: EMPTY_SUMMARY })
+    if (!user) return success(EMPTY_SUMMARY)
 
     const summary = await getDashboardSummary(user.id, {
       identityIds: parseMultiParam(req.nextUrl.searchParams, 'identity'),

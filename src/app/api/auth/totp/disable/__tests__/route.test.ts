@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/auth-session', () => ({
+vi.mock('@/lib/auth-sessions', () => ({
   requireCurrentUser: vi.fn(),
 }))
 
@@ -22,7 +22,7 @@ vi.mock('@/lib/step-up-auth', () => ({
   consumeStepUpToken: vi.fn(),
 }))
 
-import { requireCurrentUser } from '@/lib/auth-session'
+import { requireCurrentUser } from '@/lib/auth-sessions'
 import { prisma } from '@/lib/prisma'
 import { consumeStepUpToken } from '@/lib/step-up-auth'
 import { POST } from '../route'

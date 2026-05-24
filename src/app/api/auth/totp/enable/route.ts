@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { errorFromException } from '@/lib/api-helpers'
-import { requireCurrentUser } from '@/lib/auth-session'
+import { requireCurrentUser } from '@/lib/auth-sessions'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(req: Request) {
