@@ -380,8 +380,11 @@ export async function restoreEmail(
 
   // Re-fetch body from the provider. Gmail is the only concrete provider today.
   let bodyFull: string
+  let bodyHtml: string | null
   try {
-    bodyFull = await fetchGmailMessageBody(userId, email.providerMessageId)
+    const fetched = await fetchGmailMessageBody(userId, email.providerMessageId)
+    bodyFull = fetched.text
+    bodyHtml = fetched.html
   } catch (err) {
     return {
       success: false,
@@ -396,7 +399,7 @@ export async function restoreEmail(
     }
   }
 
-  await retentionRepo.restoreEmailBody(emailId, bodyFull)
+  await retentionRepo.restoreEmailBody(emailId, bodyFull, bodyHtml)
   return { success: true, emailId }
 }
 

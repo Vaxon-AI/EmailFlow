@@ -458,7 +458,7 @@ describe('restoreEmail', () => {
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: addDays(NOW, 10),
     })
-    mockFetchGmail.mockResolvedValue('')
+    mockFetchGmail.mockResolvedValue({ text: '', html: null })
     const result = await restoreEmail('user-1', 'email-1')
     expect(result.success).toBe(false)
     if (!result.success) expect(result.reason).toContain('empty body')
@@ -484,7 +484,7 @@ describe('restoreEmail', () => {
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: addDays(NOW, 15),
     })
-    mockFetchGmail.mockResolvedValue('Full email body content here.')
+    mockFetchGmail.mockResolvedValue({ text: 'Full email body content here.', html: null })
     const result = await restoreEmail('user-1', 'email-1')
     expect(result.success).toBe(true)
     if (result.success) expect(result.emailId).toBe('email-1')
@@ -497,10 +497,10 @@ describe('restoreEmail', () => {
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: addDays(NOW, 20),
     })
-    mockFetchGmail.mockResolvedValue('The restored body.')
+    mockFetchGmail.mockResolvedValue({ text: 'The restored body.', html: '<p>The restored body.</p>' })
     await restoreEmail('user-1', 'email-1')
     expect(mockFetchGmail).toHaveBeenCalledWith('user-1', 'provider-xyz')
-    expect(mockRestoreBody).toHaveBeenCalledWith('email-1', 'The restored body.')
+    expect(mockRestoreBody).toHaveBeenCalledWith('email-1', 'The restored body.', '<p>The restored body.</p>')
   })
 
   it('succeeds when restorableUntil is null (no window set)', async () => {
@@ -511,7 +511,7 @@ describe('restoreEmail', () => {
       retentionStatus: 'METADATA_ONLY',
       restorableUntil: null,
     })
-    mockFetchGmail.mockResolvedValue('Body content.')
+    mockFetchGmail.mockResolvedValue({ text: 'Body content.', html: null })
     const result = await restoreEmail('user-1', 'email-1')
     expect(result.success).toBe(true)
   })

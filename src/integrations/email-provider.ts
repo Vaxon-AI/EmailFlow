@@ -14,6 +14,7 @@ export interface EmailMessage {
   recipients: readonly string[]
   bodyPreview: string
   bodyFull: string
+  bodyHtml: string | null
   receivedAt: Date
   hasAttachments: boolean
 

@@ -347,6 +347,7 @@ async function retryFailedEmails(userId: string): Promise<{ retriedSuccessCount:
           recipients: [],
           bodyPreview: '',
           bodyFull: '',
+          bodyHtml: null,
           labels: [],
           hasAttachments: false,
           providerCategories: [],

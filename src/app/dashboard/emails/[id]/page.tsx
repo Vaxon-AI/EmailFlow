@@ -646,11 +646,18 @@ export default function EmailDetailPage() {
           {/* Email body */}
           <Card className="animate-fade-in-up stagger-3 border-white/70 bg-white/95 shadow-sm">
             <CardContent className="py-5">
-              <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {email.bodyFull || email.bodyPreview || (
-                  <span className="italic text-gray-400">No body content available.</span>
-                )}
-              </div>
+              {email.bodyHtml ? (
+                <div
+                  className="prose prose-sm max-w-none text-gray-700 leading-relaxed prose-a:text-brand-600 prose-a:no-underline hover:prose-a:underline prose-img:rounded-lg prose-img:my-2"
+                  dangerouslySetInnerHTML={{ __html: email.bodyHtml }}
+                />
+              ) : (
+                <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {email.bodyFull || email.bodyPreview || (
+                    <span className="italic text-gray-400">No body content available.</span>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

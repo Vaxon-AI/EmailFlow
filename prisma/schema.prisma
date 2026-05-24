@@ -130,6 +130,7 @@ model Email {
   recipients         String          @default("")
   bodyPreview        String
   bodyFull           String?
+  bodyHtml           String?
   receivedAt         DateTime
   labels             String          @default("")
   hasAttachments     Boolean         @default(false)

@@ -47,6 +47,7 @@ export async function storeEmail(data: StoreEmailData): Promise<StoreEmailResult
     recipients: JSON.stringify(data.message.recipients),
     bodyPreview: data.message.bodyPreview,
     bodyFull: data.message.bodyFull,
+    bodyHtml: data.message.bodyHtml ?? null,
     receivedAt: data.message.receivedAt,
     labels: JSON.stringify(data.message.labels),
     hasAttachments: data.message.hasAttachments,

@@ -288,31 +288,59 @@ function decodeBase64Url(data: string): string {
   return buff.toString('utf-8')
 }
 
-function extractBody(payload: gmail_v1.Schema$MessagePart): string {
+// Converts HTML to a readable plain-text fallback that preserves paragraph
+// and list breaks — the prior implementation collapsed everything to one line.
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6]|tr|blockquote)>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '\n• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim()
+}
+
+export function extractBody(payload: gmail_v1.Schema$MessagePart): {
+  text: string
+  html: string | null
+} {
   const bodyData = payload.body?.data
   if (bodyData) {
-    return decodeBase64Url(bodyData)
+    const decoded = decodeBase64Url(bodyData)
+    return payload.mimeType === 'text/html'
+      ? { text: htmlToText(decoded), html: decoded }
+      : { text: decoded, html: null }
   }
   if (payload.parts) {
     const textPart = payload.parts.find((p) => p.mimeType === 'text/plain')
-    const textData = textPart?.body?.data
-    if (textData) {
-      return decodeBase64Url(textData)
-    }
     const htmlPart = payload.parts.find((p) => p.mimeType === 'text/html')
-    const htmlData = htmlPart?.body?.data
-    if (htmlData) {
-      const html = decodeBase64Url(htmlData)
-      return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    const text = textPart?.body?.data ? decodeBase64Url(textPart.body.data) : null
+    const html = htmlPart?.body?.data ? decodeBase64Url(htmlPart.body.data) : null
+
+    if (text || html) {
+      return {
+        text: text ?? (html ? htmlToText(html) : ''),
+        html: html ?? null,
+      }
     }
+
     for (const part of payload.parts) {
       if (part.parts) {
         const result = extractBody(part)
-        if (result) return result
+        if (result.text || result.html) return result
       }
     }
   }
-  return ''
+  return { text: '', html: null }
 }
 
 function getHeader(headers: gmail_v1.Schema$MessagePartHeader[], name: string): string {
@@ -433,7 +461,7 @@ export const gmailProvider: EmailProvider = {
           if (!msg || !msg.payload) continue
 
           const headers = msg.payload.headers || []
-          const bodyFull = extractBody(msg.payload)
+          const { text: bodyFull, html: bodyHtml } = extractBody(msg.payload)
           const subject = getHeader(headers, 'Subject') || '(no subject)'
           const sender = getHeader(headers, 'From')
           const to = getHeader(headers, 'To')
@@ -459,6 +487,7 @@ export const gmailProvider: EmailProvider = {
             recipients,
             bodyPreview: bodyFull.slice(0, 2000),
             bodyFull,
+            bodyHtml,
             receivedAt,
             labels: gmailLabels,
             providerCategories,
@@ -643,7 +672,7 @@ export const gmailProvider: EmailProvider = {
 export async function fetchGmailMessageBody(
   userId: string,
   providerMessageId: string
-): Promise<string> {
+): Promise<{ text: string; html: string | null }> {
   const auth = await getAuthenticatedClient(userId)
   const gmail = google.gmail({ version: 'v1', auth })
 
@@ -653,6 +682,6 @@ export async function fetchGmailMessageBody(
     format: 'full',
   })
 
-  if (!res.data.payload) return ''
+  if (!res.data.payload) return { text: '', html: null }
   return extractBody(res.data.payload)
 }

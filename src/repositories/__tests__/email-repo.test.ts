@@ -57,6 +57,7 @@ function makeMessage(id = 'gmail-msg-1') {
     recipients: ['bob@example.com'],
     bodyPreview: 'Hello...',
     bodyFull: 'Hello World',
+    bodyHtml: null,
     receivedAt: new Date('2024-01-15T10:00:00Z'),
     labels: ['INBOX'],
     hasAttachments: false,

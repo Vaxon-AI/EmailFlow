@@ -207,6 +207,7 @@ export async function setMetadataOnly(
           restorableUntil,
           retentionReason: reason,
           bodyFull: null,
+          bodyHtml: null,
         },
       })
     )
@@ -234,6 +235,7 @@ export async function purgeEmails(emailIds: string[], reason: string) {
       retentionReason: reason,
       // Clear all body content; providerMessageId + threadId + subject + sender stay
       bodyFull: null,
+      bodyHtml: null,
       bodyPreview: '',
       classReasoning: null,
     },
@@ -279,12 +281,17 @@ export async function deleteEmailRows(userId: string, gracePeriodDays: number): 
  * The actual Gmail fetch is handled by the service layer; this only handles
  * the DB write for a successful restore.
  */
-export async function restoreEmailBody(emailId: string, bodyFull: string) {
+export async function restoreEmailBody(
+  emailId: string,
+  bodyFull: string,
+  bodyHtml: string | null
+) {
   return prisma.email.update({
     where: { id: emailId },
     data: {
       retentionStatus: 'ACTIVE',
       bodyFull,
+      bodyHtml,
       metadataOnlyAt: null,
       restorableUntil: null,
       retentionReason: 'restored by user',

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
 import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
 import * as emailRepo from '@/repositories/email-repo'
+import { sanitizeEmailHtml } from '@/lib/sanitize-email-html'
 
 export async function GET(
   req: NextRequest,
@@ -12,7 +13,10 @@ export async function GET(
     const { id } = await params
     const email = await emailRepo.findEmailById(user.id, id)
     if (!email) return error('NOT_FOUND', 'Email not found', 404)
-    return success(email)
+    const safeEmail = email.bodyHtml
+      ? { ...email, bodyHtml: sanitizeEmailHtml(email.bodyHtml) }
+      : email
+    return success(safeEmail)
   } catch (err) {
     return errorFromException(err, 'INTERNAL_ERROR', 'Failed to load email', 500)
   }
