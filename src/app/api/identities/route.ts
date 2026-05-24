@@ -1,5 +1,11 @@
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { errorFromException, getAuthUser, success, parseJsonBody } from '@/lib/api-helpers'
 import * as identityRepo from '@/repositories/identity-repo'
+import { z } from 'zod'
+
+const createIdentitySchema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+  description: z.string().optional(),
+})
 
 export async function GET() {
   try {
@@ -16,12 +22,10 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const user = await getAuthUser()
-
-    const { name, description } = await req.json()
-    if (!name?.trim()) return error('BAD_REQUEST', 'Name is required', 400)
+    const { name, description } = await parseJsonBody(req, createIdentitySchema)
 
     const identity = await identityRepo.createSuggestion(user.id, {
-      name: name.trim(),
+      name,
       description: description?.trim() || null,
     })
     return success(identity)

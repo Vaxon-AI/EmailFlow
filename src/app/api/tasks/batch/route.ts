@@ -1,19 +1,21 @@
 export const dynamic = 'force-dynamic'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
+import { z } from 'zod'
 
-type BatchAction = 'complete' | 'activate' | 'delete' | 'reassign'
+const batchTaskSchema = z.object({
+  ids: z.array(z.string()).min(1, 'ids is required'),
+  action: z.string().min(1, 'action is required'),
+  projectId: z.string().optional(),
+})
 
 export async function POST(req: Request) {
   try {
     const user = await getAuthUser()
-    const { ids, action, projectId }: { ids: string[]; action: BatchAction; projectId?: string } = await req.json()
-
-    if (!ids || ids.length === 0) return error('BAD_REQUEST', 'ids is required', 400)
-    if (!action) return error('BAD_REQUEST', 'action is required', 400)
+    const { ids, action, projectId } = await parseJsonBody(req, batchTaskSchema)
 
     const now = new Date()
 

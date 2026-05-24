@@ -1,24 +1,24 @@
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 import { ensureMatterForProject } from '@/services/project-matter-service'
+import { z } from 'zod'
+
+const reassignThreadSchema = z.object({
+  threadId: z.string().min(1, 'threadId and projectId are required'),
+  projectId: z.string().min(1, 'threadId and projectId are required'),
+  includeThread: z.boolean().optional(),
+  taskIds: z.array(z.string()).optional(),
+})
 
 export async function POST(req: Request) {
   try {
     const user = await getAuthUser()
-
     const {
       threadId,
       projectId,
       includeThread = true,
       taskIds,
-    }: {
-      threadId: string
-      projectId: string
-      includeThread?: boolean
-      taskIds?: string[]
-    } = await req.json()
-
-    if (!threadId || !projectId) return error('BAD_REQUEST', 'threadId and projectId are required', 400)
+    } = await parseJsonBody(req, reassignThreadSchema)
 
     const matter = await ensureMatterForProject(user.id, projectId)
     if (!matter) return error('NOT_FOUND', 'Project not found', 404)

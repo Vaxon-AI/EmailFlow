@@ -1,8 +1,15 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 import { suggestTaskDates } from '@/ai/skills/suggest-task-dates'
+import { z } from 'zod'
+
+const suggestDatesSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required'),
+  summary: z.string().optional(),
+  projectId: z.string().optional(),
+})
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,11 +19,7 @@ export async function POST(req: NextRequest) {
       return error('PRO_REQUIRED', 'Date suggestions are available on Pro.', 402)
     }
 
-    const { title, summary, projectId } = await req.json()
-
-    if (!title || typeof title !== 'string' || !title.trim()) {
-      return error('BAD_REQUEST', 'Title is required', 400)
-    }
+    const { title, summary, projectId } = await parseJsonBody(req, suggestDatesSchema)
 
     const today = new Date().toISOString().slice(0, 10)
 
@@ -66,8 +69,8 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await suggestTaskDates({
-      title: title.trim(),
-      summary: typeof summary === 'string' ? summary : undefined,
+      title,
+      summary,
       today,
       recentTasks,
       projectName,

@@ -1,17 +1,19 @@
 import { after } from 'next/server'
-import { getAuthUser, errorFromException, error, success } from '@/lib/api-helpers'
+import { getAuthUser, errorFromException, success, parseJsonBody } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 import { createTaskFromClassifiedEmail } from '@/workflows'
+import { z } from 'zod'
+
+const reviewModeSchema = z.object({
+  manualReviewMode: z.boolean({ message: 'manualReviewMode must be a boolean' }),
+})
 
 export async function POST(req: Request) {
   try {
     const user = await getAuthUser()
-    const body = await req.json()
-    const { manualReviewMode } = body as { manualReviewMode: boolean }
-
-    if (typeof manualReviewMode !== 'boolean') {
-      return error('INVALID_INPUT', 'manualReviewMode must be a boolean', 400)
-    }
+    const { manualReviewMode } = await parseJsonBody(req, reviewModeSchema, {
+      code: 'INVALID_INPUT',
+    })
 
     await prisma.user.update({
       where: { id: user.id },

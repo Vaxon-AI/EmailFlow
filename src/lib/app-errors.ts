@@ -1,4 +1,9 @@
 export type AppErrorCode =
+  | 'BAD_REQUEST'
+  | 'INVALID_INPUT'
+  | 'NOT_FOUND'
+  | 'INTERNAL'
+  | 'INTERNAL_ERROR'
   | 'UNAUTHORIZED'
   | 'SESSION_EXPIRED'
   | 'SESSION_REVOKED'

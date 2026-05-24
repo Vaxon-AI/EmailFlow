@@ -1,11 +1,12 @@
 export const dynamic = 'force-dynamic'
 import { after } from 'next/server'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
 import * as emailRepo from '@/repositories/email-repo'
 import { processEmail } from '@/workflows'
 import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 import { ensureMatterForProject } from '@/services/project-matter-service'
+import { z } from 'zod'
 
 type BatchAction = 'reassign' | 'ignore' | 'generate_tasks' | 'classify'
 
@@ -16,13 +17,17 @@ type BatchBody = {
   bucket?: emailRepo.EmailBucket
 }
 
+const batchEmailSchema = z.object({
+  ids: z.array(z.string()).min(1, 'ids is required'),
+  action: z.string().min(1, 'action is required'),
+  projectId: z.string().optional(),
+  bucket: z.string().optional(),
+})
+
 export async function POST(req: Request) {
   try {
     const user = await getAuthUser()
-    const { ids, action, projectId, bucket }: BatchBody = await req.json()
-
-    if (!ids || ids.length === 0) return error('BAD_REQUEST', 'ids is required', 400)
-    if (!action) return error('BAD_REQUEST', 'action is required', 400)
+    const { ids, action, projectId, bucket } = await parseJsonBody(req, batchEmailSchema) as BatchBody
 
     if (action === 'reassign') {
       if (!projectId) return error('BAD_REQUEST', 'projectId is required for reassign', 400)
