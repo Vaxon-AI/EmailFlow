@@ -527,21 +527,6 @@ model UserPreference {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model QuotaLedger {
-  id             String   @id @default(cuid())
-  identifierType String
-  identifier     String
-  classifyUsed   Int      @default(0)
-  extractUsed    Int      @default(0)
-  pasteTextUsed  Int      @default(0)
-  quotaResetAt   DateTime
-  firstSeenAt    DateTime @default(now())
-  lastSnapshotAt DateTime @updatedAt
-
-  @@unique([identifierType, identifier])
-  @@index([identifier])
-}
-
 enum RetentionStatus {
   ACTIVE
   ARCHIVED
