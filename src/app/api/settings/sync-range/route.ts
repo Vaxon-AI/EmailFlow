@@ -1,11 +1,22 @@
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+
+const syncRangeSchema = z.object({
+  days: z.number({ message: 'days must be an integer between 1 and 365' })
+    .int('days must be an integer between 1 and 365')
+    .min(1, 'days must be an integer between 1 and 365')
+    .max(365, 'days must be an integer between 1 and 365')
+    .optional(),
+  customDate: z.string({ message: 'customDate must be an ISO 8601 string' }).optional(),
+})
 
 export async function POST(req: Request) {
   try {
     const user = await getAuthUser()
-    const body = await req.json().catch(() => ({}))
-    const { days, customDate } = body as { days?: unknown; customDate?: unknown }
+    const { days, customDate } = await parseJsonBody(req, syncRangeSchema, {
+      code: 'INVALID_INPUT',
+    })
 
     const hasDays = days !== undefined && days !== null
     const hasCustom = customDate !== undefined && customDate !== null
@@ -19,9 +30,6 @@ export async function POST(req: Request) {
 
     let startDate: Date
     if (hasCustom) {
-      if (typeof customDate !== 'string') {
-        return error('INVALID_INPUT', 'customDate must be an ISO 8601 string', 400)
-      }
       startDate = new Date(customDate)
       if (Number.isNaN(startDate.getTime())) {
         return error('INVALID_INPUT', 'customDate must be a valid ISO 8601 date', 400)
@@ -30,9 +38,6 @@ export async function POST(req: Request) {
         return error('INVALID_INPUT', 'customDate must be in the past', 400)
       }
     } else {
-      if (typeof days !== 'number' || !Number.isInteger(days) || days < 1 || days > 365) {
-        return error('INVALID_INPUT', 'days must be an integer between 1 and 365', 400)
-      }
       startDate = new Date()
       startDate.setDate(startDate.getDate() - days)
     }

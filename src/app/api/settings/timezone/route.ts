@@ -1,15 +1,20 @@
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
 import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+
+const timezoneSchema = z.object({
+  timezone: z.unknown().refine(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+    'Missing timezone',
+  ),
+})
 
 export async function POST(req: Request) {
   try {
     const user = await getAuthUser()
-    const body = await req.json()
-    const { timezone } = body
-
-    if (!timezone || typeof timezone !== 'string') {
-      return error('INVALID_INPUT', 'Missing timezone', 400)
-    }
+    const { timezone } = await parseJsonBody(req, timezoneSchema, {
+      code: 'INVALID_INPUT',
+    })
 
     // Validate that it's a real IANA timezone string
     try {

@@ -51,6 +51,43 @@ type DateRange = {
 const UNCATEGORIZED = '__uncategorized__'
 const MOMENTUM_DAYS = 14
 const WEEK_MOMENTUM_DAYS = 7
+const TASK_PREVIEW_TAKE = 50
+const ATTENTION_EMAIL_TAKE = 5
+
+const DASHBOARD_USER_SELECT = {
+  lastSyncAt: true,
+  syncEnabled: true,
+  emailProviderReauthRequired: true,
+  emailProviderReauthReason: true,
+  emailProviderReauthAt: true,
+  emailProviderReauthProvider: true,
+  accounts: {
+    where: { provider: 'google', syncEnabled: true },
+    select: { id: true },
+    take: 1,
+  },
+} satisfies Prisma.UserSelect
+
+const TASK_PREVIEW_SELECT = {
+  id: true,
+  title: true,
+  summary: true,
+  status: true,
+  priorityScore: true,
+  explicitDeadline: true,
+  inferredDeadline: true,
+  userSetDeadline: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+} satisfies Prisma.TaskSelect
+
+const ATTENTION_EMAIL_SELECT = {
+  id: true,
+  subject: true,
+  sender: true,
+  classification: true,
+} satisfies Prisma.EmailSelect
 
 export type DashboardView = 'today' | 'week' | 'all'
 
@@ -102,105 +139,27 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     allTimeAiTaskGroupsRaw,
     allTimeTasksRaw,
   ] = await Promise.all([
-    prisma.email.groupBy({
-      by: ['classification'],
-      where: emailWhere,
-      _count: { id: true },
-    }),
-    prisma.email.count({
-      where: {
-        ...emailWhere,
-        classification: 'action',
-        taskLinks: { some: {} },
-      },
-    }),
-    prisma.email.count({
-      where: { ...emailWhere, ...attentionEmailWhere },
-    }),
-    prisma.email.count({
-      where: { ...emailWhere, actioned: true },
-    }),
-    prisma.task.groupBy({
-      by: ['status'],
-      where: taskWhere,
-      _count: { id: true },
-    }),
-    prisma.task.groupBy({
-      by: ['status'],
-      where: {
-        ...taskWhere,
-        source: 'ai_auto',
-        status: { in: ['active', 'completed'] },
-      },
-      _count: { id: true },
-    }),
-    prisma.task.count({
-      where: andWhere(baseTaskWhere, {
-        status: { in: ['ai_suggestion', 'active'] },
-        OR: dueDateConditions(period ? { lte: period.end } : { gte: now, lte: addUtcDays(now, 7) }),
-      }),
-    }),
-    prisma.task.count({
-      where: andWhere(baseTaskWhere, {
-        status: { in: ['ai_suggestion', 'active'] },
-        OR: dueDateConditions({ lt: period?.start ?? now }),
-      }),
-    }),
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        lastSyncAt: true,
-        syncEnabled: true,
-        emailProviderReauthRequired: true,
-        emailProviderReauthReason: true,
-        emailProviderReauthAt: true,
-        emailProviderReauthProvider: true,
-        accounts: {
-          where: { provider: 'google', syncEnabled: true },
-          select: { id: true },
-          take: 1,
-        },
-      },
-    }),
-    prisma.task.findMany({
-      where: taskWhere,
-      orderBy: { priorityScore: 'desc' },
-      take: 50,
-      select: {
-        id: true,
-        title: true,
-        summary: true,
-        status: true,
-        priorityScore: true,
-        explicitDeadline: true,
-        inferredDeadline: true,
-        userSetDeadline: true,
-        createdAt: true,
-        updatedAt: true,
-        completedAt: true,
-      },
-    }),
-    prisma.email.findMany({
-      where: { ...emailWhere, ...attentionEmailWhere },
-      orderBy: { receivedAt: 'desc' },
-      take: 5,
-      select: { id: true, subject: true, sender: true, classification: true },
-    }),
+    groupEmailsByClassification(emailWhere),
+    countLinkedActionEmails(emailWhere),
+    countNeedsReviewEmails(emailWhere, attentionEmailWhere),
+    countTrackedEmails(emailWhere),
+    groupTasksByStatus(taskWhere),
+    groupAiTasksByStatus(taskWhere),
+    countUpcomingTasks(baseTaskWhere, period, now),
+    countOverdueTasks(baseTaskWhere, period, now),
+    fetchDashboardUser(userId),
+    findTaskPreview(taskWhere),
+    findAttentionEmails({ ...emailWhere, ...attentionEmailWhere }),
     // Global "awaiting review" count — ignores dashboard project/identity/time
     // filters so the dashboard agrees with the global Header chip and the
     // Inbox's Unclassified tab.
     countAwaitingReview(userId),
     isAllView
       ? Promise.resolve(null)
-      : prisma.email.findMany({
-          where: { ...baseEmailWhere, ...attentionEmailWhere },
-          orderBy: { receivedAt: 'desc' },
-          take: 5,
-          select: { id: true, subject: true, sender: true, classification: true },
-        }),
+      : findAttentionEmails({ ...baseEmailWhere, ...attentionEmailWhere }),
     isAllView
       ? Promise.resolve(null)
-      : prisma.email.count({ where: { ...baseEmailWhere, ...attentionEmailWhere } }),
+      : countNeedsReviewEmails(baseEmailWhere, attentionEmailWhere),
     prisma.task.findMany({
       where: { ...taskWhere, completedAt: { gte: momentumRange.start, lt: momentumRange.end } },
       select: { completedAt: true },
@@ -219,46 +178,25 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     }),
     isAllView
       ? Promise.resolve(null)
-      : prisma.email.groupBy({ by: ['classification'], where: baseEmailWhere, _count: { id: true } }),
+      : groupEmailsByClassification(baseEmailWhere),
     isAllView
       ? Promise.resolve(null)
-      : prisma.email.count({ where: { ...baseEmailWhere, classification: 'action', taskLinks: { some: {} } } }),
+      : countLinkedActionEmails(baseEmailWhere),
     isAllView
       ? Promise.resolve(null)
-      : prisma.email.count({ where: { ...baseEmailWhere, ...attentionEmailWhere } }),
+      : countNeedsReviewEmails(baseEmailWhere, attentionEmailWhere),
     isAllView
       ? Promise.resolve(null)
-      : prisma.email.count({ where: { ...baseEmailWhere, actioned: true } }),
+      : countTrackedEmails(baseEmailWhere),
     isAllView
       ? Promise.resolve(null)
-      : prisma.task.groupBy({ by: ['status'], where: baseTaskWhere, _count: { id: true } }),
+      : groupTasksByStatus(baseTaskWhere),
     isAllView
       ? Promise.resolve(null)
-      : prisma.task.groupBy({
-          by: ['status'],
-          where: { ...baseTaskWhere, source: 'ai_auto', status: { in: ['active', 'completed'] } },
-          _count: { id: true },
-        }),
+      : groupAiTasksByStatus(baseTaskWhere),
     isAllView
       ? Promise.resolve(null)
-      : prisma.task.findMany({
-          where: baseTaskWhere,
-          orderBy: { priorityScore: 'desc' },
-          take: 50,
-          select: {
-            id: true,
-            title: true,
-            summary: true,
-            status: true,
-            priorityScore: true,
-            explicitDeadline: true,
-            inferredDeadline: true,
-            userSetDeadline: true,
-            createdAt: true,
-            updatedAt: true,
-            completedAt: true,
-          },
-        }),
+      : findTaskPreview(baseTaskWhere),
   ])
 
   const allTimeEmailGroups = allTimeEmailGroupsRaw ?? emailGroups
@@ -316,6 +254,99 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       tasks: allTimeTaskSummary,
     },
   }
+}
+
+function groupEmailsByClassification(where: Prisma.EmailWhereInput) {
+  return prisma.email.groupBy({
+    by: ['classification'],
+    where,
+    _count: { id: true },
+  })
+}
+
+function countLinkedActionEmails(where: Prisma.EmailWhereInput) {
+  return prisma.email.count({
+    where: {
+      ...where,
+      classification: 'action',
+      taskLinks: { some: {} },
+    },
+  })
+}
+
+function countNeedsReviewEmails(where: Prisma.EmailWhereInput, attentionEmailWhere: Prisma.EmailWhereInput) {
+  return prisma.email.count({
+    where: { ...where, ...attentionEmailWhere },
+  })
+}
+
+function countTrackedEmails(where: Prisma.EmailWhereInput) {
+  return prisma.email.count({
+    where: { ...where, actioned: true },
+  })
+}
+
+function groupTasksByStatus(where: Prisma.TaskWhereInput) {
+  return prisma.task.groupBy({
+    by: ['status'],
+    where,
+    _count: { id: true },
+  })
+}
+
+function groupAiTasksByStatus(where: Prisma.TaskWhereInput) {
+  return prisma.task.groupBy({
+    by: ['status'],
+    where: {
+      ...where,
+      source: 'ai_auto',
+      status: { in: ['active', 'completed'] },
+    },
+    _count: { id: true },
+  })
+}
+
+function countUpcomingTasks(baseTaskWhere: Prisma.TaskWhereInput, period: DateRange | null, now: Date) {
+  return prisma.task.count({
+    where: andWhere(baseTaskWhere, {
+      status: { in: ['ai_suggestion', 'active'] },
+      OR: dueDateConditions(period ? { lte: period.end } : { gte: now, lte: addUtcDays(now, 7) }),
+    }),
+  })
+}
+
+function countOverdueTasks(baseTaskWhere: Prisma.TaskWhereInput, period: DateRange | null, now: Date) {
+  return prisma.task.count({
+    where: andWhere(baseTaskWhere, {
+      status: { in: ['ai_suggestion', 'active'] },
+      OR: dueDateConditions({ lt: period?.start ?? now }),
+    }),
+  })
+}
+
+function fetchDashboardUser(userId: string) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: DASHBOARD_USER_SELECT,
+  })
+}
+
+function findTaskPreview(where: Prisma.TaskWhereInput) {
+  return prisma.task.findMany({
+    where,
+    orderBy: { priorityScore: 'desc' },
+    take: TASK_PREVIEW_TAKE,
+    select: TASK_PREVIEW_SELECT,
+  })
+}
+
+function findAttentionEmails(where: Prisma.EmailWhereInput) {
+  return prisma.email.findMany({
+    where,
+    orderBy: { receivedAt: 'desc' },
+    take: ATTENTION_EMAIL_TAKE,
+    select: ATTENTION_EMAIL_SELECT,
+  })
 }
 
 function buildTaskWhere(userId: string, filters: DashboardFilters): Prisma.TaskWhereInput {
