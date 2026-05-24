@@ -47,6 +47,8 @@ import { getEmailLinkedTaskState } from '@/lib/email-linked-task-status'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
+import { useReplyDraft } from './use-reply-draft'
+import { useCreateTaskForm } from './use-create-task-form'
 
 type EmailTaskLink = {
   id: string
@@ -95,24 +97,8 @@ export default function EmailDetailPage() {
   const emailId = params.id as string
   const [classifying, setClassifying] = useState(false)
   const [unlinkingTaskId, setUnlinkingTaskId] = useState<string | null>(null)
-  const [showCreateModal, setShowCreateModal] = useState(false)
   const [showReassign, setShowReassign] = useState(false)
-  const [taskTitle, setTaskTitle] = useState('')
-  const [taskSummary, setTaskSummary] = useState('')
-  const [linkedEmailIds, setLinkedEmailIds] = useState<string[]>([])
-  const [creatingTask, setCreatingTask] = useState(false)
-  const [draftDeadline, setDraftDeadline] = useState('')
-  const [draftStartDate, setDraftStartDate] = useState('')
-  const [suggestingDates, setSuggestingDates] = useState(false)
-  const [showUpgrade, setShowUpgrade] = useState(false)
-  const [draftUrgency, setDraftUrgency] = useState(3)
-  const [draftImpact, setDraftImpact] = useState(3)
-  const [draftPriorityScore, setDraftPriorityScore] = useState(9)
-  const [draftActionItems, setDraftActionItems] = useState<string[]>([])
   const [restoring, setRestoring] = useState(false)
-  const [replyDraft, setReplyDraft] = useState('')
-  const [generatingReply, setGeneratingReply] = useState(false)
-  const [savingReply, setSavingReply] = useState(false)
   const [extracting, setExtracting] = useState(false)
 
   const goBack = useCallback(() => {
@@ -134,9 +120,49 @@ export default function EmailDetailPage() {
   const emailProjectName: string | undefined = email?.project?.name
   const emailIdentityName: string | undefined = email?.project?.identity?.name
 
-  useEffect(() => {
-    setReplyDraft(email?.aiReplyDraft ?? '')
-  }, [email?.id, email?.aiReplyDraft])
+  const {
+    replyDraft,
+    setReplyDraft,
+    generatingReply,
+    savingReply,
+    generateReply,
+    saveReply,
+    copyReply,
+  } = useReplyDraft(emailId, email?.aiReplyDraft, email?.id)
+
+  const {
+    showCreateModal,
+    setShowCreateModal,
+    taskTitle,
+    setTaskTitle,
+    taskSummary,
+    setTaskSummary,
+    linkedEmailIds,
+    setLinkedEmailIds,
+    creatingTask,
+    draftDeadline,
+    setDraftDeadline,
+    draftStartDate,
+    setDraftStartDate,
+    suggestingDates,
+    showUpgrade,
+    setShowUpgrade,
+    draftUrgency,
+    setDraftUrgency,
+    draftImpact,
+    setDraftImpact,
+    draftPriorityScore,
+    setDraftPriorityScore,
+    draftActionItems,
+    setDraftActionItems,
+    handleSuggestDates,
+    handleCreateModalOpenChange,
+    handleCreateTask,
+  } = useCreateTaskForm({
+    emailId,
+    projectId: email?.project?.id,
+    isPro,
+  })
 
   async function readErrorMessage(response: Response, fallback: string) {
     try {
@@ -192,61 +218,6 @@ export default function EmailDetailPage() {
       showError('Failed to update classification')
     } finally {
       setClassifying(false)
-    }
-  }
-
-  const generateReply = async (force = false) => {
-    if (replyDraft.trim() && !force) {
-      const shouldReplace = confirm('Regenerate the AI reply draft? This will replace the current draft.')
-      if (!shouldReplace) return
-    }
-
-    setGeneratingReply(true)
-    try {
-      const res = await fetch(`/api/emails/${emailId}/reply-suggestion`, { method: 'POST' })
-      if (!res.ok) {
-        showError(await readErrorMessage(res, 'Failed to generate reply draft'))
-        return
-      }
-      const data = await res.json()
-      const nextReply = data?.data?.reply ?? ''
-      setReplyDraft(nextReply)
-      queryClient.invalidateQueries({ queryKey: ['email', emailId] })
-      toast.success('Reply draft generated')
-    } catch {
-      showError('Failed to generate reply draft')
-    } finally {
-      setGeneratingReply(false)
-    }
-  }
-
-  const saveReply = async () => {
-    setSavingReply(true)
-    try {
-      const res = await fetch(`/api/emails/${emailId}/reply-suggestion`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reply: replyDraft }),
-      })
-      if (!res.ok) {
-        showError(await readErrorMessage(res, 'Failed to save reply draft'))
-        return
-      }
-      queryClient.invalidateQueries({ queryKey: ['email', emailId] })
-      toast.success('Reply draft saved')
-    } catch {
-      showError('Failed to save reply draft')
-    } finally {
-      setSavingReply(false)
-    }
-  }
-
-  const copyReply = async () => {
-    try {
-      await navigator.clipboard.writeText(replyDraft)
-      toast.success('Reply draft copied')
-    } catch {
-      showError('Failed to copy reply draft')
     }
   }
 
@@ -335,93 +306,6 @@ export default function EmailDetailPage() {
       showError('Failed to extract task')
     } finally {
       setExtracting(false)
-    }
-  }
-
-  const resetCreateForm = () => {
-    setTaskTitle('')
-    setTaskSummary('')
-    setLinkedEmailIds([])
-    setDraftDeadline('')
-    setDraftStartDate('')
-    setSuggestingDates(false)
-    setDraftUrgency(3)
-    setDraftImpact(3)
-    setDraftPriorityScore(9)
-    setDraftActionItems([])
-  }
-
-  const handleSuggestDates = async () => {
-    if (!taskTitle.trim()) return
-    if (!isPro) { setShowUpgrade(true); return }
-    setSuggestingDates(true)
-    try {
-      const res = await fetch('/api/tasks/suggest-dates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: taskTitle,
-          summary: taskSummary,
-          projectId: email?.project?.id || undefined,
-        }),
-      })
-      if (res.status === 402) { setShowUpgrade(true); return }
-      if (!res.ok) { showError('Failed to suggest dates'); return }
-      const { data } = await res.json()
-      if (data.startDate) setDraftStartDate(data.startDate)
-      if (data.dueDate) setDraftDeadline(data.dueDate)
-      if (!data.startDate && !data.dueDate) {
-        toast.info('No clear date signal — leave empty or set manually.')
-      } else if (data.reasoning) {
-        toast.info(`AI: ${data.reasoning}`)
-      }
-    } catch {
-      showError('Failed to suggest dates')
-    } finally {
-      setSuggestingDates(false)
-    }
-  }
-
-  const handleCreateModalOpenChange = (open: boolean) => {
-    setShowCreateModal(open)
-    if (!open) resetCreateForm()
-  }
-
-  const handleCreateTask = async () => {
-    setCreatingTask(true)
-    try {
-      const res = await fetch('/api/emails/create-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: taskTitle,
-          summary: taskSummary,
-          sourceEmailId: emailId,
-          linkedEmailIds: linkedEmailIds.length > 0 ? linkedEmailIds : [emailId],
-          urgency: draftUrgency,
-          impact: draftImpact,
-          priorityScore: draftPriorityScore,
-          userSetDeadline: draftDeadline || undefined,
-          startDate: draftStartDate || undefined,
-          actionItems: draftActionItems.length > 0 ? draftActionItems : undefined,
-          projectId: email?.project?.id || undefined,
-        }),
-      })
-
-      if (res.ok) {
-        await res.json()
-        queryClient.invalidateQueries({ queryKey: ['email', emailId] })
-        queryClient.invalidateQueries({ queryKey: ['tasks'] })
-        toast.success('Task created')
-        setShowCreateModal(false)
-        resetCreateForm()
-      } else {
-        showError('Failed to create task')
-      }
-    } catch {
-      showError('Failed to create task')
-    } finally {
-      setCreatingTask(false)
     }
   }
 
