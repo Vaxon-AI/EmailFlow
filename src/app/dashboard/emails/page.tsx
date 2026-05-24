@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,235 +24,36 @@ import {
   CheckSquare, Paperclip, Mail,
   Search, CalendarIcon, X, ChevronDown, UserRound, FolderOpen, Loader2, Zap, Eye, EyeOff, Tag, CheckCircle2,
 } from 'lucide-react'
-import { Suspense, useState, useMemo, useEffect, useCallback } from 'react'
+import { Suspense, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
-import { EMAIL_DISPLAY_CONFIG, getEmailDisplayState } from '@/lib/email-classification'
+import { getEmailDisplayState } from '@/lib/email-classification'
 import { getEmailLinkedTaskState } from '@/lib/email-linked-task-status'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { BatchReassignModal } from '@/components/batch-reassign-modal'
 import { InlineEditableName } from '@/components/inline-editable-name'
 import { useAuth } from '@/lib/use-auth'
-import { CACHE_TIME } from '@/lib/query-cache'
 import { toast } from 'sonner'
-
-// ---------------------------------------------------------------------------
-// Sync batch types
-// ---------------------------------------------------------------------------
-
-type BatchActionEmail = {
-  id: string
-  subject: string | null
-  sender: string | null
-  receivedAt: string
-  taskLinks: Array<{ task: { id: string; title: string } | null }>
-}
-
-type BatchStatus = {
-  isComplete: boolean
-  totalEmails: number
-  pendingEmails: number
-  classifiedEmails?: number
-  quotaSkippedEmails?: number
-  uncertainCount?: number
-  uncertainEmails?: number
-  actionEmailCount: number
-  actionEmails: BatchActionEmail[]
-}
-
-// Each tab is a mutually-exclusive bucket — no "All Mail" tab anymore. Needs
-// Action / Tracked / FYI cover the everyday mail; Ignored is the catch-all
-// for AI-classified ignore + user-dismissed soft-deletes. Unclassified only
-// appears when there are quota-skipped emails awaiting manual classification.
-type Tab = 'needs_action' | 'tracked' | 'fyi' | 'ignored' | 'unclassified'
-type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
-type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
-type EmailTabState = {
-  bucket: Tab
-  totalCount: number
-  newCount: number
-  lastSeenAt: string | null
-}
-
-const EMAIL_BUCKET_LABELS: Record<EmailBucket, string> = {
-  needs_action: 'Needs Action',
-  tracked: 'Tracked',
-  fyi: 'FYI',
-  ignored: 'Ignored',
-}
-
-type LinkedTask = {
-  id: string
-  title: string
-  status?: string | null
-  completedAt?: string | null
-}
-
-type EmailTaskLink = {
-  task?: LinkedTask | null
-}
-
-type EmailItem = {
-  id: string
-  subject?: string | null
-  sender?: string | null
-  bodyPreview?: string | null
-  receivedAt: string
-  classification?: EmailClassification | null
-  processingStatus?: string | null
-  actioned?: boolean
-  taskLinks?: EmailTaskLink[]
-  accountEmail?: string | null
-  hasAttachments?: boolean | null
-  threadId?: string | null
-  retentionStatus?: string | null
-  restorableUntil?: string | null
-  project?: { id: string; name: string; identity: { id: string; name: string } | null } | null
-  matter?: { id: string; title: string } | null
-}
-
-type QueryMeta = {
-  totalCount?: number
-  totalPages?: number
-  page?: number
-}
-
-type QueryResponse<T> = {
-  data?: T
-  meta?: QueryMeta
-}
-
-const fyiPriority: Record<string, number> = {
-  awareness: 0,
-}
-
-const VALID_TABS = new Set<Tab>(['needs_action', 'tracked', 'fyi', 'ignored', 'unclassified'])
-
-function isNeedsActionPageEmail(email: EmailItem) {
-  return email.classification === 'action' && email.actioned !== true && !hasLinkedTasks(email)
-}
-
-function isUncertainEmail(email: EmailItem) {
-  return email.classification === 'uncertain' && email.actioned !== true
-}
-
-function canGenerateTaskFromEmail(email: EmailItem) {
-  return (email.classification === 'action' || email.classification === 'uncertain' || !email.classification) && !hasLinkedTasks(email)
-}
-
-function hasLinkedTasks(email: EmailItem) {
-  return (email.taskLinks ?? []).some((link) => link.task)
-}
-
-function isTrackedEmail(email: EmailItem) {
-  return hasLinkedTasks(email) || (email.actioned === true && email.classification === 'action')
-}
-
-function isFyiEmail(email: EmailItem) {
-  return email.classification === 'awareness' && !hasLinkedTasks(email)
-}
-
-function isIgnoredEmail(email: EmailItem) {
-  return email.classification === 'ignore' && !hasLinkedTasks(email)
-}
-
-// "Unclassified" bucket: anything the user has to look at manually because
-// AI either couldn't categorize it (quota_skipped) or wasn't confident
-// enough (uncertain). actioned=true takes the email out of this bucket
-// (it's effectively triaged by being in Tracked).
-function isUnclassifiedEmail(email: EmailItem) {
-  if (email.actioned || hasLinkedTasks(email)) return false
-  if (!email.classification) return true
-  if (email.classification === 'uncertain') return true
-  return false
-}
-
-function matchesEmailTab(email: EmailItem, tab: Tab) {
-  if (tab === 'needs_action') return isNeedsActionPageEmail(email)
-  if (tab === 'tracked') return isTrackedEmail(email)
-  if (tab === 'fyi') return isFyiEmail(email)
-  if (tab === 'unclassified') return isUnclassifiedEmail(email)
-  return isIgnoredEmail(email)
-}
-
-type FilterEmailsOptions = {
-  emails: EmailItem[]
-  tab: Tab
-  accountFilter: string
-  searchQuery: string
-  dateRange?: DateRange
-}
-
-function filterEmails({
-  emails,
-  tab,
-  accountFilter,
-  searchQuery,
-  dateRange,
-}: FilterEmailsOptions) {
-  let result = emails
-
-  result = result.filter((email) => matchesEmailTab(email, tab))
-
-  if (accountFilter !== 'all') {
-    result = result.filter((email) => email.accountEmail === accountFilter)
-  }
-
-  if (dateRange?.from) {
-    const from = new Date(dateRange.from)
-    from.setHours(0, 0, 0, 0)
-    result = result.filter((email) => new Date(email.receivedAt) >= from)
-  }
-
-  if (dateRange?.to) {
-    const to = new Date(dateRange.to)
-    to.setHours(23, 59, 59, 999)
-    result = result.filter((email) => new Date(email.receivedAt) <= to)
-  }
-
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase()
-    result = result.filter((email) =>
-      email.subject?.toLowerCase().includes(query) ||
-      email.sender?.toLowerCase().includes(query) ||
-      email.bodyPreview?.toLowerCase().includes(query)
-    )
-  }
-
-  if (tab === 'fyi') {
-    result = [...result].sort((a, b) => {
-      const rankDiff =
-        (fyiPriority[a.classification ?? ''] ?? 99) -
-        (fyiPriority[b.classification ?? ''] ?? 99)
-
-      if (rankDiff !== 0) {
-        return rankDiff
-      }
-
-      return new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
-    })
-  }
-
-  return result
-}
-
-function parseEmailTab(value: string | null, legacyClassification: string | null): Tab {
-  if (value && VALID_TABS.has(value as Tab)) return value as Tab
-  if (value === 'needs_review') return 'unclassified'
-  // Legacy URL compat: an old "?tab=all&classification=ignore" link from the
-  // dashboard or a bookmark resolves to the new Ignored tab. Other classifications
-  // are absorbed into their tab equivalents.
-  if (value === 'all' && legacyClassification === 'ignore') return 'ignored'
-  if (legacyClassification === 'action') return 'needs_action'
-  if (legacyClassification === 'uncertain') return 'unclassified'
-  if (legacyClassification === 'awareness') return 'fyi'
-  if (legacyClassification === 'ignore') return 'ignored'
-  return 'needs_action'
-}
+import {
+  EMAIL_BUCKET_LABELS,
+  type BatchStatus,
+  type EmailBucket,
+  type EmailItem,
+  EMAIL_DISPLAY_CONFIG,
+  type LinkedTask,
+  parseEmailTab,
+  renderEmailTabNewBadge,
+  type Tab,
+  canGenerateTaskFromEmail,
+  isNeedsActionPageEmail,
+  isTrackedEmail,
+  isUncertainEmail,
+} from './email-page-types'
+import { useEmailsPageData } from './use-emails-page-data'
 
 export default function EmailsPage() {
   return (
@@ -341,18 +142,6 @@ function EmailsContent() {
     const query = params.toString()
     router.replace(query ? `/dashboard/emails?${query}` : '/dashboard/emails', { scroll: false })
   }, [router])
-
-  const { data: pendingReviewData } = useQuery({
-    queryKey: ['pending-review-count'],
-    queryFn: async () => {
-      const r = await fetch('/api/emails/pending-review')
-      const d = await r.json()
-      return d.data?.count as number
-    },
-    enabled: manualReviewMode,
-    staleTime: CACHE_TIME.list,
-  })
-  const pendingReviewCount = pendingReviewData ?? 0
 
   const reviewModeMutation = useMutation({
     mutationFn: async (mode: boolean) => {
@@ -516,51 +305,6 @@ function EmailsContent() {
   const [batchDismissed, setBatchDismissed] = useState(false)
   const [showBatchModal, setShowBatchModal] = useState(false)
 
-  const { data: batchStatus } = useQuery<BatchStatus>({
-    queryKey: ['syncBatch', syncBatchId],
-    queryFn: async () => {
-      const r = await fetch(`/api/sync/batch/${syncBatchId}`)
-      const d = await r.json()
-      return d.data as BatchStatus
-    },
-    enabled: !!syncBatchId && !batchDismissed,
-    refetchInterval: (query) => {
-      const data = query.state.data as BatchStatus | undefined
-      if (!data || data.isComplete) return false
-      return 3000
-    },
-    staleTime: 0,
-  })
-
-  // Derived: show the banner unless dismissed or the batch completed with no action emails.
-  const batchBannerActive =
-    !!syncBatchId &&
-    !batchDismissed &&
-    !(batchStatus?.isComplete && batchStatus.actionEmailCount === 0)
-
-  // Side effect only: clean sessionStorage when a batch silently completes (no actions).
-  useEffect(() => {
-    if (batchStatus?.isComplete && batchStatus.actionEmailCount === 0) {
-      sessionStorage.removeItem('emailflow:syncBatchId')
-    }
-  }, [batchStatus])
-
-  useEffect(() => {
-    if (!batchStatus) return
-    queryClient.invalidateQueries({ queryKey: ['emails'] })
-    queryClient.invalidateQueries({ queryKey: ['emails', 'tab-states'] })
-    queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
-  }, [
-    batchStatus,
-    batchStatus?.pendingEmails,
-    batchStatus?.classifiedEmails,
-    batchStatus?.quotaSkippedEmails,
-    batchStatus?.uncertainCount,
-    batchStatus?.uncertainEmails,
-    batchStatus?.isComplete,
-    queryClient,
-  ])
-
   const dismissBatchBanner = () => {
     sessionStorage.removeItem('emailflow:syncBatchId')
     setBatchDismissed(true)
@@ -590,107 +334,28 @@ function EmailsContent() {
     // Always start in 'from' mode when opening
     if (open) setSelectingStep('from')
   }
-
-  const { data: res, isLoading } = useQuery({
-    queryKey: ['emails', page, tab],
-    queryFn: () =>
-      fetch(`/api/emails?page=${page}&limit=2000&bucket=${tab}`).then((r) => r.json()),
-    staleTime: CACHE_TIME.list,
-    placeholderData: (previous) => previous,
-  })
-
-  const { data: tabStatesRes } = useQuery<{ data: EmailTabState[] }>({
-    queryKey: ['emails', 'tab-states'],
-    queryFn: () => fetch('/api/emails/tab-states').then((r) => r.json()),
-    staleTime: 0,
-  })
-
-  const markTabSeenMutation = useMutation({
-    mutationFn: async (bucket: Tab) => {
-      const res = await fetch('/api/emails/tab-states/seen', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bucket }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to mark tab seen')
-      return bucket
-    },
-    onSuccess: (bucket) => {
-      queryClient.setQueryData<{ data: EmailTabState[] }>(['emails', 'tab-states'], (current) => {
-        if (!current?.data) return current
-        return {
-          ...current,
-          data: current.data.map((state) =>
-            state.bucket === bucket ? { ...state, newCount: 0, lastSeenAt: new Date().toISOString() } : state
-          ),
-        }
-      })
-    },
-  })
-
-  // Authoritative unclassified count, shared with the Header chip. Driving the
-  // Unclassified tab off this (instead of a client-side filter over the
-  // current page) keeps the two consistent even if some matching email isn't
-  // in the fetched page.
-  const { data: unclassifiedRes } = useQuery<{ data: { count: number } }>({
-    queryKey: ['emails', 'unclassified-count'],
-    queryFn: () => fetch('/api/emails/unclassified-count').then((r) => r.json()),
-    staleTime: 0,
-  })
-
-  const emails = useMemo(() => (res?.data || []) as EmailItem[], [res?.data])
-  const meta = (res as QueryResponse<EmailItem[]>)?.meta
-  const tabStateMap = useMemo(() => {
-    const map = new Map<Tab, EmailTabState>()
-    for (const state of tabStatesRes?.data ?? []) map.set(state.bucket, state)
-    return map
-  }, [tabStatesRes?.data])
-  const activeTabNewCount = tabStateMap.get(tab)?.newCount ?? 0
-
-  useEffect(() => {
-    if (!tabStatesRes?.data || activeTabNewCount <= 0) return
-    markTabSeenMutation.mutate(tab)
-    // Marking the active tab as seen is intentionally tied to tab changes and
-    // first state load only; the mutation's own cache update should not loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, activeTabNewCount, tabStatesRes?.data])
-
-  // Discover unique email accounts
-  const accounts = useMemo(() => {
-    const set = new Set<string>()
-    for (const e of emails) {
-      if (e.accountEmail) set.add(e.accountEmail)
-    }
-    return Array.from(set)
-  }, [emails])
-
-  // Client-side filtering: tab -> account -> search
-  const filtered = filterEmails({
-    emails,
+  const {
+    pendingReviewCount,
+    batchStatus,
+    batchBannerActive,
+    isLoading,
+    meta,
+    tabStateMap,
+    accounts,
+    filtered,
+    unclassifiedCount,
+    pendingCount,
+    tabs,
+  } = useEmailsPageData({
     tab,
+    page,
+    manualReviewMode,
+    syncBatchId,
+    batchDismissed,
     accountFilter,
     searchQuery,
     dateRange,
   })
-
-  const needsActionCount = tabStateMap.get('needs_action')?.totalCount ?? emails.filter(isNeedsActionPageEmail).length
-  const trackedCount = tabStateMap.get('tracked')?.totalCount ?? emails.filter(isTrackedEmail).length
-  const infoCount = tabStateMap.get('fyi')?.totalCount ?? emails.filter(isFyiEmail).length
-  const ignoredCount = tabStateMap.get('ignored')?.totalCount ?? emails.filter(isIgnoredEmail).length
-  const unclassifiedCount = tabStateMap.get('unclassified')?.totalCount ?? unclassifiedRes?.data?.count ?? 0
-  const pendingCount = emails.filter((e) => e.processingStatus === 'pending').length
-
-  const tabs: { key: Tab; label: string; count: number }[] = [
-    // Unclassified leads when present — these are the emails the user needs
-    // to act on most urgently (AI couldn't categorize them) and they don't
-    // surface anywhere else in the inbox.
-    ...(unclassifiedCount > 0 ? [{ key: 'unclassified' as Tab, label: 'Unclassified', count: unclassifiedCount }] : []),
-    { key: 'needs_action', label: 'Needs Action', count: needsActionCount },
-    { key: 'tracked', label: 'Tracked', count: trackedCount },
-    { key: 'fyi', label: 'FYI', count: infoCount },
-    { key: 'ignored', label: 'Ignored', count: ignoredCount },
-  ]
 
   return (
     <div className="animate-in fade-in space-y-5 duration-200">
@@ -1298,15 +963,6 @@ function SyncBatchModal({
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function renderEmailTabNewBadge(count: number, bucket: Tab) {
-  if (bucket === 'ignored' || count <= 0) return undefined
-  return (
-    <span className="rounded-full bg-critical px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
-      +{count}
-    </span>
   )
 }
 
