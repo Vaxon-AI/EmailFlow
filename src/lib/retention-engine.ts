@@ -127,6 +127,24 @@ function extractDomain(sender: string): string {
   return parts.length === 2 ? parts[1] : ''
 }
 
+function getAlwaysProtectedLabelReason(labels: string[]) {
+  if (labels.includes('STARRED')) {
+    return 'email is starred (STARRED label)'
+  }
+  if (labels.includes('IMPORTANT')) {
+    return 'email is marked important (IMPORTANT label)'
+  }
+  return null
+}
+
+function buildPurgeAction(reason: string): RetentionActionPurge {
+  return { action: 'purge', reason }
+}
+
+function buildNoneAction(reason: string): RetentionActionNone {
+  return { action: 'none', reason }
+}
+
 type ProtectionCheckResult =
   | { isProtected: true; reason: string }
   | { isProtected: false }
@@ -138,11 +156,9 @@ function checkProtection(
   const labels = parseLabels(email.labels)
 
   // Hardcoded: starred and important are always protected regardless of rules
-  if (labels.includes('STARRED')) {
-    return { isProtected: true, reason: 'email is starred (STARRED label)' }
-  }
-  if (labels.includes('IMPORTANT')) {
-    return { isProtected: true, reason: 'email is marked important (IMPORTANT label)' }
+  const hardcodedLabelReason = getAlwaysProtectedLabelReason(labels)
+  if (hardcodedLabelReason) {
+    return { isProtected: true, reason: hardcodedLabelReason }
   }
 
   const senderAddress = extractEmailAddress(email.sender)
@@ -192,7 +208,7 @@ export function getRetentionAction(
 ): RetentionAction {
   // Already fully purged — nothing to do
   if (email.retentionStatus === 'PURGED') {
-    return { action: 'none', reason: 'email is already purged' }
+    return buildNoneAction('email is already purged')
   }
 
   // Protection check — takes precedence over all rules
@@ -237,7 +253,7 @@ function applyTaskDoneRules(
           reason: `linked task completed ${daysSinceCompletion}d ago (threshold: ${taskDoneArchiveAfterDays}d)`,
         }
       }
-      return { action: 'none', reason: 'task completed but archive threshold not reached' }
+      return buildNoneAction('task completed but archive threshold not reached')
     }
 
     case 'ARCHIVED': {
@@ -251,22 +267,19 @@ function applyTaskDoneRules(
           restorableUntil,
         }
       }
-      return { action: 'none', reason: 'archived but metadata-only threshold not reached' }
+      return buildNoneAction('archived but metadata-only threshold not reached')
     }
 
     case 'METADATA_ONLY': {
       const restorableUntil = email.restorableUntil
       if (restorableUntil !== null && now > restorableUntil) {
-        return {
-          action: 'purge',
-          reason: `restore window expired on ${restorableUntil.toISOString()}`,
-        }
+        return buildPurgeAction(`restore window expired on ${restorableUntil.toISOString()}`)
       }
-      return { action: 'none', reason: 'within restore window' }
+      return buildNoneAction('within restore window')
     }
 
     case 'PURGED':
-      return { action: 'none', reason: 'email is already purged' }
+      return buildNoneAction('email is already purged')
   }
 }
 
@@ -288,6 +301,7 @@ function applyGeneralRules(
   const { metadataOnlyAfterDays, purgeAfterDays } = policy
   const daysSinceReceived = differenceInDays(now, email.receivedAt)
   const purgeDate = addDays(email.receivedAt, purgeAfterDays)
+  const purgeReason = `received ${daysSinceReceived}d ago, exceeds purge threshold of ${purgeAfterDays}d`
 
   switch (email.retentionStatus) {
     case 'ACTIVE':
@@ -295,10 +309,7 @@ function applyGeneralRules(
       // ARCHIVED without a completed task = treat same as ACTIVE for general rules
       if (daysSinceReceived >= purgeAfterDays) {
         // Crossed both thresholds — go straight to purge
-        return {
-          action: 'purge',
-          reason: `received ${daysSinceReceived}d ago, exceeds purge threshold of ${purgeAfterDays}d`,
-        }
+        return buildPurgeAction(purgeReason)
       }
       if (daysSinceReceived >= metadataOnlyAfterDays) {
         return {
@@ -307,21 +318,18 @@ function applyGeneralRules(
           restorableUntil: purgeDate,
         }
       }
-      return { action: 'none', reason: 'email is within active retention window' }
+      return buildNoneAction('email is within active retention window')
     }
 
     case 'METADATA_ONLY': {
       if (daysSinceReceived >= purgeAfterDays) {
-        return {
-          action: 'purge',
-          reason: `received ${daysSinceReceived}d ago, exceeds purge threshold of ${purgeAfterDays}d`,
-        }
+        return buildPurgeAction(purgeReason)
       }
-      return { action: 'none', reason: 'within retention window' }
+      return buildNoneAction('within retention window')
     }
 
     case 'PURGED':
-      return { action: 'none', reason: 'email is already purged' }
+      return buildNoneAction('email is already purged')
   }
 }
 

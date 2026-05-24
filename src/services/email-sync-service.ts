@@ -29,6 +29,21 @@ const PROVIDER_FETCH_CAP = 100
 // Internal type alias for emails returned by storeEmail, passed from phase1 to phase2.
 type StoredEmail = NonNullable<Awaited<ReturnType<typeof emailRepo.storeEmail>>['email']>
 
+type SyncInfo = NonNullable<Awaited<ReturnType<typeof userRepo.getUserSyncInfo>>>
+type EmailAccount = {
+  id?: string
+  provider: string
+  email: string | null
+  reauthRequired: boolean
+}
+type StoreLoopResult = {
+  storedEmails: StoredEmail[]
+  newEmailIds: string[]
+  syncedCount: number
+  skippedCount: number
+  failedCount: number
+}
+
 export interface Phase1Result {
   totalFetched: number
   syncedCount: number
@@ -46,6 +61,126 @@ export interface Phase1Result {
   storedEmails: StoredEmail[]
 }
 
+function assertSyncAllowed(syncInfo: SyncInfo) {
+  if (!syncInfo.emailConnected) throw new AppError('SYNC_FAILED', 'Email not connected', 400)
+  if (!syncInfo.syncEnabled) throw new Error('Email sync is disabled')
+}
+
+async function assertProviderReauthResolved(userId: string, syncInfo: SyncInfo) {
+  if (!syncInfo.emailProviderReauthRequired) return
+
+  const enabledAccounts = await userRepo.listEnabledEmailAccounts(userId)
+  if (enabledAccounts.length === 0) {
+    throw new AppError(
+      'PROVIDER_REAUTH_REQUIRED',
+      'Your email provider connection needs to be reauthorized before sync can continue.',
+      401,
+      {
+        provider: syncInfo.emailProviderReauthProvider || 'gmail',
+        reason: syncInfo.emailProviderReauthReason || 'refresh_failed',
+      },
+    )
+  }
+}
+
+async function getAccountsToSync(userId: string): Promise<EmailAccount[]> {
+  const emailAccounts = await userRepo.listEnabledEmailAccounts(userId)
+  if (emailAccounts.length > 0) return emailAccounts
+
+  return [{ id: undefined, provider: 'google', email: null, reauthRequired: false }]
+}
+
+function getStoredEmailInput(email: StoredEmail) {
+  return {
+    id: email.id,
+    subject: email.subject,
+    sender: email.sender,
+    receivedAt: email.receivedAt,
+    bodyPreview: email.bodyPreview,
+    bodyFull: email.bodyFull,
+    labels: email.labels,
+    threadId: email.threadId,
+    awaitingReview: (email as StoredEmail & { awaitingReview?: boolean }).awaitingReview ?? false,
+  }
+}
+
+async function storeFetchedEmails(
+  userId: string,
+  messages: EmailMessage[],
+  syncBatchId: string
+): Promise<StoreLoopResult> {
+  const storedEmails: StoredEmail[] = []
+  const newEmailIds: string[] = []
+  let syncedCount = 0
+  let skippedCount = 0
+  let failedCount = 0
+
+  for (const message of messages) {
+    try {
+      const result = await emailRepo.storeEmail({ userId, message, syncBatchId })
+      if (result.wasCreated) {
+        storedEmails.push(result.email)
+        syncedCount++
+        newEmailIds.push(result.email.id)
+      } else {
+        skippedCount++
+      }
+    } catch (err) {
+      failedCount++
+      const reason = err instanceof Error ? err.message : String(err)
+      console.error(`Failed to store email providerMessageId=${message.providerMessageId}: ${reason}`)
+      try {
+        await failedRepo.recordFailedEmail(userId, message, reason)
+      } catch (recordErr) {
+        console.error(`Failed to record failed email providerMessageId=${message.providerMessageId}:`, recordErr)
+      }
+    }
+  }
+
+  return {
+    storedEmails,
+    newEmailIds,
+    syncedCount,
+    skippedCount,
+    failedCount,
+  }
+}
+
+async function markStoredEmailsAwaitingReview(newEmailIds: string[], storedEmails: StoredEmail[]) {
+  if (newEmailIds.length === 0) return
+
+  await emailRepo.markEmailsAwaitingReview(newEmailIds)
+  const newIdSet = new Set(newEmailIds)
+  for (const email of storedEmails) {
+    if (newIdSet.has(email.id)) {
+      ;(email as StoredEmail & { awaitingReview: boolean }).awaitingReview = true
+    }
+  }
+}
+
+function buildRetryMessage(record: {
+  providerMessageId: string
+  threadId: string | null
+  receivedAt: Date | null
+  subject: string | null
+  sender: string | null
+}): EmailMessage {
+  return {
+    providerMessageId: record.providerMessageId,
+    threadId: record.threadId ?? null,
+    receivedAt: record.receivedAt ?? new Date(),
+    subject: record.subject ?? '(no subject)',
+    sender: record.sender ?? '',
+    recipients: [],
+    bodyPreview: '',
+    bodyFull: '',
+    bodyHtml: null,
+    labels: [],
+    hasAttachments: false,
+    providerCategories: [],
+  }
+}
+
 // ============================================================
 // Phase 1 — Gmail fetch + email storage
 // Called by the route handler. Returns before AI runs.
@@ -58,22 +193,8 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
 
   const syncInfo = await userRepo.getUserSyncInfo(userId)
   if (!syncInfo) throw new Error('User not found')
-  if (!syncInfo.emailConnected) throw new AppError('SYNC_FAILED', 'Email not connected', 400)
-  if (!syncInfo.syncEnabled) throw new Error('Email sync is disabled')
-  if (syncInfo.emailProviderReauthRequired) {
-    const enabledAccounts = await userRepo.listEnabledEmailAccounts(userId)
-    if (enabledAccounts.length === 0) {
-      throw new AppError(
-        'PROVIDER_REAUTH_REQUIRED',
-        'Your email provider connection needs to be reauthorized before sync can continue.',
-        401,
-        {
-          provider: syncInfo.emailProviderReauthProvider || 'gmail',
-          reason: syncInfo.emailProviderReauthReason || 'refresh_failed',
-        },
-      )
-    }
-  }
+  assertSyncAllowed(syncInfo)
+  await assertProviderReauthResolved(userId, syncInfo)
 
   // Provider fetch is intentionally independent from classify quota. Sync's
   // promise is to bring new email into the product first; Phase 2 can classify
@@ -82,10 +203,7 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
   const quotaLimited = quotaRemaining !== Infinity && quotaRemaining < 100
   const fetchCap = PROVIDER_FETCH_CAP
 
-  const emailAccounts = await userRepo.listEnabledEmailAccounts(userId)
-  const accountsToSync = emailAccounts.length > 0
-    ? emailAccounts
-    : [{ id: undefined, provider: 'google', email: null, reauthRequired: false }]
+  const accountsToSync = await getAccountsToSync(userId)
 
   if (accountsToSync.length === 0) {
     throw new AppError('SYNC_FAILED', 'Email not connected', 400)
@@ -138,51 +256,19 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
   //    updateLastSync from running.  Promise.all would reject on the
   //    first error while earlier upserts had already committed.
   const tStore = Date.now()
-  const storedEmails: StoredEmail[] = []
-  const newEmailIds: string[] = []
-  let syncedCount = 0
-  let skippedCount = 0
-  let failedCount = 0
-
-  for (const message of messages) {
-    try {
-      const result = await emailRepo.storeEmail({ userId, message, syncBatchId })
-      if (result.wasCreated) {
-        // Only newly inserted emails feed Phase 2. Already-stored emails were
-        // either classified by a previous sync (no need to redo) or are stuck
-        // 'pending' from a crashed prior run (handled by fixStuckEmails). Re-running
-        // the AI pipeline on them wastes quota and can cause the same email to
-        // be re-classified multiple times.
-        storedEmails.push(result.email)
-        syncedCount++
-        newEmailIds.push(result.email.id)
-      } else {
-        // skipped: existing duplicate OR tombstoned (previously deleted by retention)
-        skippedCount++
-      }
-    } catch (err) {
-      failedCount++
-      const reason = err instanceof Error ? err.message : String(err)
-      console.error(`Failed to store email providerMessageId=${message.providerMessageId}: ${reason}`)
-      try {
-        await failedRepo.recordFailedEmail(userId, message, reason)
-      } catch (recordErr) {
-        console.error(`Failed to record failed email providerMessageId=${message.providerMessageId}:`, recordErr)
-      }
-    }
-  }
+  const {
+    storedEmails,
+    newEmailIds,
+    syncedCount,
+    skippedCount,
+    failedCount,
+  } = await storeFetchedEmails(userId, messages, syncBatchId)
   console.log(`[sync] storeEmails: ${Date.now() - tStore}ms, synced=${syncedCount}, skipped=${skippedCount}, failed=${failedCount}`)
 
   // Tag newly stored emails as awaiting user review when manual mode is on.
   // Also update the in-memory objects so Phase 2 passes the correct flag to processEmail.
   if (syncInfo.manualReviewMode && newEmailIds.length > 0) {
-    await emailRepo.markEmailsAwaitingReview(newEmailIds)
-    const newIdSet = new Set(newEmailIds)
-    for (const email of storedEmails) {
-      if (newIdSet.has(email.id)) {
-        ;(email as StoredEmail & { awaitingReview: boolean }).awaitingReview = true
-      }
-    }
+    await markStoredEmailsAwaitingReview(newEmailIds, storedEmails)
   }
 
   // 3) Mark sync time — persisted before AI pipeline so it's recorded even
@@ -245,17 +331,7 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
 
     for (const email of storedEmails) {
       try {
-        const input = {
-          id: email.id,
-          subject: email.subject,
-          sender: email.sender,
-          receivedAt: email.receivedAt,
-          bodyPreview: email.bodyPreview,
-          bodyFull: email.bodyFull,
-          labels: email.labels,
-          threadId: email.threadId,
-          awaitingReview: (email as StoredEmail & { awaitingReview?: boolean }).awaitingReview ?? false,
-        }
+        const input = getStoredEmailInput(email)
 
         if (remaining !== Infinity && remaining <= 0) {
           const ruleResult = await processEmailRuleOnly(input)
@@ -338,20 +414,7 @@ async function retryFailedEmails(userId: string): Promise<{ retriedSuccessCount:
     try {
       const { wasCreated } = await emailRepo.storeEmail({
         userId,
-        message: {
-          providerMessageId,
-          threadId: record.threadId ?? null,
-          receivedAt: record.receivedAt ?? new Date(),
-          subject: record.subject ?? '(no subject)',
-          sender: record.sender ?? '',
-          recipients: [],
-          bodyPreview: '',
-          bodyFull: '',
-          bodyHtml: null,
-          labels: [],
-          hasAttachments: false,
-          providerCategories: [],
-        },
+        message: buildRetryMessage(record),
       })
 
       retriedSuccessCount++
