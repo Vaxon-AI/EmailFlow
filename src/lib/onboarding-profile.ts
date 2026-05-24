@@ -56,6 +56,27 @@ export type OnboardingProfile = {
   focusAreas: string[]
 }
 
+function isBrowserEnvironment() {
+  return typeof window !== 'undefined'
+}
+
+function sanitizeStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function parseStoredProfile(raw: string): OnboardingProfile | null {
+  const parsed = JSON.parse(raw) as Partial<OnboardingProfile>
+  const role = sanitizeStringArray(parsed.role)
+  const purpose = sanitizeStringArray(parsed.purpose)
+  const focusAreas = sanitizeStringArray(parsed.focusAreas)
+
+  if (role.length === 0 && purpose.length === 0 && focusAreas.length === 0) {
+    return null
+  }
+
+  return { role, purpose, focusAreas }
+}
+
 // Toggle a value in/out of a multi-select chip group, capped at `limit`.
 // Returning unchanged state at capacity (rather than dropping the oldest pick)
 // keeps the user's prior selections stable — they have to deselect before
@@ -71,23 +92,18 @@ export function toggleChipValue(current: string[], value: string, limit: number)
 // server returns null. We only READ here — the caller decides when to delete
 // the localStorage entry (after a successful POST).
 export function migrateLocalStorageIfPresent(): OnboardingProfile | null {
-  if (typeof window === 'undefined') return null
+  if (!isBrowserEnvironment()) return null
   try {
     const raw = window.localStorage.getItem(ONBOARDING_PROFILE_STORAGE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<OnboardingProfile>
-    const role = Array.isArray(parsed.role) ? parsed.role.filter((v): v is string => typeof v === 'string') : []
-    const purpose = Array.isArray(parsed.purpose) ? parsed.purpose.filter((v): v is string => typeof v === 'string') : []
-    const focusAreas = Array.isArray(parsed.focusAreas) ? parsed.focusAreas.filter((v): v is string => typeof v === 'string') : []
-    if (role.length === 0 && purpose.length === 0 && focusAreas.length === 0) return null
-    return { role, purpose, focusAreas }
+    return parseStoredProfile(raw)
   } catch {
     return null
   }
 }
 
 export function clearLocalStorageProfile(): void {
-  if (typeof window === 'undefined') return
+  if (!isBrowserEnvironment()) return
   try {
     window.localStorage.removeItem(ONBOARDING_PROFILE_STORAGE_KEY)
   } catch {

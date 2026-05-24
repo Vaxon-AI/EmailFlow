@@ -8,6 +8,19 @@ export type ProviderReauthReason =
   | 'refresh_failed'
   | 'revoked'
 
+function buildProviderReauthData(
+  provider: EmailProviderName,
+  required: boolean,
+  reason: ProviderReauthReason | null,
+) {
+  return {
+    emailProviderReauthRequired: required,
+    emailProviderReauthReason: reason,
+    emailProviderReauthAt: required ? new Date() : null,
+    emailProviderReauthProvider: provider,
+  }
+}
+
 export async function markProviderReauthRequired(
   userId: string,
   provider: EmailProviderName,
@@ -15,23 +28,13 @@ export async function markProviderReauthRequired(
 ) {
   return prisma.user.update({
     where: { id: userId },
-    data: {
-      emailProviderReauthRequired: true,
-      emailProviderReauthReason: reason,
-      emailProviderReauthAt: new Date(),
-      emailProviderReauthProvider: provider,
-    },
+    data: buildProviderReauthData(provider, true, reason),
   })
 }
 
 export async function clearProviderReauthRequired(userId: string, provider: EmailProviderName) {
   return prisma.user.update({
     where: { id: userId },
-    data: {
-      emailProviderReauthRequired: false,
-      emailProviderReauthReason: null,
-      emailProviderReauthAt: null,
-      emailProviderReauthProvider: provider,
-    },
+    data: buildProviderReauthData(provider, false, null),
   })
 }

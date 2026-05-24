@@ -8,14 +8,40 @@ type TaskLinkLike = {
   task?: LinkedEmailTask | null
 }
 
-export function getEmailLinkedTaskState(links?: TaskLinkLike[] | null): EmailLinkedTaskState | null {
-  const tasks = (links ?? [])
-    .map((link) => link.task)
-    .filter((task): task is LinkedEmailTask => Boolean(task))
+const LINKED_TASK_STATE_PRIORITY: Record<EmailLinkedTaskState, number> = {
+  ai_suggestion: 3,
+  active: 2,
+  completed: 1,
+}
 
-  if (tasks.length === 0) return null
-  if (tasks.some((task) => task.status === 'ai_suggestion')) return 'ai_suggestion'
-  if (tasks.some((task) => task.status === 'active')) return 'active'
-  if (tasks.every((task) => task.status === 'completed')) return 'completed'
-  return 'active'
+function toEmailLinkedTaskState(status?: string | null): EmailLinkedTaskState | null {
+  if (status === 'ai_suggestion' || status === 'active' || status === 'completed') {
+    return status
+  }
+  return null
+}
+
+export function getEmailLinkedTaskState(links?: TaskLinkLike[] | null): EmailLinkedTaskState | null {
+  let highestPriorityState: EmailLinkedTaskState | null = null
+  let hasEffectiveTask = false
+
+  for (const link of links ?? []) {
+    if (!link.task) continue
+
+    hasEffectiveTask = true
+    const state = toEmailLinkedTaskState(link.task.status)
+    if (!state) {
+      highestPriorityState = 'active'
+      continue
+    }
+
+    if (
+      !highestPriorityState ||
+      LINKED_TASK_STATE_PRIORITY[state] > LINKED_TASK_STATE_PRIORITY[highestPriorityState]
+    ) {
+      highestPriorityState = state
+    }
+  }
+
+  return hasEffectiveTask ? highestPriorityState ?? 'active' : null
 }

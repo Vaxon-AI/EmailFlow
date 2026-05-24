@@ -6,6 +6,20 @@ import type { AppErrorCode } from '@/lib/app-errors'
 import type { ZodType } from 'zod'
 import { ZodError } from 'zod'
 
+type ParseJsonBodyOptions = {
+  code?: AppErrorCode
+  message?: string
+  status?: number
+}
+
+function resolveParseOptions(options: ParseJsonBodyOptions) {
+  return {
+    code: options.code ?? 'BAD_REQUEST',
+    message: options.message ?? 'Invalid request body',
+    status: options.status ?? 400,
+  }
+}
+
 export function success<T>(data: T, meta?: ApiResponse['meta']): NextResponse {
   return NextResponse.json({ success: true, data, meta })
 }
@@ -21,17 +35,9 @@ export async function getAuthUser() {
 export async function parseJsonBody<T>(
   req: Request,
   schema: ZodType<T>,
-  options: {
-    code?: AppErrorCode
-    message?: string
-    status?: number
-  } = {},
+  options: ParseJsonBodyOptions = {},
 ): Promise<T> {
-  const {
-    code = 'BAD_REQUEST',
-    message = 'Invalid request body',
-    status = 400,
-  } = options
+  const { code, message, status } = resolveParseOptions(options)
 
   let body: unknown
   try {
@@ -67,10 +73,6 @@ export function errorFromException(
   fallbackStatus: number = 500,
 ) {
   if (isAppError(err)) {
-    return error(err.code, err.message, err.status)
-  }
-
-  if (err instanceof AppError) {
     return error(err.code, err.message, err.status)
   }
 

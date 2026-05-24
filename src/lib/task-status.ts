@@ -8,6 +8,8 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   completed: 'Completed',
 }
 
+const ACTIVE_TASK_STATUSES: TaskStatus[] = ['ai_suggestion', 'active']
+
 export function isTaskStatus(value: unknown): value is TaskStatus {
   return typeof value === 'string' && TASK_STATUSES.includes(value as TaskStatus)
 }
@@ -17,5 +19,5 @@ export function getTaskStatusLabel(status?: string | null): string {
 }
 
 export function activeTaskStatuses(): TaskStatus[] {
-  return ['ai_suggestion', 'active']
+  return [...ACTIVE_TASK_STATUSES]
 }

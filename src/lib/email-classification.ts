@@ -123,19 +123,35 @@ export const EMAIL_DISPLAY_CONFIG: Record<EmailDisplayState, EmailClassConfig> =
   },
 }
 
+const CLASSIFICATION_TO_DISPLAY_STATE: Record<string, Exclude<EmailDisplayState, 'tracked' | 'unclassified'>> = {
+  action: 'needs_action',
+  awareness: 'fyi',
+  ignore: 'ignored',
+  uncertain: 'uncertain',
+}
+
+function hasTrackedTask(input: { taskLinks?: unknown[] | null }) {
+  return (input.taskLinks?.length ?? 0) > 0
+}
+
+function isTrackedActionEmail(input: { classification?: string | null; actioned?: boolean | null }) {
+  return input.actioned === true && input.classification === 'action'
+}
+
+function getDisplayStateFromClassification(classification?: string | null): EmailDisplayState {
+  if (!classification) return 'unclassified'
+  return CLASSIFICATION_TO_DISPLAY_STATE[classification] ?? 'needs_action'
+}
+
 export function getEmailDisplayState(input: {
   classification?: string | null
   actioned?: boolean | null
   taskLinks?: unknown[] | null
   processingStatus?: string | null
 }): EmailDisplayState {
-  if ((input.taskLinks?.length ?? 0) > 0) return 'tracked'
-  if (input.actioned && input.classification === 'action') return 'tracked'
-  if (input.classification === 'ignore') return 'ignored'
-  if (input.classification === 'awareness') return 'fyi'
-  if (input.classification === 'uncertain') return 'uncertain'
-  if (!input.classification) return 'unclassified'
-  return 'needs_action'
+  if (hasTrackedTask(input)) return 'tracked'
+  if (isTrackedActionEmail(input)) return 'tracked'
+  return getDisplayStateFromClassification(input.classification)
 }
 
 // ---------------------------------------------------------------------------

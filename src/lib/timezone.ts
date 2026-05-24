@@ -10,6 +10,26 @@ type LocalDateTimeParts = LocalDateParts & {
   second: number
 }
 
+function toUtcTimestamp(parts: LocalDateTimeParts): number {
+  return Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  )
+}
+
+function atLocalMidnight(parts: LocalDateParts): LocalDateTimeParts {
+  return {
+    ...parts,
+    hour: 0,
+    minute: 0,
+    second: 0,
+  }
+}
+
 function getFormatter(timeZone: string) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -56,33 +76,12 @@ function zonedDateTimeToUtc(
   timeZone: string,
   parts: LocalDateTimeParts
 ): Date {
-  let guess = Date.UTC(
-    parts.year,
-    parts.month - 1,
-    parts.day,
-    parts.hour,
-    parts.minute,
-    parts.second
-  )
+  const targetAsUtc = toUtcTimestamp(parts)
+  let guess = targetAsUtc
 
   for (let i = 0; i < 4; i++) {
     const actual = getTimeZoneParts(new Date(guess), timeZone)
-    const actualAsUtc = Date.UTC(
-      actual.year,
-      actual.month - 1,
-      actual.day,
-      actual.hour,
-      actual.minute,
-      actual.second
-    )
-    const targetAsUtc = Date.UTC(
-      parts.year,
-      parts.month - 1,
-      parts.day,
-      parts.hour,
-      parts.minute,
-      parts.second
-    )
+    const actualAsUtc = toUtcTimestamp(actual)
 
     const diff = targetAsUtc - actualAsUtc
     guess += diff
@@ -148,18 +147,8 @@ export function getLocalDayRangeUtc(
   const startDay = shiftLocalDate(localNow, offsetDays)
   const endDay = shiftLocalDate(startDay, 1)
 
-  const start = zonedDateTimeToUtc(timeZone, {
-    ...startDay,
-    hour: 0,
-    minute: 0,
-    second: 0,
-  })
-  const end = zonedDateTimeToUtc(timeZone, {
-    ...endDay,
-    hour: 0,
-    minute: 0,
-    second: 0,
-  })
+  const start = zonedDateTimeToUtc(timeZone, atLocalMidnight(startDay))
+  const end = zonedDateTimeToUtc(timeZone, atLocalMidnight(endDay))
 
   return {
     start,

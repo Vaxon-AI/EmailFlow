@@ -8,10 +8,15 @@ export type SyncState =
   | { kind: 'stale'; lastSyncAt: string; daysSince: number }
 
 const FRESH_DAYS = 7
+const MS_PER_DAY = 86_400_000
+
+function getDaysSince(lastSyncAt: Date, now: Date) {
+  return Math.floor((now.getTime() - lastSyncAt.getTime()) / MS_PER_DAY)
+}
 
 export function classifySyncState(lastSyncAt: Date | null | undefined, now: Date = new Date()): SyncState {
   if (!lastSyncAt) return { kind: 'never' }
-  const days = Math.floor((now.getTime() - lastSyncAt.getTime()) / 86_400_000)
+  const days = getDaysSince(lastSyncAt, now)
   if (days <= FRESH_DAYS) {
     return { kind: 'fresh', lastSyncAt: lastSyncAt.toISOString() }
   }

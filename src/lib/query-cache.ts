@@ -20,7 +20,9 @@ export const WORKSPACE_QUERY_ROOTS = [
   'auth-user',
 ] as const
 
+const WORKSPACE_QUERY_ROOT_SET = new Set<string>(WORKSPACE_QUERY_ROOTS)
+
 export function isWorkspaceQueryKey(queryKey: readonly unknown[]) {
   const root = queryKey[0]
-  return typeof root === 'string' && WORKSPACE_QUERY_ROOTS.includes(root as (typeof WORKSPACE_QUERY_ROOTS)[number])
+  return typeof root === 'string' && WORKSPACE_QUERY_ROOT_SET.has(root)
 }

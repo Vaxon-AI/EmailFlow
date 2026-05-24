@@ -1,14 +1,13 @@
+const PROVIDER_LABELS: Record<string, string> = {
+  google: 'Google',
+  gmail: 'Google',
+  microsoft: 'Outlook',
+  outlook: 'Outlook',
+}
+
 export function getEmailProviderLabel(provider?: string | null) {
-  switch (provider) {
-    case 'google':
-    case 'gmail':
-      return 'Google'
-    case 'microsoft':
-    case 'outlook':
-      return 'Outlook'
-    default:
-      return 'Email'
-  }
+  if (!provider) return 'Email'
+  return PROVIDER_LABELS[provider] ?? 'Email'
 }
 
 export function getEmailProviderAccountLabel(provider?: string | null) {
