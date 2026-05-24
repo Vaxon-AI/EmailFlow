@@ -4,13 +4,20 @@
  *   Body: { ruleType: 'CONTACT' | 'DOMAIN' | 'LABEL', value: string }
  */
 
-import { getAuthUser, success, error, errorFromException } from '@/lib/api-helpers'
+import { getAuthUser, success, error, errorFromException, parseJsonBody } from '@/lib/api-helpers'
 import * as retentionRepo from '@/repositories/retention-repo'
 import type { ProtectionRuleType } from '@prisma/client'
+import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
 const VALID_RULE_TYPES: ProtectionRuleType[] = ['CONTACT', 'DOMAIN', 'LABEL']
+const retentionWhitelistSchema = z.object({
+  ruleType: z.enum(VALID_RULE_TYPES, {
+    message: `ruleType must be one of: ${VALID_RULE_TYPES.join(', ')}`,
+  }),
+  value: z.string().trim().min(1, 'value is required and must be a non-empty string'),
+})
 
 export async function GET() {
   try {
@@ -25,22 +32,11 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const user = await getAuthUser()
-    const body = await req.json()
-    const { ruleType, value } = body
+    const { ruleType, value } = await parseJsonBody(req, retentionWhitelistSchema, {
+      code: 'INVALID_INPUT',
+    })
 
-    if (!VALID_RULE_TYPES.includes(ruleType)) {
-      return error(
-        'INVALID_INPUT',
-        `ruleType must be one of: ${VALID_RULE_TYPES.join(', ')}`,
-        400
-      )
-    }
-
-    if (!value || typeof value !== 'string' || value.trim().length === 0) {
-      return error('INVALID_INPUT', 'value is required and must be a non-empty string', 400)
-    }
-
-    const rule = await retentionRepo.addProtectionRule(user.id, ruleType, value.trim())
+    const rule = await retentionRepo.addProtectionRule(user.id, ruleType, value)
     return success(rule)
   } catch (err) {
     // Unique constraint violation → duplicate rule
