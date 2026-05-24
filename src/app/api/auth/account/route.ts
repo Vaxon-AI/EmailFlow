@@ -1,7 +1,6 @@
-import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireCurrentSessionContext } from '@/lib/auth-sessions'
-import { errorFromException, error as apiError, parseJsonBody } from '@/lib/api-helpers'
+import { errorFromException, error as apiError, parseJsonBody, success } from '@/lib/api-helpers'
 import { clearSessionCookie } from '@/lib/auth-token'
 import { deleteUserWithQuotaSnapshot } from '@/repositories/user-repo'
 
@@ -52,7 +51,7 @@ export async function DELETE(req: Request) {
     // Clear the session cookie so the browser doesn't hold a dangling token
     await clearSessionCookie()
 
-    return NextResponse.json({ success: true })
+    return success(undefined)
   } catch (err) {
     console.error('[api/auth/account]', err)
     return errorFromException(err, 'SYNC_FAILED', 'Failed to delete account', 500)

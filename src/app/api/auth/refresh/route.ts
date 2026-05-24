@@ -1,9 +1,7 @@
-import { NextResponse } from 'next/server'
-
 import { AppError } from '@/lib/app-errors'
 import { getSessionToken, setSessionCookie } from '@/lib/auth-token'
 import { rotateSessionToken, requireSessionToken } from '@/lib/auth-sessions'
-import { errorFromException } from '@/lib/api-helpers'
+import { errorFromException, success } from '@/lib/api-helpers'
 
 /**
  * POST /api/auth/refresh
@@ -33,12 +31,12 @@ export async function POST() {
     if (!result) {
       // Either already rotated concurrently (ok) or session became invalid mid-flight
       // Return 200 so the client doesn't retry aggressively
-      return NextResponse.json({ success: true, rotated: false })
+      return success({ rotated: false })
     }
 
     await setSessionCookie(result.newRawToken, context.session.remember)
 
-    return NextResponse.json({ success: true, rotated: true })
+    return success({ rotated: true })
   } catch (err) {
     console.error('[api/auth/refresh]', err)
     return errorFromException(err, 'SYNC_FAILED', 'Refresh failed', 500)

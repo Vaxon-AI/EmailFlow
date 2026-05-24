@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server'
 import { requireCurrentSessionContext } from '@/lib/auth-sessions'
-import { errorFromException } from '@/lib/api-helpers'
+import { errorFromException, success, error } from '@/lib/api-helpers'
 import { findPasswordHash, setPasswordHash } from '@/repositories/user-repo'
 import { hashPassword, verifyPassword } from '@/lib/auth-password'
 import { consumeStepUpToken } from '@/lib/step-up-auth'
@@ -32,10 +31,7 @@ export async function POST(req: Request) {
     }
 
     if (!currentPassword || !newPassword || !stepUpToken) {
-      return NextResponse.json(
-        { success: false, error: 'currentPassword, newPassword, and stepUpToken are required' },
-        { status: 400 },
-      )
+      return error('VALIDATION_ERROR', 'currentPassword, newPassword, and stepUpToken are required', 400)
     }
 
     // Validate step-up token first
@@ -44,30 +40,21 @@ export async function POST(req: Request) {
     const user = await findPasswordHash(userId)
 
     if (!user?.passwordHash) {
-      return NextResponse.json(
-        { success: false, error: 'This account does not use a password' },
-        { status: 400 },
-      )
+      return error('VALIDATION_ERROR', 'This account does not use a password', 400)
     }
 
     const currentValid = await verifyPassword(currentPassword, user.passwordHash)
     if (!currentValid) {
-      return NextResponse.json({ success: false, error: 'Current password is incorrect' }, { status: 401 })
+      return error('VALIDATION_ERROR', 'Current password is incorrect', 401)
     }
 
     if (newPassword.length < 8) {
-      return NextResponse.json(
-        { success: false, error: 'New password must be at least 8 characters' },
-        { status: 400 },
-      )
+      return error('VALIDATION_ERROR', 'New password must be at least 8 characters', 400)
     }
 
     const sameAsOld = await verifyPassword(newPassword, user.passwordHash)
     if (sameAsOld) {
-      return NextResponse.json(
-        { success: false, error: 'New password must be different from the current password' },
-        { status: 400 },
-      )
+      return error('VALIDATION_ERROR', 'New password must be different from the current password', 400)
     }
 
     const newHash = await hashPassword(newPassword)
@@ -77,7 +64,7 @@ export async function POST(req: Request) {
     // Revoke all other sessions so stolen sessions are invalidated after a password change
     await revokeOtherSessions(userId, context.session.id)
 
-    return NextResponse.json({ success: true })
+    return success(undefined)
   } catch (err) {
     console.error('[api/auth/change-password]', err)
     return errorFromException(err, 'SYNC_FAILED', 'Failed to change password', 500)

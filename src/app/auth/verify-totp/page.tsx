@@ -13,6 +13,7 @@ import { InlineNotice } from '@/components/inline-notice'
 import { StatePanel } from '@/components/state-panel'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { getErrorMessage } from '@/lib/api-client'
 import { Input } from '@/components/ui/input'
 
 type DeviceLimitDevice = {
@@ -60,7 +61,7 @@ function VerifyTotpContent() {
           setDeviceLimit({ token: data.deviceLimitToken, devices: data.data.devices })
           return
         }
-        setError(data.error || 'Verification failed')
+        setError(getErrorMessage(data, 'Verification failed'))
         return
       }
 
@@ -91,7 +92,7 @@ function VerifyTotpContent() {
         body: JSON.stringify({ token: deviceLimit.token, sessionId }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || 'Failed to sign out device')
+      if (!res.ok) throw new Error(getErrorMessage(data, 'Failed to sign out device'))
       toast.success('Device signed out')
       setDeviceLimit(null)
       await submitTotp()

@@ -11,6 +11,7 @@ import { InlineNotice } from '@/components/inline-notice'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { getErrorMessage } from '@/lib/api-client'
 
 const GOOGLE_OAUTH_ERROR_MESSAGES: Record<string, string> = {
   no_email: 'Your Google account must have an email address.',
@@ -84,7 +85,7 @@ export default function SignUpPage() {
       })
       const data = await res.json()
       if (!data.success) {
-        setError(data.error || 'Registration failed')
+        setError(getErrorMessage(data, 'Registration failed'))
         return
       }
       queryClient.invalidateQueries({ queryKey: ['auth-user'] })

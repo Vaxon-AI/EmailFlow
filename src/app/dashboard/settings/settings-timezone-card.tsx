@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Globe, Check, ChevronsUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
+import { getErrorMessage } from '@/lib/api-client'
 
 const POPULAR_TIMEZONES = [
   'UTC',
@@ -151,7 +152,7 @@ export function SettingsTimezoneCard({ currentTimezone }: { currentTimezone?: st
         body: JSON.stringify({ timezone }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to update timezone')
+      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to update timezone'))
       return json
     },
     onSuccess: () => {

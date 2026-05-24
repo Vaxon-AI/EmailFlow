@@ -8,6 +8,7 @@ import { AuthShell } from '@/components/auth-shell'
 import { InlineNotice } from '@/components/inline-notice'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { getErrorMessage } from '@/lib/api-client'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -27,7 +28,7 @@ export default function ForgotPasswordPage() {
       })
       const data = await res.json()
       if (!data.success) {
-        setError(data.error || 'Something went wrong')
+        setError(getErrorMessage(data, 'Something went wrong'))
       } else {
         setSent(true)
       }

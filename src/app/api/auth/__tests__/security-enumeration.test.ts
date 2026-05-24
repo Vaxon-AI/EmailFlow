@@ -108,14 +108,14 @@ describe('Anti-enumeration: login', () => {
     const res2 = await loginPost(loginRequest({ email: 'alice@example.com', password: 'wrong' }))
     const body2 = await res2.json()
 
-    expect(body1.error).toBe(body2.error)
+    expect(body1.error).toEqual(body2.error)
   })
 
   it('error message for nonexistent user does not hint that the account is missing', async () => {
     mockUser.findUnique.mockResolvedValue(null)
     const res = await loginPost(loginRequest({ email: 'nobody@example.com', password: 'secret' }))
     const body = await res.json()
-    const message = (body.error ?? '').toLowerCase()
+    const message = (body.error?.message ?? body.error ?? '').toLowerCase()
 
     expect(message).not.toContain('not found')
     expect(message).not.toContain('does not exist')

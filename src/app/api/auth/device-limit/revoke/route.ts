@@ -1,41 +1,32 @@
-import { NextResponse } from 'next/server'
-
+import { z } from 'zod'
+import { success, error, errorFromException, parseJsonBody } from '@/lib/api-helpers'
 import { verifyToken } from '@/lib/auth-token'
 import { revokeSessionById } from '@/lib/auth-sessions'
 
+const revokeDeviceSchema = z.object({
+  token: z.string().min(1, 'Device limit token and session are required'),
+  sessionId: z.string().min(1, 'Device limit token and session are required'),
+})
+
 export async function POST(req: Request) {
   try {
-    const { token, sessionId } = await req.json()
-
-    if (!token || !sessionId) {
-      return NextResponse.json(
-        { success: false, error: 'Device limit token and session are required' },
-        { status: 400 }
-      )
-    }
+    const { token, sessionId } = await parseJsonBody(req, revokeDeviceSchema, {
+      code: 'VALIDATION_ERROR',
+    })
 
     const payload = verifyToken(token)
     if (!payload || payload.purpose !== 'device-limit') {
-      return NextResponse.json(
-        { success: false, error: 'Invalid or expired device limit token' },
-        { status: 401 }
-      )
+      return error('INVALID_TOKEN', 'Invalid or expired device limit token', 401)
     }
 
     const revoked = await revokeSessionById(sessionId, payload.userId)
     if (!revoked) {
-      return NextResponse.json(
-        { success: false, error: 'Device not found' },
-        { status: 404 }
-      )
+      return error('NOT_FOUND', 'Device not found', 404)
     }
 
-    return NextResponse.json({ success: true })
+    return success(undefined)
   } catch (err) {
     console.error('[api/auth/device-limit/revoke]', err)
-    return NextResponse.json(
-      { success: false, error: 'Failed to sign out device' },
-      { status: 500 }
-    )
+    return errorFromException(err, 'SYNC_FAILED', 'Failed to sign out device', 500)
   }
 }

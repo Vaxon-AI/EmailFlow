@@ -1,8 +1,12 @@
+import { z } from 'zod'
 import { requireCurrentUser } from '@/lib/auth-sessions'
-import { errorFromException, error as apiError, success } from '@/lib/api-helpers'
-import { verifyStepUp, type StepUpAction } from '@/lib/step-up-auth'
+import { errorFromException, success, parseJsonBody } from '@/lib/api-helpers'
+import { verifyStepUp } from '@/lib/step-up-auth'
 
-const VALID_ACTIONS: StepUpAction[] = ['change_password', 'disable_totp', 'delete_account']
+const stepUpVerifySchema = z.object({
+  action: z.enum(['change_password', 'disable_totp', 'delete_account'], 'Invalid action'),
+  code: z.string().min(1, 'Verification code is required'),
+})
 
 /**
  * POST /api/auth/step-up/verify
@@ -15,16 +19,9 @@ export async function POST(req: Request) {
   try {
     const user = await requireCurrentUser()
 
-    const body = await req.json()
-    const { action, code } = body as { action: StepUpAction; code: string }
-
-    if (!action || !VALID_ACTIONS.includes(action)) {
-      return apiError('VALIDATION_ERROR', 'Invalid action', 400)
-    }
-
-    if (!code || typeof code !== 'string') {
-      return apiError('VALIDATION_ERROR', 'Verification code is required', 400)
-    }
+    const { action, code } = await parseJsonBody(req, stepUpVerifySchema, {
+      code: 'VALIDATION_ERROR',
+    })
 
     const stepUpToken = await verifyStepUp(user.id, code.trim(), action)
 

@@ -127,7 +127,7 @@ describe('GET /api/auth/me', () => {
     expect(res.status).toBe(404)
     expect(await res.json()).toEqual({
       success: false,
-      error: 'User not found',
+      error: { code: 'NOT_FOUND', message: 'User not found' },
     })
   })
 })

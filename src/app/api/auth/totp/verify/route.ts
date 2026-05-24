@@ -1,33 +1,23 @@
-import { NextResponse } from 'next/server'
 import { verify } from 'otplib'
+import { z } from 'zod'
+import { success, errorFromException, parseJsonBody } from '@/lib/api-helpers'
+
+const verifyTotpSchema = z.object({
+  token: z.string().min(1, 'Token and secret are required'),
+  secret: z.string().min(1, 'Token and secret are required'),
+})
 
 export async function POST(req: Request) {
   try {
-    const { token, secret } = await req.json()
-
-    if (!token || !secret) {
-      return NextResponse.json(
-        { success: false, error: 'Token and secret are required' },
-        { status: 400 }
-      )
-    }
-
-    const result = await verify({
-      token,
-      secret,
+    const { token, secret } = await parseJsonBody(req, verifyTotpSchema, {
+      code: 'VALIDATION_ERROR',
     })
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        isValid: result.valid,
-      },
-    })
+    const result = await verify({ token, secret })
+
+    return success({ isValid: result.valid })
   } catch (err) {
     console.error('[api/auth/totp/verify]', err)
-    return NextResponse.json(
-      { success: false, error: 'Failed to verify code' },
-      { status: 500 }
-    )
+    return errorFromException(err, 'SYNC_FAILED', 'Failed to verify code', 500)
   }
 }

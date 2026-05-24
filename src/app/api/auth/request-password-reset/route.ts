@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { getAuthUser, success } from '@/lib/api-helpers'
+import { getAuthUser, success, error, errorFromException } from '@/lib/api-helpers'
 import { sendPasswordResetEmail } from '@/lib/mailer'
 import { hashResetToken, getTokenTtlMs, RATE_LIMIT_SECONDS } from '@/lib/password-reset'
 import { findByEmail, findById } from '@/repositories/user-repo'
@@ -31,32 +30,23 @@ export async function POST(req: Request) {
         // no body / not JSON
       }
       if (!email) {
-        return NextResponse.json(
-          { success: false, error: 'Email is required' },
-          { status: 400 }
-        )
+        return error('VALIDATION_ERROR', 'Email is required', 400)
       }
       user = await findByEmail(email)
     }
 
     // Always return success for unauthenticated requests to prevent email enumeration
-    const genericOk = NextResponse.json({
-      success: true,
-      data: { message: 'If that email has an account, a reset link has been sent.' },
-    })
+    const genericOk = () => success({ message: 'If that email has an account, a reset link has been sent.' })
 
     if (!user) {
       // Don't reveal whether the email exists
-      if (!sessionUser) return genericOk
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 })
+      if (!sessionUser) return genericOk()
+      return error('NOT_FOUND', 'User not found', 404)
     }
 
     if (!user.passwordHash) {
-      if (!sessionUser) return genericOk
-      return NextResponse.json(
-        { success: false, error: 'This account uses OAuth sign-in and has no local password' },
-        { status: 400 }
-      )
+      if (!sessionUser) return genericOk()
+      return error('VALIDATION_ERROR', 'This account uses OAuth sign-in and has no local password', 400)
     }
 
     // Rate limit: reject if a token was issued within the last RATE_LIMIT_SECONDS
@@ -65,10 +55,7 @@ export async function POST(req: Request) {
       const secondsSince = (Date.now() - latest.createdAt.getTime()) / 1000
       if (secondsSince < RATE_LIMIT_SECONDS) {
         const retryAfter = Math.ceil(RATE_LIMIT_SECONDS - secondsSince)
-        return NextResponse.json(
-          { success: false, error: `Please wait ${retryAfter} second(s) before requesting another reset email` },
-          { status: 429 }
-        )
+        return error('RATE_LIMITED', `Please wait ${retryAfter} second(s) before requesting another reset email`, 429)
       }
     }
 
@@ -88,12 +75,9 @@ export async function POST(req: Request) {
 
     return sessionUser
       ? success({ message: 'Password reset email sent. Check your inbox.' })
-      : genericOk
+      : genericOk()
   } catch (err) {
     console.error('[api/auth/request-password-reset]', err)
-    return NextResponse.json(
-      { success: false, error: 'Failed to send reset email' },
-      { status: 500 }
-    )
+    return errorFromException(err, 'SYNC_FAILED', 'Failed to send reset email', 500)
   }
 }

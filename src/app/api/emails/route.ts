@@ -1,16 +1,15 @@
 export const dynamic = "force-dynamic"
-import { NextResponse } from 'next/server'
 import { NextRequest } from 'next/server'
 import { getAuthUser, success } from '@/lib/api-helpers'
 import * as emailRepo from '@/repositories/email-repo'
 
-const EMPTY_LIST = { success: true, data: [], meta: { page: 1, totalPages: 0, totalCount: 0 } }
+const EMPTY_META = { page: 1, totalPages: 0, totalCount: 0 }
 const EMAIL_BUCKETS = new Set(['needs_action', 'tracked', 'fyi', 'ignored', 'unclassified'])
 
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser()
-    if (!user) return NextResponse.json(EMPTY_LIST)
+    if (!user) return success([], EMPTY_META)
 
     const url = req.nextUrl
     const page = parseInt(url.searchParams.get('page') || '1')
@@ -35,6 +34,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (err) {
     console.error('[api/emails GET]', err)
-    return NextResponse.json(EMPTY_LIST)
+    return success([], EMPTY_META)
   }
 }

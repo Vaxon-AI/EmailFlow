@@ -5,31 +5,23 @@ import { createToken, setSessionCookie } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
 import { isAppError } from '@/lib/app-errors'
 import { getInheritedQuotaForEmail } from '@/repositories/quota-ledger-repo'
+import { success, error } from '@/lib/api-helpers'
 
 export async function POST(req: Request) {
   try {
     const { email, password, name } = await req.json()
 
     if (!email || !password) {
-      return NextResponse.json(
-        { success: false, error: 'Email and password are required' },
-        { status: 400 }
-      )
+      return error('VALIDATION_ERROR', 'Email and password are required', 400)
     }
 
     if (password.length < 8) {
-      return NextResponse.json(
-        { success: false, error: 'Password must be at least 8 characters' },
-        { status: 400 }
-      )
+      return error('VALIDATION_ERROR', 'Password must be at least 8 characters', 400)
     }
 
     const existing = await findByEmail(email)
     if (existing) {
-      return NextResponse.json(
-        { success: false, error: 'An account with this email already exists' },
-        { status: 409 }
-      )
+      return error('EMAIL_EXISTS', 'An account with this email already exists', 409)
     }
 
     const passwordHash = await hashPassword(password)
@@ -53,12 +45,10 @@ export async function POST(req: Request) {
     })
     await setSessionCookie(rawToken, true)
 
-    return NextResponse.json({
-      success: true,
-      data: { id: user.id, email: user.email, name: user.name },
-    })
+    return success({ id: user.id, email: user.email, name: user.name })
   } catch (err) {
     if (isAppError(err) && err.code === 'DEVICE_LIMIT_REACHED') {
+      // Non-standard shape: deviceLimitToken/code at top level (frontend reads them directly).
       return NextResponse.json(
         {
           success: false,
@@ -75,9 +65,6 @@ export async function POST(req: Request) {
       )
     }
     console.error('[api/auth/register]', err)
-    return NextResponse.json(
-      { success: false, error: 'Registration failed' },
-      { status: 500 }
-    )
+    return error('REGISTER_FAILED', 'Registration failed', 500)
   }
 }

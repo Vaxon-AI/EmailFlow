@@ -1,8 +1,12 @@
-import { NextResponse } from 'next/server'
-import { errorFromException } from '@/lib/api-helpers'
+import { z } from 'zod'
+import { errorFromException, success, error, parseJsonBody } from '@/lib/api-helpers'
 import { requireCurrentUser } from '@/lib/auth-sessions'
 import { findTotpEnabled, disableTotp } from '@/repositories/user-repo'
 import { consumeStepUpToken } from '@/lib/step-up-auth'
+
+const disableTotpSchema = z.object({
+  stepUpToken: z.string().min(1, 'stepUpToken is required'),
+})
 
 /**
  * POST /api/auth/totp/disable
@@ -19,24 +23,21 @@ export async function POST(req: Request) {
   try {
     const user = await requireCurrentUser()
 
-    const body = await req.json()
-    const { stepUpToken } = body as { stepUpToken?: string }
-
-    if (!stepUpToken) {
-      return NextResponse.json({ success: false, error: 'stepUpToken is required' }, { status: 400 })
-    }
+    const { stepUpToken } = await parseJsonBody(req, disableTotpSchema, {
+      code: 'VALIDATION_ERROR',
+    })
 
     await consumeStepUpToken(user.id, stepUpToken, 'disable_totp')
 
     const dbUser = await findTotpEnabled(user.id)
 
     if (!dbUser?.totpEnabled) {
-      return NextResponse.json({ success: false, error: '2FA is not currently enabled' }, { status: 400 })
+      return error('VALIDATION_ERROR', '2FA is not currently enabled', 400)
     }
 
     await disableTotp(user.id)
 
-    return NextResponse.json({ success: true })
+    return success(undefined)
   } catch (err) {
     console.error('[api/auth/totp/disable]', err)
     return errorFromException(err, 'SYNC_FAILED', 'Failed to disable 2FA', 500)

@@ -5,33 +5,25 @@ import { verifyToken, setSessionCookie, createToken } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
 import { isAppError } from '@/lib/app-errors'
 import { findForTotpVerify } from '@/repositories/user-repo'
+import { error } from '@/lib/api-helpers'
 
 export async function POST(req: Request) {
   try {
     const { tempToken, totpCode } = await req.json()
 
     if (!tempToken || !totpCode) {
-      return NextResponse.json(
-        { success: false, error: 'Verification token and code are required' },
-        { status: 400 }
-      )
+      return error('VALIDATION_ERROR', 'Verification token and code are required', 400)
     }
 
     const payload = verifyToken(tempToken)
     if (!payload || payload.purpose !== 'pre-2fa') {
-      return NextResponse.json(
-        { success: false, error: 'Invalid or expired verification token' },
-        { status: 401 }
-      )
+      return error('INVALID_TOKEN', 'Invalid or expired verification token', 401)
     }
 
     const user = await findForTotpVerify(payload.userId)
 
     if (!user || !user.totpEnabled || !user.totpSecret) {
-      return NextResponse.json(
-        { success: false, error: 'Two-factor authentication is not configured' },
-        { status: 400 }
-      )
+      return error('VALIDATION_ERROR', 'Two-factor authentication is not configured', 400)
     }
 
     const isValid = await verify({
@@ -40,10 +32,7 @@ export async function POST(req: Request) {
     })
 
     if (!isValid.valid) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid authenticator code' },
-        { status: 401 }
-      )
+      return error('INVALID_CREDENTIALS', 'Invalid authenticator code', 401)
     }
 
     const remember = Boolean(payload.remember)
@@ -56,6 +45,7 @@ export async function POST(req: Request) {
 
     await setSessionCookie(rawToken, remember)
 
+    // Non-standard shape: isNewDevice at top level (frontend reads it directly).
     return NextResponse.json({
       success: true,
       isNewDevice,
@@ -67,6 +57,7 @@ export async function POST(req: Request) {
     })
   } catch (err) {
     if (isAppError(err) && err.code === 'DEVICE_LIMIT_REACHED') {
+      // Non-standard shape: deviceLimitToken/code at top level (frontend reads them directly).
       return NextResponse.json(
         {
           success: false,
@@ -83,9 +74,6 @@ export async function POST(req: Request) {
       )
     }
     console.error('[api/auth/verify-totp]', err)
-    return NextResponse.json(
-      { success: false, error: 'Verification failed' },
-      { status: 500 }
-    )
+    return error('SYNC_FAILED', 'Verification failed', 500)
   }
 }

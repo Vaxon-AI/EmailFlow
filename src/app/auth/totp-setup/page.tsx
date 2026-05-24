@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
+import { getErrorMessage } from '@/lib/api-client'
 
 export default function TotpSetupPage() {
   const [qrCode, setQrCode] = useState('')
@@ -22,7 +23,7 @@ export default function TotpSetupPage() {
         if (data.success) {
           setUserId(data.data.userId)
         } else {
-          setError(data.error || 'No logged-in user found')
+          setError(getErrorMessage(data, 'No logged-in user found'))
         }
       } catch {
         setError('Failed to load current user')
@@ -46,7 +47,7 @@ export default function TotpSetupPage() {
       const data = await res.json()
 
       if (!data.success) {
-        setError(data.error || 'Failed to generate QR code')
+        setError(getErrorMessage(data, 'Failed to generate QR code'))
         return
       }
 
@@ -77,7 +78,7 @@ export default function TotpSetupPage() {
       const data = await res.json()
 
       if (!data.success) {
-        setError(data.error || 'Failed to verify code')
+        setError(getErrorMessage(data, 'Failed to verify code'))
         return
       }
 
@@ -99,7 +100,7 @@ export default function TotpSetupPage() {
         const enableData = await enableRes.json()
 
         if (!enableData.success) {
-          setError(enableData.error || 'Failed to enable 2FA')
+          setError(getErrorMessage(enableData, 'Failed to enable 2FA'))
           return
         }
 

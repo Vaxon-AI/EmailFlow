@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
 import { generateSecret, generateURI } from 'otplib'
 import QRCode from 'qrcode'
+import { success, errorFromException } from '@/lib/api-helpers'
 
 export async function POST() {
   try {
@@ -16,18 +16,9 @@ export async function POST() {
 
     console.log('SECRET:', secret)
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        secret,
-        qrCodeDataUrl,
-      },
-    })
+    return success({ secret, qrCodeDataUrl })
   } catch (err) {
     console.error('[api/auth/totp/setup]', err)
-    return NextResponse.json(
-      { success: false, error: 'Failed to generate QR code' },
-      { status: 500 }
-    )
+    return errorFromException(err, 'SYNC_FAILED', 'Failed to generate QR code', 500)
   }
 }

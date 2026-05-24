@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { InlineNotice } from '@/components/inline-notice'
 import { PageHeader } from '@/components/page-header'
+import { getErrorMessage } from '@/lib/api-client'
 import {
   AlertTriangle,
   CalendarIcon,
@@ -276,7 +277,7 @@ function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string | null }
         body: JSON.stringify({ days }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to update sync range')
+      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to update sync range'))
       return json
     },
     onSuccess: () => {
@@ -442,7 +443,7 @@ function ReviewModeCard({ manualReviewMode }: { manualReviewMode: boolean }) {
         body: JSON.stringify({ manualReviewMode: mode }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to update')
+      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to update'))
       return json
     },
     onSuccess: () => {
@@ -731,7 +732,7 @@ function DeviceSessionsCard({
     queryFn: async () => {
       const res = await fetch('/api/auth/sessions')
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to load sessions')
+      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to load sessions'))
       return json
     },
     staleTime: CACHE_TIME.auth,
@@ -745,7 +746,7 @@ function DeviceSessionsCard({
         method: 'POST',
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || 'Failed to sign out device')
+      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to sign out device'))
       return session
     },
     onSuccess: async (session) => {
@@ -769,7 +770,7 @@ function DeviceSessionsCard({
         method: 'POST',
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to sign out other devices')
+      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to sign out other devices'))
       return json
     },
     onSuccess: (json) => {
@@ -1200,7 +1201,7 @@ function LinkAccountCard({
         body: JSON.stringify({ accountId }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Disconnect failed')
+      if (!res.ok) throw new Error(getErrorMessage(json, 'Disconnect failed'))
     },
     onSuccess: () => {
       toast.success('Google account disconnected')

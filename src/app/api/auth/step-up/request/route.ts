@@ -1,8 +1,11 @@
-import { errorFromException, error as apiError, success } from '@/lib/api-helpers'
+import { z } from 'zod'
+import { errorFromException, success, parseJsonBody } from '@/lib/api-helpers'
 import { requireCurrentUser } from '@/lib/auth-sessions'
-import { requestStepUp, type StepUpAction } from '@/lib/step-up-auth'
+import { requestStepUp } from '@/lib/step-up-auth'
 
-const VALID_ACTIONS: StepUpAction[] = ['change_password', 'disable_totp', 'delete_account']
+const stepUpRequestSchema = z.object({
+  action: z.enum(['change_password', 'disable_totp', 'delete_account'], 'Invalid action'),
+})
 
 /**
  * POST /api/auth/step-up/request
@@ -15,12 +18,9 @@ export async function POST(req: Request) {
   try {
     const user = await requireCurrentUser()
 
-    const body = await req.json()
-    const action = body?.action as StepUpAction
-
-    if (!action || !VALID_ACTIONS.includes(action)) {
-      return apiError('VALIDATION_ERROR', 'Invalid action', 400)
-    }
+    const { action } = await parseJsonBody(req, stepUpRequestSchema, {
+      code: 'VALIDATION_ERROR',
+    })
 
     const { method } = await requestStepUp(user.id, action)
 

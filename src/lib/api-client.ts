@@ -22,6 +22,22 @@ export function isSessionFailureCode(code?: string | null) {
   return Boolean(code && SESSION_FAILURE_CODES.has(code))
 }
 
+/**
+ * Extracts a user-facing error message from an API response payload, handling
+ * both the legacy `{ error: 'string' }` shape and the new `{ error: { code, message } }`
+ * shape from `success()`/`error()` helpers in `src/lib/api-helpers.ts`.
+ */
+export function getErrorMessage(payload: unknown, fallback = 'Request failed'): string {
+  if (!payload || typeof payload !== 'object') return fallback
+  const errorField = (payload as { error?: unknown }).error
+  if (typeof errorField === 'string') return errorField || fallback
+  if (errorField && typeof errorField === 'object') {
+    const message = (errorField as { message?: unknown }).message
+    if (typeof message === 'string' && message) return message
+  }
+  return fallback
+}
+
 export async function readApiClientError(response: Response): Promise<ApiClientError> {
   let payload: unknown = null
 

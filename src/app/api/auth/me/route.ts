@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCurrentSessionContext } from '@/lib/auth-sessions'
-import { errorFromException } from '@/lib/api-helpers'
+import { errorFromException, error } from '@/lib/api-helpers'
 import { findFullProfile } from '@/repositories/user-repo'
+
+// Note: success responses use a non-standard `user` top-level field instead of
+// the standard success() helper because the frontend (use-auth, settings page)
+// reads `json.user` directly. See src/lib/use-auth.ts:35.
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,10 +29,7 @@ export async function GET(request: NextRequest) {
 
     const profile = await findFullProfile(context.user.id)
     if (!profile) {
-      return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
-      )
+      return error('NOT_FOUND', 'User not found', 404)
     }
     const { user, googleAccounts } = profile
 

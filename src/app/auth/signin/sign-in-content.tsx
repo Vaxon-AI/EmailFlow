@@ -12,6 +12,7 @@ import { InlineNotice } from '@/components/inline-notice'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { getErrorMessage } from '@/lib/api-client'
 
 type DeviceLimitDevice = {
   id: string
@@ -68,7 +69,7 @@ export function SignInContent() {
       return true
     }
 
-    setError(data.error || 'Device limit reached. Sign out an older device to continue.')
+    setError(getErrorMessage(data, 'Device limit reached. Sign out an older device to continue.'))
     return true
   }
 
@@ -90,7 +91,7 @@ export function SignInContent() {
           handleDeviceLimit(data)
           return
         }
-        setError(data.error || 'Login failed')
+        setError(getErrorMessage(data, 'Login failed'))
         return
       }
 
@@ -129,7 +130,7 @@ export function SignInContent() {
         body: JSON.stringify({ token: deviceLimit.token, sessionId }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || 'Failed to sign out device')
+      if (!res.ok) throw new Error(getErrorMessage(data, 'Failed to sign out device'))
       toast.success('Device signed out')
       setDeviceLimit(null)
       await submitLogin()

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { success } from '@/lib/api-helpers'
 import { clearSessionCookie, getSessionToken } from '@/lib/auth-token'
 import { revokeSessionByToken } from '@/lib/auth-sessions'
 
@@ -7,9 +7,9 @@ export async function POST() {
     const token = await getSessionToken()
     await revokeSessionByToken(token)
     await clearSessionCookie()
-    return NextResponse.json({ success: true })
+    return success(undefined)
   } catch (err) {
     console.error('[api/auth/logout]', err)
-    return NextResponse.json({ success: true })
+    return success(undefined)
   }
 }

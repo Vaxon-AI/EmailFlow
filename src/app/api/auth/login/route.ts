@@ -4,34 +4,26 @@ import { verifyPassword } from '@/lib/auth-password'
 import { createToken, setSessionCookie } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
 import { isAppError } from '@/lib/app-errors'
+import { error } from '@/lib/api-helpers'
 
 export async function POST(req: Request) {
   try {
     const { email, password, rememberMe } = await req.json()
 
     if (!email || !password) {
-      return NextResponse.json(
-        { success: false, error: 'Email and password are required' },
-        { status: 400 }
-      )
+      return error('VALIDATION_ERROR', 'Email and password are required', 400)
     }
 
     const user = await findByEmail(email)
 
     if (!user || !user.passwordHash) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid email or password' },
-        { status: 401 }
-      )
+      return error('INVALID_CREDENTIALS', 'Invalid email or password', 401)
     }
 
     const valid = await verifyPassword(password, user.passwordHash)
 
     if (!valid) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid email or password' },
-        { status: 401 }
-      )
+      return error('INVALID_CREDENTIALS', 'Invalid email or password', 401)
     }
 
     if (user.totpEnabled) {
@@ -41,6 +33,7 @@ export async function POST(req: Request) {
         remember: !!rememberMe,
       })
 
+      // Non-standard shape: requiresTwoFactor/tempToken at top level (frontend reads them directly).
       return NextResponse.json({
         success: true,
         requiresTwoFactor: true,
@@ -57,6 +50,7 @@ export async function POST(req: Request) {
 
     await setSessionCookie(rawToken, !!rememberMe)
 
+    // Non-standard shape: requiresTwoFactor/isNewDevice at top level (frontend reads them directly).
     return NextResponse.json({
       success: true,
       requiresTwoFactor: false,
@@ -65,6 +59,7 @@ export async function POST(req: Request) {
     })
   } catch (err) {
     if (isAppError(err) && err.code === 'DEVICE_LIMIT_REACHED') {
+      // Non-standard shape: deviceLimitToken/code at top level (frontend reads them directly).
       return NextResponse.json(
         {
           success: false,
@@ -81,9 +76,6 @@ export async function POST(req: Request) {
       )
     }
     console.error('[api/auth/login]', err)
-    return NextResponse.json(
-      { success: false, error: 'Login failed' },
-      { status: 500 }
-    )
+    return error('LOGIN_FAILED', 'Login failed', 500)
   }
 }
