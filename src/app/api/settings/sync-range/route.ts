@@ -38,8 +38,12 @@ export async function POST(req: Request) {
         return error('INVALID_INPUT', 'customDate must be in the past', 400)
       }
     } else {
+      const lookbackDays = days
+      if (lookbackDays === undefined) {
+        return error('INVALID_INPUT', 'Missing days or customDate', 400)
+      }
       startDate = new Date()
-      startDate.setDate(startDate.getDate() - days)
+      startDate.setDate(startDate.getDate() - lookbackDays)
     }
 
     await prisma.user.update({
