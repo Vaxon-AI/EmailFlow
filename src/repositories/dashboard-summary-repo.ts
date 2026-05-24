@@ -48,6 +48,9 @@ type DateRange = {
   end: Date
 }
 
+type SummaryPeriodData = Awaited<ReturnType<typeof fetchCurrentPeriodSummaryData>>
+type SummaryAllTimeData = Awaited<ReturnType<typeof fetchAllTimeSummaryData>>
+
 const UNCATEGORIZED = '__uncategorized__'
 const MOMENTUM_DAYS = 14
 const WEEK_MOMENTUM_DAYS = 7
@@ -158,15 +161,7 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     actionMomentumEmails,
   } = currentPeriod
 
-  const allTimeEmailGroups = allTimeRaw?.emailGroups ?? emailGroups
-  const allTimeLinkedActionEmails = allTimeRaw?.linkedActionEmails ?? linkedActionEmails
-  const allTimeNeedsReviewCount = allTimeRaw?.needsReviewCount ?? needsReviewCount
-  const allTimeTrackedCount = allTimeRaw?.trackedCount ?? trackedCount
-  const allTimeTaskGroups = allTimeRaw?.taskGroups ?? taskGroups
-  const allTimeAiTaskGroups = allTimeRaw?.aiTaskGroups ?? aiTaskGroups
-  const allTimeTasks = allTimeRaw?.tasks ?? tasks
-  const allTimeAttentionEmails = allTimeRaw?.attentionEmails ?? attentionEmails
-  const allTimeAttentionEmailCount = allTimeRaw?.attentionEmailCount ?? attentionEmails.length
+  const allTime = resolveAllTimeSummaryData(currentPeriod, allTimeRaw)
 
   const stats = buildStats(emailGroups, linkedActionEmails, needsReviewCount, trackedCount, awaitingReviewCount, taskGroups, userInfo)
   const taskSummary = {
@@ -182,30 +177,83 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     filters.timezoneOffset ?? 0
   )
   const allTimeStats = buildStats(
-    allTimeEmailGroups,
-    allTimeLinkedActionEmails,
-    allTimeNeedsReviewCount,
-    allTimeTrackedCount,
+    allTime.emailGroups,
+    allTime.linkedActionEmails,
+    allTime.needsReviewCount,
+    allTime.trackedCount,
     awaitingReviewCount,
-    allTimeTaskGroups,
+    allTime.taskGroups,
     userInfo,
   )
-  const allTimeTaskSummary = buildTaskSummary(allTimeTasks, allTimeStats.tasks, allTimeAiTaskGroups, null, now)
+  const allTimeTaskSummary = buildTaskSummary(allTime.tasks, allTimeStats.tasks, allTime.aiTaskGroups, null, now)
   const feedback = buildFeedback(view, stats.tasks.completed, dueOrOverdueCount, overdueCount, allTimeStats.tasks)
+
+  return buildDashboardSummaryResult({
+    view,
+    stats,
+    taskSummary,
+    attentionEmails: allTime.attentionEmails,
+    attentionEmailCount: allTime.attentionEmailCount,
+    momentum,
+    feedback,
+    currentPeriodAttentionEmails: attentionEmails,
+    allTimeStats,
+    allTimeTaskSummary,
+  })
+}
+
+function resolveAllTimeSummaryData(currentPeriod: SummaryPeriodData, allTimeRaw: SummaryAllTimeData | null) {
+  return {
+    emailGroups: allTimeRaw?.emailGroups ?? currentPeriod.emailGroups,
+    linkedActionEmails: allTimeRaw?.linkedActionEmails ?? currentPeriod.linkedActionEmails,
+    needsReviewCount: allTimeRaw?.needsReviewCount ?? currentPeriod.needsReviewCount,
+    trackedCount: allTimeRaw?.trackedCount ?? currentPeriod.trackedCount,
+    taskGroups: allTimeRaw?.taskGroups ?? currentPeriod.taskGroups,
+    aiTaskGroups: allTimeRaw?.aiTaskGroups ?? currentPeriod.aiTaskGroups,
+    tasks: allTimeRaw?.tasks ?? currentPeriod.tasks,
+    attentionEmails: allTimeRaw?.attentionEmails ?? currentPeriod.attentionEmails,
+    attentionEmailCount: allTimeRaw?.attentionEmailCount ?? currentPeriod.attentionEmails.length,
+  }
+}
+
+function buildDashboardSummaryResult(input: {
+  view: DashboardView
+  stats: DashboardStats
+  taskSummary: ReturnType<typeof buildTaskSummary>
+  attentionEmails: Array<{ id: string; subject: string | null; sender: string | null; classification: string | null }>
+  attentionEmailCount: number
+  momentum: ReturnType<typeof buildMomentum>
+  feedback: ReturnType<typeof buildFeedback>
+  currentPeriodAttentionEmails: Array<{ id: string; subject: string | null; sender: string | null; classification: string | null }>
+  allTimeStats: DashboardStats
+  allTimeTaskSummary: ReturnType<typeof buildTaskSummary>
+}) {
+  const {
+    view,
+    stats,
+    taskSummary,
+    attentionEmails,
+    attentionEmailCount,
+    momentum,
+    feedback,
+    currentPeriodAttentionEmails,
+    allTimeStats,
+    allTimeTaskSummary,
+  } = input
 
   return {
     view,
     stats,
     tasks: taskSummary,
-    attentionEmails: allTimeAttentionEmails,
-    attentionEmailCount: allTimeAttentionEmailCount,
+    attentionEmails,
+    attentionEmailCount,
     momentum,
     feedback,
     currentPeriod: {
       stats,
       tasks: taskSummary,
-      attentionEmails,
-      attentionEmailCount: attentionEmails.length,
+      attentionEmails: currentPeriodAttentionEmails,
+      attentionEmailCount: currentPeriodAttentionEmails.length,
       momentum,
     },
     allTime: {
