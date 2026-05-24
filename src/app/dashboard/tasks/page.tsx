@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Check, X, Calendar, List, GanttChart, ChevronLeft, ChevronRight,
-  Mail, Clock, ThumbsUp, Plus, FolderOpen, Trash2,
+  Mail, ThumbsUp, Plus, FolderOpen, Trash2,
   ChevronDown, UserRound, Sparkles, MoreHorizontal,
 } from 'lucide-react'
 import {
@@ -46,6 +46,7 @@ import { UpgradeModal } from '@/components/upgrade-modal'
 import { useAuth } from '@/lib/use-auth'
 import { InlineEditableName } from '@/components/inline-editable-name'
 import { ScorePicker } from '@/components/score-picker'
+import { TaskDueBadge } from '@/components/task-due-badge'
 import { getPriorityBand, getPriorityColor, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
@@ -1802,20 +1803,6 @@ function TaskListView({ tasks, updateTask, focusProjectId, onReassign, onDelete,
   )
 }
 
-function formatTaskScheduleLabel(startDate?: string | null, deadline?: string | null) {
-  if (!deadline) return null
-  const end = new Date(deadline)
-  const endLabel = end.toLocaleDateString('en', { month: 'short', day: 'numeric' })
-
-  if (!startDate) return `Due ${endLabel}`
-
-  const start = new Date(startDate)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `Due ${endLabel}`
-
-  const startLabel = start.toLocaleDateString('en', { month: 'short', day: 'numeric' })
-  return start.toDateString() === end.toDateString() ? `Due ${endLabel}` : `${startLabel} - ${endLabel}`
-}
-
 function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleSelect }: {
   task: TaskItem
   updateTask: MutationLike
@@ -1827,8 +1814,6 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
   const band = getPriorityBand(task.priorityScore || 0)
   const deadline = task.userSetDeadline || task.explicitDeadline || task.inferredDeadline
   const startDate = task.startDate
-  const scheduleLabel = formatTaskScheduleLabel(startDate, deadline)
-  const isOverdue = deadline && new Date(deadline) < new Date() && (task.status === 'ai_suggestion' || task.status === 'active')
   const senderName = task.emailLinks?.[0]?.email?.sender?.split('<')[0]?.trim()
   const isPending = task.status === 'ai_suggestion'
   const isDone = task.status === 'completed'
@@ -1896,13 +1881,6 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
           {matter ? (
             <span className="truncate text-gray-500">{matter.title}</span>
           ) : null}
-          {scheduleLabel && (
-            <span className={`flex items-center gap-1 ${isOverdue ? 'text-critical font-medium' : ''}`}>
-              <Clock className="h-3 w-3" />
-              {isOverdue ? 'Overdue: ' : ''}
-              {scheduleLabel}
-            </span>
-          )}
           {senderName && (
             <span className="flex items-center gap-1">
               <Mail className="h-3 w-3" />
@@ -1910,6 +1888,12 @@ function TaskRow({ task, updateTask, onReassign, onDelete, isSelected, onToggleS
             </span>
           )}
           <span>Score: {task.priorityScore}</span>
+          <TaskDueBadge
+            deadline={deadline}
+            startDate={startDate}
+            muted={isDone}
+            className="shrink-0"
+          />
         </div>
       </div>
 

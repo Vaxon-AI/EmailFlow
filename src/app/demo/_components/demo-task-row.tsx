@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { Check, Clock, Mail, ThumbsUp, Trash2 } from 'lucide-react'
+import { Check, Mail, ThumbsUp, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { TaskDueBadge } from '@/components/task-due-badge'
 import { getPriorityBand } from '@/types'
 import { useDemoStore } from '@/lib/demo/store'
 import { effectiveDeadline, type DemoTask } from '@/lib/demo/types'
 import { cn } from '@/lib/utils'
-import { formatDeadline, PriorityBadge, StatusChip } from './demo-bits'
+import { PriorityBadge, StatusChip } from './demo-bits'
 
 export function DemoTaskRow({
   task,
@@ -20,12 +21,11 @@ export function DemoTaskRow({
 }) {
   const { setTaskStatus, deleteTask, getMatter, emailsForTask } = useDemoStore()
   const band = getPriorityBand(task.priorityScore)
-  const deadline = formatDeadline(effectiveDeadline(task))
+  const deadlineIso = effectiveDeadline(task)
   const matter = getMatter(task.matterId)
   const sourceEmail = emailsForTask(task.id)[0]?.email
   const isPending = task.status === 'ai_suggestion'
   const isDone = task.status === 'completed'
-  const showOverdue = deadline?.overdue && (task.status === 'ai_suggestion' || task.status === 'active')
   const selectable = !!onToggleSelect
 
   const handleDelete = () => {
@@ -96,12 +96,6 @@ export function DemoTaskRow({
         <p className="mt-0.5 truncate text-xs text-gray-500">{task.summary}</p>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400">
           {matter ? <span className="truncate text-gray-500">{matter.title}</span> : null}
-          {deadline ? (
-            <span className={cn('flex items-center gap-1', showOverdue && 'font-medium text-critical')}>
-              <Clock className="h-3 w-3" />
-              {deadline.label}
-            </span>
-          ) : null}
           {sourceEmail ? (
             <span className="flex items-center gap-1">
               <Mail className="h-3 w-3" />
@@ -109,6 +103,7 @@ export function DemoTaskRow({
             </span>
           ) : null}
           <span>Score: {task.priorityScore}</span>
+          <TaskDueBadge deadline={deadlineIso} muted={isDone} className="shrink-0" />
         </div>
       </div>
 
