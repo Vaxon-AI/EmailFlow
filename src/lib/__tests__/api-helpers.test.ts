@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 vi.mock('@/lib/auth-sessions', () => ({
@@ -20,12 +20,12 @@ const mockRequireCurrentUser = vi.mocked(requireCurrentUser)
 
 describe('success', () => {
   it('returns a success payload with data and meta', async () => {
-    const response = success({ ok: true }, { total: 1 })
+    const response = success({ ok: true }, { page: 1, totalPages: 1, totalCount: 1 })
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({
       success: true,
       data: { ok: true },
-      meta: { total: 1 },
+      meta: { page: 1, totalPages: 1, totalCount: 1 },
     })
   })
 })
