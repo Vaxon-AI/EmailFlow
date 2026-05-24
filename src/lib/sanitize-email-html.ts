@@ -1,4 +1,4 @@
-import DOMPurify from 'isomorphic-dompurify'
+import sanitizeHtml from 'sanitize-html'
 
 const ALLOWED_TAGS = [
   'a', 'b', 'blockquote', 'br', 'code', 'div', 'em',
@@ -7,22 +7,22 @@ const ALLOWED_TAGS = [
   'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul',
 ]
 
-const ALLOWED_ATTR = [
-  'href', 'src', 'alt', 'title', 'width', 'height',
-  'colspan', 'rowspan', 'align', 'style',
-]
-
-const FORBID_TAGS = ['script', 'iframe', 'object', 'embed', 'form', 'input', 'meta', 'link', 'style']
-const FORBID_ATTR = ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur']
-
 export function sanitizeEmailHtml(html: string): string {
-  const cleaned = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    FORBID_TAGS,
-    FORBID_ATTR,
-    ALLOW_DATA_ATTR: false,
+  return sanitizeHtml(html, {
+    allowedTags: ALLOWED_TAGS,
+    allowedAttributes: {
+      '*': ['title', 'align', 'style'],
+      a: ['href', 'target', 'rel'],
+      img: ['src', 'alt', 'width', 'height'],
+      td: ['colspan', 'rowspan'],
+      th: ['colspan', 'rowspan'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    transformTags: {
+      a: sanitizeHtml.simpleTransform('a', {
+        target: '_blank',
+        rel: 'noopener noreferrer nofollow',
+      }, true),
+    },
   })
-  // All links open in a new tab and don't leak referrer.
-  return cleaned.replace(/<a\s/gi, '<a target="_blank" rel="noopener noreferrer nofollow" ')
 }
