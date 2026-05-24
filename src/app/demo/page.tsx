@@ -119,6 +119,7 @@ function DashboardContent() {
     emails,
     identities: demoIdentities,
     projects: demoProjects,
+    chartHistory,
     getProject,
     now,
   } = useDemoStore()
@@ -298,6 +299,18 @@ function DashboardContent() {
         emailsBy.set(k, (emailsBy.get(k) ?? 0) + 1)
       }
     }
+    // Layer the synthetic per-day backdrop on top of real counts so the
+    // chart reads as a smooth trend (busy mid-week, quiet weekends) instead
+    // of a single 0→N→0 spike from the 2 real completed tasks. Only blend
+    // when the user has NOT filtered to a specific identity/project — under
+    // a filter, the chart should honour what's actually in scope.
+    if (selectedIdentityIds.length === 0) {
+      for (const p of chartHistory) {
+        completedBy.set(p.dayKey, (completedBy.get(p.dayKey) ?? 0) + p.completedTasks)
+        createdBy.set(p.dayKey, (createdBy.get(p.dayKey) ?? 0) + p.createdTasks)
+        emailsBy.set(p.dayKey, (emailsBy.get(p.dayKey) ?? 0) + p.actionEmails)
+      }
+    }
     const out: MomentumPoint[] = []
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(today.getTime() - i * DAY_MS)
@@ -310,7 +323,7 @@ function DashboardContent() {
       })
     }
     return out
-  }, [tasks, emails, momentumEnd, now, view, inScope])
+  }, [tasks, emails, chartHistory, momentumEnd, now, view, inScope, selectedIdentityIds])
 
   const updateMomentumWindow = useCallback((direction: 'previous' | 'next' | 'latest') => {
     const latest = startOfDay(now)

@@ -108,6 +108,21 @@ export interface DemoDigest {
   isCurrent: boolean
 }
 
+/**
+ * Per-day synthetic counts that feed the dashboard momentum chart only.
+ * These are NOT real tasks/emails — they exist purely to give the chart
+ * a smooth, trend-shaped backdrop (busy mid-week, quiet weekends) without
+ * polluting the Tasks list or the Emails inbox. Demo's "now" is fresh
+ * every reseed, so the dayKey aligns with each session's current date.
+ */
+export interface ChartHistoryPoint {
+  /** `${y}-${m}-${d}` matching the dashboard's dayKey() format. */
+  dayKey: string
+  completedTasks: number
+  createdTasks: number
+  actionEmails: number
+}
+
 export interface DemoData {
   identities: DemoIdentity[]
   projects: DemoProject[]
@@ -116,6 +131,7 @@ export interface DemoData {
   tasks: DemoTask[]
   links: DemoTaskEmailLink[]
   digests: DemoDigest[]
+  chartHistory: ChartHistoryPoint[]
   /** The moment the dataset was seeded — the demo's "now". */
   seededAt: string
 }

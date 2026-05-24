@@ -24,6 +24,7 @@ import {
 import { DEMO_EMAILS } from './content'
 import { buildDigestContent, computeDigestStats, seedDemoData } from './seed'
 import type {
+  ChartHistoryPoint,
   DemoData,
   DemoDigest,
   DemoEmail,
@@ -88,6 +89,8 @@ export interface DemoStore {
   emails: DemoEmail[]
   tasks: DemoTask[]
   digests: DemoDigest[]
+  /** Per-day synthetic counts that ONLY feed the dashboard momentum chart. */
+  chartHistory: ChartHistoryPoint[]
   /** The demo's "now" — fixed at seed time so render stays pure. */
   now: Date
 
@@ -324,6 +327,7 @@ function DemoStoreInner({
       emails: data.emails,
       tasks: data.tasks,
       digests: data.digests,
+      chartHistory: data.chartHistory,
       now: new Date(data.seededAt),
 
       getEmail: (id) => emailById.get(id),

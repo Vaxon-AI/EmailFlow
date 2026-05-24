@@ -16,6 +16,7 @@ import {
   type TaskTemplate,
 } from './content'
 import type {
+  ChartHistoryPoint,
   DemoData,
   DemoDigest,
   DemoDigestStats,
@@ -321,6 +322,64 @@ function buildDigests(now: Date, emails: DemoEmail[], tasks: DemoTask[]): DemoDi
   ]
 }
 
+// ---------- chart history ----------
+
+// Hand-crafted 28-day wave that feeds ONLY the dashboard momentum chart —
+// not the Tasks list, Emails inbox, or digest stats. Shape: weekly rhythm
+// with mid-week peaks (Tue/Wed/Thu) and weekend troughs (Sat/Sun),
+// repeated 4 times with small variation so the chart reads as four real
+// working weeks rather than a flat line or a 0→N→0 spike. Index 0 maps
+// to day -3 (avoids overlap with real completed task days -1 / -2).
+//
+// Each tuple is [completedTasks, createdTasks, actionEmails] for that day.
+const HISTORY_WAVE: ReadonlyArray<readonly [number, number, number]> = [
+  // Week 1 (most recent)
+  [3, 2, 4],   // -3
+  [5, 3, 6],   // -4
+  [6, 4, 7],   // -5 peak
+  [4, 3, 5],   // -6
+  [2, 1, 3],   // -7
+  [1, 1, 2],   // -8  weekend
+  [1, 0, 2],   // -9  weekend
+  // Week 2
+  [3, 2, 4],   // -10
+  [4, 3, 6],   // -11
+  [5, 4, 7],   // -12 peak
+  [5, 3, 6],   // -13
+  [3, 2, 4],   // -14
+  [1, 1, 2],   // -15 weekend
+  [2, 1, 3],   // -16 weekend (someone catching up)
+  // Week 3
+  [4, 2, 5],   // -17
+  [5, 3, 6],   // -18
+  [4, 3, 7],   // -19 peak (in emails)
+  [3, 2, 5],   // -20
+  [2, 1, 3],   // -21
+  [1, 0, 2],   // -22 weekend
+  [1, 1, 1],   // -23 weekend
+  // Week 4 (oldest)
+  [3, 2, 4],   // -24
+  [4, 3, 5],   // -25
+  [5, 4, 7],   // -26 peak
+  [4, 3, 5],   // -27
+  [2, 2, 3],   // -28
+  [1, 1, 2],   // -29 weekend
+  [1, 0, 2],   // -30 weekend
+]
+
+function buildChartHistory(now: Date): ChartHistoryPoint[] {
+  return HISTORY_WAVE.map((row, i) => {
+    const daysAgo = -(i + 3)
+    const d = dateAt(now, daysAgo, 12)
+    return {
+      dayKey: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`,
+      completedTasks: row[0],
+      createdTasks: row[1],
+      actionEmails: row[2],
+    }
+  })
+}
+
 // ---------- entry point ----------
 
 export function seedDemoData(now: Date = new Date()): DemoData {
@@ -328,6 +387,7 @@ export function seedDemoData(now: Date = new Date()): DemoData {
   const tasks = DEMO_TASKS.map((t) => buildTask(now, t))
   const links = buildLinks()
   const digests = buildDigests(now, emails, tasks)
+  const chartHistory = buildChartHistory(now)
 
   return {
     identities: DEMO_IDENTITIES.map((i) => ({ ...i })),
@@ -337,6 +397,7 @@ export function seedDemoData(now: Date = new Date()): DemoData {
     tasks,
     links,
     digests,
+    chartHistory,
     seededAt: now.toISOString(),
   }
 }
