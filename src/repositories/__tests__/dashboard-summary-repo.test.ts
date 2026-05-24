@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 
+const { threadMemoryFindManyMock } = vi.hoisted(() => ({
+  threadMemoryFindManyMock: vi.fn(),
+}))
+
 vi.mock('@/lib/prisma', () => ({
-  prisma: {},
+  prisma: {
+    threadMemory: {
+      findMany: threadMemoryFindManyMock,
+    },
+  },
 }))
 
 vi.mock('@/repositories/email-repo', () => ({
@@ -10,6 +18,8 @@ vi.mock('@/repositories/email-repo', () => ({
 
 import {
   buildFeedback,
+  buildEmailWhere,
+  buildTaskWhere,
   getMomentumRange,
   getPeriodRange,
   resolveAllTimeSummaryData,
@@ -157,6 +167,82 @@ describe('dashboard-summary-repo helpers', () => {
         tasks: [{ id: 'task-all-time' }],
         attentionEmails: [{ id: 'email-all-time', subject: 'B', sender: 'T', classification: 'action' }],
         attentionEmailCount: 11,
+      })
+    })
+  })
+
+  describe('buildTaskWhere', () => {
+    it('returns the base task filter when no project or identity filters are provided', () => {
+      expect(buildTaskWhere('user-1', {})).toEqual({
+        userId: 'user-1',
+        archivedAt: null,
+      })
+    })
+
+    it('builds project-scoped task filters including uncategorized', () => {
+      expect(buildTaskWhere('user-1', {
+        projectIds: ['project-1', '__uncategorized__'],
+      })).toEqual({
+        userId: 'user-1',
+        archivedAt: null,
+        OR: [
+          { matter: { projectContextId: { in: ['project-1'] } } },
+          { matterId: null },
+        ],
+      })
+    })
+
+    it('builds identity-scoped task filters including uncategorized', () => {
+      expect(buildTaskWhere('user-1', {
+        identityIds: ['identity-1', '__uncategorized__'],
+      })).toEqual({
+        userId: 'user-1',
+        archivedAt: null,
+        OR: [
+          { matter: { projectContext: { identityId: { in: ['identity-1'] } } } },
+          { matterId: null },
+          { matter: { projectContext: { identityId: null } } },
+        ],
+      })
+    })
+  })
+
+  describe('buildEmailWhere', () => {
+    it('returns the base email filter when no project or identity filters are provided', async () => {
+      await expect(buildEmailWhere('user-1', {})).resolves.toEqual({ userId: 'user-1' })
+      expect(threadMemoryFindManyMock).not.toHaveBeenCalled()
+    })
+
+    it('builds threadId filters from project-scoped thread memory', async () => {
+      threadMemoryFindManyMock.mockResolvedValue([{ threadId: 'thread-1' }, { threadId: 'thread-2' }])
+
+      await expect(buildEmailWhere('user-1', {
+        projectIds: ['project-1'],
+      })).resolves.toEqual({
+        userId: 'user-1',
+        threadId: { in: ['thread-1', 'thread-2'] },
+      })
+
+      expect(threadMemoryFindManyMock).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-1',
+          OR: [{ matter: { projectContextId: { in: ['project-1'] } } }],
+        },
+        select: { threadId: true },
+      })
+    })
+
+    it('includes null threadIds for uncategorized identity filters', async () => {
+      threadMemoryFindManyMock.mockResolvedValue([{ threadId: 'thread-1' }])
+
+      await expect(buildEmailWhere('user-1', {
+        identityIds: ['identity-1', '__uncategorized__'],
+      })).resolves.toEqual({
+        userId: 'user-1',
+        OR: [
+          { threadId: { in: ['thread-1'] } },
+          { threadId: null },
+        ],
       })
     })
   })

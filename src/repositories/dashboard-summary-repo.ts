@@ -480,7 +480,7 @@ function findAttentionEmails(where: Prisma.EmailWhereInput) {
   })
 }
 
-function buildTaskWhere(userId: string, filters: DashboardFilters): Prisma.TaskWhereInput {
+export function buildTaskWhere(userId: string, filters: DashboardFilters): Prisma.TaskWhereInput {
   // Hide soft-archived tasks from all dashboard summaries.
   const where: Prisma.TaskWhereInput = { userId, archivedAt: null }
 
@@ -531,7 +531,7 @@ function andWhere<T extends Prisma.TaskWhereInput | Prisma.EmailWhereInput>(base
   return { AND: [base, next] } as T
 }
 
-async function buildEmailWhere(userId: string, filters: DashboardFilters): Promise<Prisma.EmailWhereInput> {
+export async function buildEmailWhere(userId: string, filters: DashboardFilters): Promise<Prisma.EmailWhereInput> {
   const where: Prisma.EmailWhereInput = { userId }
 
   if (!filters.projectIds?.length && !filters.identityIds?.length) return where
