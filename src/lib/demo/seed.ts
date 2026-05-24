@@ -34,7 +34,15 @@ const DAY_MS = 86_400_000
  * activated; the rest of the action emails stay in "Needs Action". Mirrors the
  * real inbox, where extracting a task flips the email to actioned = true.
  */
-const TRACKED_EMAIL_IDS = new Set(['em-2', 'em-5', 'em-7', 'em-10', 'em-13', 'em-14'])
+const TRACKED_EMAIL_IDS = new Set([
+  'em-2',
+  'em-5',
+  'em-7',
+  'em-10',
+  'em-13',
+  'em-14',
+  ...DEMO_TASKS.map((task) => task.sourceEmailId).filter((id): id is string => Boolean(id)),
+])
 
 function startOfDay(d: Date): Date {
   const r = new Date(d)
