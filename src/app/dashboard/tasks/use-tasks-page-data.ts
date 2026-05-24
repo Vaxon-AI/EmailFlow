@@ -12,18 +12,18 @@ import type {
   TaskTabState,
 } from './task-page-types'
 
-type ProjectSummary = {
+export type ProjectSummary = {
   id: string
   name: string
   identity: { id: string; name: string } | null
 }
 
-type IdentitySummary = {
+export type IdentitySummary = {
   id: string
   name: string
 }
 
-type RecentEmail = {
+export type RecentEmail = {
   id: string
   subject: string
   sender: string

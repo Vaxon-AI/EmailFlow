@@ -34,9 +34,6 @@ import {
   Mail, ThumbsUp, Plus, FolderOpen, Trash2,
   ChevronDown, UserRound, Sparkles, MoreHorizontal,
 } from 'lucide-react'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { Suspense, useState, useMemo, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { GanttTimeline } from '@/components/gantt-timeline'
@@ -53,18 +50,19 @@ import {
   type MutationLike,
   type PriorityFilter,
   PRIORITY_LABELS,
-  PRIORITY_LEVELS,
   PRIORITY_OPTIONS,
   renderTaskTabNewBadge,
   parsePriorityFilter,
   parseStatusFilter,
   type StatusFilter,
   STATUS_OPTIONS,
-  type TaskDraft,
   type TaskItem,
   type ViewMode,
   priorityBucketFromScore,
 } from './task-page-types'
+import { TaskDraftCard } from './task-draft-card'
+import { TaskIdentityProjectPicker } from './task-identity-project-picker'
+import { TaskLinkedEmailPicker } from './task-linked-email-picker'
 import { useTaskComposer } from './use-task-composer'
 import { useTasksPageData } from './use-tasks-page-data'
 import { useTasksPageActions } from './use-tasks-page-actions'
@@ -314,146 +312,6 @@ function TasksContent() {
       if (next && proj?.identity?.id !== next) setSelectedProjectId('')
     }
   }
-
-  const identityProjectPicker = (
-    <div className="grid grid-cols-2 gap-3">
-      <div className="space-y-2">
-        <Label>Identity <span className="text-muted-foreground font-normal">(optional)</span></Label>
-        <Select
-          value={selectedIdentityId || '__none__'}
-          onValueChange={(v) => handleIdentityChange(v === '__none__' ? '' : (v ?? ''))}
-        >
-          <SelectTrigger className="h-9 w-full text-sm">
-            <SelectValue>
-              {selectedIdentityName ?? <span className="text-muted-foreground">Any identity</span>}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">Any identity</SelectItem>
-            {identities.map((id) => (
-              <SelectItem key={id.id} value={id.id}>{id.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label>Project <span className="text-muted-foreground font-normal">(optional)</span></Label>
-        <Select
-          value={selectedProjectId || '__none__'}
-          onValueChange={(v) => setSelectedProjectId(v === '__none__' ? '' : (v ?? ''))}
-        >
-          <SelectTrigger className="h-9 w-full text-sm">
-            <SelectValue>
-              {selectedProjectName ?? <span className="text-muted-foreground">Uncategorized</span>}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">Uncategorized</SelectItem>
-            {filteredProjects.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                <div className="flex flex-col py-0.5">
-                  <span className="font-medium">{p.name}</span>
-                  {p.identity && !selectedIdentityId && (
-                    <span className="text-xs text-muted-foreground">{p.identity.name}</span>
-                  )}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  )
-
-  const linkedEmailPicker = (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <Label>Linked emails <span className="text-muted-foreground font-normal">(optional)</span></Label>
-        <Popover open={emailPickerOpen} onOpenChange={setEmailPickerOpen}>
-          <PopoverTrigger
-            render={
-              <Button type="button" size="sm" variant="outline" className="h-7 text-xs">
-                <Mail className="mr-1 size-3.5" />
-                {linkedEmailIds.length > 0 ? `${linkedEmailIds.length} linked` : 'Link email'}
-              </Button>
-            }
-          />
-          <PopoverContent className="w-[360px] p-0" align="end">
-            <div className="space-y-2 border-b p-2">
-              {(selectedProjectName || (selectedIdentityName && !selectedProjectName)) && (
-                <div className="px-1 text-[11px] text-muted-foreground">
-                  Showing emails from{' '}
-                  <span className="font-medium text-foreground">
-                    {selectedProjectName ?? `${selectedIdentityName} projects`}
-                  </span>
-                </div>
-              )}
-              <Input
-                placeholder="Search by subject or sender..."
-                value={emailPickerQuery}
-                onChange={(e) => setEmailPickerQuery(e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="max-h-[260px] overflow-y-auto">
-              {filteredEmails.length === 0 ? (
-                <div className="p-4 text-center text-xs text-muted-foreground">
-                  {recentEmails.length === 0
-                    ? 'No emails available'
-                    : selectedProjectName
-                      ? 'No emails for this project in the recent 50'
-                      : 'No emails match your search'}
-                </div>
-              ) : (
-                filteredEmails.map((e) => {
-                  const linked = linkedEmailIds.includes(e.id)
-                  return (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => {
-                        setLinkedEmailIds((prev) =>
-                          prev.includes(e.id) ? prev.filter((id) => id !== e.id) : [...prev, e.id]
-                        )
-                      }}
-                      className={`flex w-full items-start gap-2 border-b border-border/50 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 ${linked ? 'bg-brand-50' : ''}`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{e.subject || '(no subject)'}</div>
-                        <div className="truncate text-muted-foreground">{e.sender}</div>
-                      </div>
-                      {linked && <Check className="size-3.5 shrink-0 text-brand-600" />}
-                    </button>
-                  )
-                })
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-      {linkedEmails.length > 0 && (
-        <div className="space-y-1">
-          {linkedEmails.map((e) => (
-            <div key={e.id} className="flex items-center gap-2 rounded-md border bg-muted/30 px-2 py-1.5">
-              <Mail className="size-3.5 shrink-0 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-medium">{e.subject || '(no subject)'}</div>
-                <div className="truncate text-[11px] text-muted-foreground">{e.sender}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setLinkedEmailIds(linkedEmailIds.filter((id) => id !== e.id))}
-                aria-label="Remove email link"
-                className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
-              >
-                <X className="size-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
 
   return (
     <div className="space-y-5">
@@ -756,7 +614,7 @@ function TasksContent() {
               <>
                 <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1">
                   {draftCards.map((card, idx) => (
-                    <DraftCard
+                    <TaskDraftCard
                       key={idx}
                       card={card}
                       onChange={(patch) => updateCard(idx, patch)}
@@ -765,7 +623,16 @@ function TasksContent() {
                   ))}
                 </div>
 
-                {identityProjectPicker}
+                <TaskIdentityProjectPicker
+                  identities={identities}
+                  filteredProjects={filteredProjects}
+                  selectedIdentityId={selectedIdentityId}
+                  selectedIdentityName={selectedIdentityName}
+                  selectedProjectId={selectedProjectId}
+                  selectedProjectName={selectedProjectName}
+                  onIdentityChange={handleIdentityChange}
+                  onProjectChange={setSelectedProjectId}
+                />
               </>
             ) : null}
           </div>
@@ -835,9 +702,30 @@ function TasksContent() {
               />
             </div>
 
-            {identityProjectPicker}
+            <TaskIdentityProjectPicker
+              identities={identities}
+              filteredProjects={filteredProjects}
+              selectedIdentityId={selectedIdentityId}
+              selectedIdentityName={selectedIdentityName}
+              selectedProjectId={selectedProjectId}
+              selectedProjectName={selectedProjectName}
+              onIdentityChange={handleIdentityChange}
+              onProjectChange={setSelectedProjectId}
+            />
 
-            {linkedEmailPicker}
+            <TaskLinkedEmailPicker
+              emailPickerOpen={emailPickerOpen}
+              emailPickerQuery={emailPickerQuery}
+              filteredEmails={filteredEmails}
+              linkedEmailIds={linkedEmailIds}
+              linkedEmails={linkedEmails}
+              recentEmails={recentEmails}
+              selectedIdentityName={selectedIdentityName}
+              selectedProjectName={selectedProjectName}
+              setEmailPickerOpen={setEmailPickerOpen}
+              setEmailPickerQuery={setEmailPickerQuery}
+              setLinkedEmailIds={setLinkedEmailIds}
+            />
 
             <div className="space-y-2">
               <Label>Checklist <span className="text-muted-foreground font-normal">(optional)</span></Label>
@@ -963,112 +851,6 @@ function TasksContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  )
-}
-
-/* ========== DRAFT CARD - one suggested task in the multi-candidate review list ========== */
-function DraftCard({
-  card,
-  onChange,
-  onRemove,
-}: {
-  card: TaskDraft
-  onChange: (patch: Partial<TaskDraft>) => void
-  onRemove: () => void
-}) {
-  const deadline = card.explicitDeadline || card.inferredDeadline || ''
-  const priorityBucket = priorityBucketFromScore(card.priorityScore)
-
-  return (
-    <div className="relative rounded-lg border bg-card p-3 space-y-2">
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label="Remove this task"
-        className="absolute right-2 top-2 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
-      >
-        <X className="size-3.5" />
-      </button>
-
-      <Input
-        value={card.title}
-        onChange={(e) => onChange({ title: e.target.value })}
-        placeholder="Task title"
-        className="h-9 pr-7 text-sm font-medium"
-      />
-
-      {card.splitReason && (
-        <p className="text-[11px] italic text-muted-foreground">{card.splitReason}</p>
-      )}
-
-      {card.summary && (
-        <Textarea
-          value={card.summary}
-          onChange={(e) => onChange({ summary: e.target.value })}
-          rows={2}
-          className="resize-none text-xs"
-        />
-      )}
-
-      {card.actionItems.length > 0 && (
-        <div className="space-y-1">
-          {card.actionItems.map((item, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <Input
-                value={item}
-                onChange={(e) => {
-                  const next = [...card.actionItems]
-                  next[i] = e.target.value
-                  onChange({ actionItems: next })
-                }}
-                className="h-7 text-xs"
-              />
-              <button
-                type="button"
-                onClick={() => onChange({ actionItems: card.actionItems.filter((_, j) => j !== i) })}
-                className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-              >
-                <X className="size-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={() => onChange({ actionItems: [...card.actionItems, ''] })}
-        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <Plus className="size-3" /> Add item
-      </button>
-
-      <div className="flex gap-2">
-        <Input
-          type="date"
-          value={deadline}
-          onChange={(e) => onChange({ explicitDeadline: e.target.value || null, inferredDeadline: null })}
-          className="h-7 flex-1 text-xs"
-        />
-        <Select
-          value={priorityBucket}
-          onValueChange={(v) => {
-            if (!v) return
-            const p = PRIORITY_LEVELS[v]
-            if (p) onChange({ urgency: p.urgency, impact: p.impact, priorityScore: p.score })
-          }}
-        >
-          <SelectTrigger className="h-7 w-[110px] text-xs">
-            <SelectValue>{PRIORITY_LABELS[priorityBucket]}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="critical">Critical</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
     </div>
   )
 }
