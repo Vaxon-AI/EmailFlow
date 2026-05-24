@@ -51,6 +51,7 @@ model User {
   sessions                    Session[]
   stepUpChallenges            StepUpChallenge[]
   stepUpTokens                StepUpToken[]
+  surfaceSeenStates           UserSurfaceSeenState[]
   tasks                       Task[]
   identities                  UserIdentity[]
   feedbacks                   Feedback[]
@@ -138,6 +139,7 @@ model Email {
   isWorkRelated      Boolean?
   processedAt        DateTime?
   createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
   retentionStatus    RetentionStatus @default(ACTIVE)
   archivedAt         DateTime?
   metadataOnlyAt     DateTime?
@@ -165,6 +167,7 @@ model Email {
   @@index([userId, retentionStatus, receivedAt(sort: Desc)])
   @@index([userId, awaitingReview, receivedAt(sort: Desc)])
   @@index([userId, actioned, classification])
+  @@index([userId, updatedAt])
 }
 
 model Task {
@@ -215,6 +218,20 @@ model TaskEmail {
 
   @@unique([taskId, emailId])
   @@index([emailId])
+}
+
+model UserSurfaceSeenState {
+  id         String   @id @default(cuid())
+  userId     String
+  surface    String
+  bucket     String
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, surface, bucket])
+  @@index([userId, surface])
 }
 
 model Digest {
@@ -482,6 +499,21 @@ model Feedback {
 
   @@index([userId, createdAt])
   @@index([category, createdAt])
+}
+
+model QuotaLedger {
+  id             String   @id @default(cuid())
+  identifierType String
+  identifier     String
+  classifyUsed   Int      @default(0)
+  extractUsed    Int      @default(0)
+  pasteTextUsed  Int      @default(0)
+  quotaResetAt   DateTime
+  firstSeenAt    DateTime @default(now())
+  lastSnapshotAt DateTime @updatedAt
+
+  @@unique([identifierType, identifier])
+  @@index([identifier])
 }
 
 model UserPreference {

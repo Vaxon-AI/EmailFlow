@@ -179,9 +179,9 @@ describe('PATCH /api/emails/[id]', () => {
 })
 
 describe('email-classification helpers', () => {
-  it('maps uncertain and null to unclassified', async () => {
+  it('keeps uncertain distinct from unclassified display state', async () => {
     const { getEmailDisplayState } = await import('@/lib/email-classification')
-    expect(getEmailDisplayState({ classification: 'uncertain', actioned: false })).toBe('unclassified')
+    expect(getEmailDisplayState({ classification: 'uncertain', actioned: false })).toBe('uncertain')
     expect(getEmailDisplayState({ classification: 'action', actioned: false })).toBe('needs_action')
     expect(getEmailDisplayState({ classification: 'awareness', actioned: false })).toBe('fyi')
     expect(getEmailDisplayState({ classification: 'ignore', actioned: false })).toBe('ignored')
@@ -192,7 +192,7 @@ describe('email-classification helpers', () => {
     const { getEmailDisplayState } = await import('@/lib/email-classification')
     expect(getEmailDisplayState({ classification: 'action', actioned: true })).toBe('tracked')
     expect(getEmailDisplayState({ classification: 'awareness', actioned: true })).toBe('fyi')
-    expect(getEmailDisplayState({ classification: 'uncertain', actioned: true })).toBe('unclassified')
+    expect(getEmailDisplayState({ classification: 'uncertain', actioned: true })).toBe('uncertain')
     expect(getEmailDisplayState({ classification: 'uncertain', taskLinks: [{}] })).toBe('tracked')
   })
 })

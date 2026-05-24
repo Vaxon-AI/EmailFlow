@@ -65,7 +65,7 @@ export function getEmailClassConfig(classification?: string | null): EmailClassC
 //     Each bucket maps deterministically to a (classification, actioned) pair
 //     written by `setEmailBucket` in email-repo.ts.
 //
-//  2. EmailDisplayState (5 values) — what the UI SHOWS, including 'uncertain'
+//  2. EmailDisplayState (6 values) — what the UI SHOWS, including 'uncertain'
 //     for emails the AI couldn't confidently classify. The picker can't
 //     produce 'uncertain' (it's an AI-internal state), but rows / headers /
 //     badges need to surface it visually so users notice and can resolve.
@@ -107,10 +107,11 @@ export const EMAIL_BUCKET_CONFIG: Record<EmailBucket, EmailClassConfig> = {
   },
 }
 
-export type EmailDisplayState = EmailTabBucket
+export type EmailDisplayState = EmailTabBucket | 'uncertain'
 
 export const EMAIL_DISPLAY_CONFIG: Record<EmailDisplayState, EmailClassConfig> = {
   ...EMAIL_BUCKET_CONFIG,
+  uncertain: EMAIL_CLASS_CONFIG.uncertain,
   unclassified: {
     label: 'Unclassified',
     // Solid amber bg + white text — pairs visually with Needs Action's
@@ -132,7 +133,7 @@ export function getEmailDisplayState(input: {
   if (input.actioned && input.classification === 'action') return 'tracked'
   if (input.classification === 'ignore') return 'ignored'
   if (input.classification === 'awareness') return 'fyi'
-  if (input.classification === 'uncertain') return 'unclassified'
+  if (input.classification === 'uncertain') return 'uncertain'
   if (!input.classification) return 'unclassified'
   return 'needs_action'
 }
@@ -152,6 +153,7 @@ export const EMAIL_DETAIL_TONE: Record<EmailDisplayState, string> = {
   tracked: 'bg-brand-50 text-brand-700 border-brand-100',
   fyi: 'bg-white text-gray-700 border-gray-200',
   ignored: 'bg-transparent text-gray-400 border-gray-200',
+  uncertain: 'bg-warning-50/70 text-warning-700 border-warning-100',
   unclassified: 'bg-warning-50/70 text-warning-700 border-warning-100',
 }
 
@@ -161,5 +163,6 @@ export const EMAIL_DETAIL_HEADER_BG: Record<EmailDisplayState, string> = {
   tracked: 'from-brand-50/30 via-white to-white',
   fyi: 'from-gray-50/30 via-white to-white',
   ignored: 'from-gray-50/25 via-white to-white',
+  uncertain: 'from-warning-50/20 via-white to-white',
   unclassified: 'from-warning-50/20 via-white to-white',
 }

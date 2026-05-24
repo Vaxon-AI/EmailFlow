@@ -194,6 +194,7 @@ export async function bulkMarkActioned(userId: string, emailIds: string[]) {
 // emails — if you wanted FYI, you'd pick FYI directly.
 export type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
 export type EmailTabBucket = EmailBucket | 'unclassified'
+export const EMAIL_TAB_BUCKETS: EmailTabBucket[] = ['unclassified', 'needs_action', 'tracked', 'fyi', 'ignored']
 
 function emailBucketData(bucket: EmailBucket) {
   switch (bucket) {
@@ -208,7 +209,7 @@ function emailBucketData(bucket: EmailBucket) {
   }
 }
 
-function emailBucketWhere(bucket: EmailTabBucket): Prisma.EmailWhereInput {
+export function emailBucketWhere(bucket: EmailTabBucket): Prisma.EmailWhereInput {
   switch (bucket) {
     case 'tracked':
       return {
@@ -243,6 +244,68 @@ function emailBucketWhere(bucket: EmailTabBucket): Prisma.EmailWhereInput {
         ],
       }
   }
+}
+
+export type EmailTabState = {
+  bucket: EmailTabBucket
+  totalCount: number
+  newCount: number
+  lastSeenAt: Date | null
+}
+
+export async function findEmailTabStates(userId: string): Promise<EmailTabState[]> {
+  const seenStates = await prisma.userSurfaceSeenState.findMany({
+    where: { userId, surface: 'emails', bucket: { in: EMAIL_TAB_BUCKETS } },
+    select: { bucket: true, lastSeenAt: true },
+  })
+  const seenByBucket = new Map(seenStates.map((state) => [state.bucket, state.lastSeenAt]))
+
+  return Promise.all(
+    EMAIL_TAB_BUCKETS.map(async (bucket) => {
+      const where = { userId, ...emailBucketWhere(bucket) }
+      const lastSeenAt = seenByBucket.get(bucket) ?? null
+      const [totalCount, newCount] = await Promise.all([
+        prisma.email.count({ where }),
+        bucket === 'ignored'
+          ? Promise.resolve(0)
+          : prisma.email.count({
+              where: lastSeenAt
+                ? {
+                    AND: [
+                      where,
+                      {
+                        OR: [
+                          { createdAt: { gt: lastSeenAt } },
+                          { updatedAt: { gt: lastSeenAt } },
+                        ],
+                      },
+                    ],
+                  }
+                : where,
+            }),
+      ])
+      return { bucket, totalCount, newCount, lastSeenAt }
+    })
+  )
+}
+
+export async function markEmailTabSeen(userId: string, bucket: EmailTabBucket) {
+  return prisma.userSurfaceSeenState.upsert({
+    where: {
+      userId_surface_bucket: {
+        userId,
+        surface: 'emails',
+        bucket,
+      },
+    },
+    create: {
+      userId,
+      surface: 'emails',
+      bucket,
+      lastSeenAt: new Date(),
+    },
+    update: { lastSeenAt: new Date() },
+  })
 }
 
 export async function setEmailBucket(emailId: string, bucket: EmailBucket) {

@@ -16,6 +16,78 @@ export interface CreateTaskData {
   status?: Extract<TaskStatus, 'ai_suggestion' | 'active'>
 }
 
+export type TaskTabBucket = 'all' | 'ai_suggestion' | 'active' | 'completed'
+export const TASK_TAB_BUCKETS: TaskTabBucket[] = ['all', 'ai_suggestion', 'active', 'completed']
+
+export type TaskTabState = {
+  bucket: TaskTabBucket
+  totalCount: number
+  newCount: number
+  lastSeenAt: Date | null
+}
+
+export function taskTabWhere(bucket: TaskTabBucket): Prisma.TaskWhereInput {
+  const where: Prisma.TaskWhereInput = { archivedAt: null }
+  if (bucket === 'all') where.status = { in: ['ai_suggestion', 'active'] }
+  else where.status = bucket
+  return where
+}
+
+export async function findTaskTabStates(userId: string): Promise<TaskTabState[]> {
+  const seenStates = await prisma.userSurfaceSeenState.findMany({
+    where: { userId, surface: 'tasks', bucket: { in: TASK_TAB_BUCKETS } },
+    select: { bucket: true, lastSeenAt: true },
+  })
+  const seenByBucket = new Map(seenStates.map((state) => [state.bucket, state.lastSeenAt]))
+
+  return Promise.all(
+    TASK_TAB_BUCKETS.map(async (bucket) => {
+      const where = { userId, ...taskTabWhere(bucket) }
+      const lastSeenAt = seenByBucket.get(bucket) ?? null
+      const [totalCount, newCount] = await Promise.all([
+        prisma.task.count({ where }),
+        bucket === 'completed'
+          ? Promise.resolve(0)
+          : prisma.task.count({
+              where: lastSeenAt
+                ? {
+                    AND: [
+                      where,
+                      {
+                        OR: [
+                          { createdAt: { gt: lastSeenAt } },
+                          { updatedAt: { gt: lastSeenAt } },
+                        ],
+                      },
+                    ],
+                  }
+                : where,
+            }),
+      ])
+      return { bucket, totalCount, newCount, lastSeenAt }
+    })
+  )
+}
+
+export async function markTaskTabSeen(userId: string, bucket: TaskTabBucket) {
+  return prisma.userSurfaceSeenState.upsert({
+    where: {
+      userId_surface_bucket: {
+        userId,
+        surface: 'tasks',
+        bucket,
+      },
+    },
+    create: {
+      userId,
+      surface: 'tasks',
+      bucket,
+      lastSeenAt: new Date(),
+    },
+    update: { lastSeenAt: new Date() },
+  })
+}
+
 export async function createTask(data: CreateTaskData) {
   try {
   const task = await prisma.task.create({

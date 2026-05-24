@@ -71,6 +71,12 @@ type BatchStatus = {
 type Tab = 'needs_action' | 'tracked' | 'fyi' | 'ignored' | 'unclassified'
 type EmailBucket = 'needs_action' | 'tracked' | 'fyi' | 'ignored'
 type EmailClassification = 'action' | 'awareness' | 'ignore' | 'uncertain'
+type EmailTabState = {
+  bucket: Tab
+  totalCount: number
+  newCount: number
+  lastSeenAt: string | null
+}
 
 const EMAIL_BUCKET_LABELS: Record<EmailBucket, string> = {
   needs_action: 'Needs Action',
@@ -415,6 +421,7 @@ function EmailsContent() {
       toast.success(`Ignored ${data.affected} email${data.affected === 1 ? '' : 's'}`)
       clearSelection()
       queryClient.invalidateQueries({ queryKey: ['emails'] })
+      queryClient.invalidateQueries({ queryKey: ['emails', 'tab-states'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
     },
     onError: (err: Error) => toast.error(err.message),
@@ -435,6 +442,7 @@ function EmailsContent() {
       toast.success(`Marked ${data.affected} email${data.affected === 1 ? '' : 's'} as ${EMAIL_BUCKET_LABELS[data.bucket]}`)
       clearSelection()
       queryClient.invalidateQueries({ queryKey: ['emails'] })
+      queryClient.invalidateQueries({ queryKey: ['emails', 'tab-states'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
       queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
       queryClient.invalidateQueries({ queryKey: ['emails', 'unclassified-count'] })
@@ -480,6 +488,7 @@ function EmailsContent() {
       // user sees Tracked count tick up.
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['emails'] })
+        queryClient.invalidateQueries({ queryKey: ['emails', 'tab-states'] })
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
       }, 1500)
     },
@@ -539,6 +548,7 @@ function EmailsContent() {
   useEffect(() => {
     if (!batchStatus) return
     queryClient.invalidateQueries({ queryKey: ['emails'] })
+    queryClient.invalidateQueries({ queryKey: ['emails', 'tab-states'] })
     queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
   }, [
     batchStatus,
@@ -589,6 +599,36 @@ function EmailsContent() {
     placeholderData: (previous) => previous,
   })
 
+  const { data: tabStatesRes } = useQuery<{ data: EmailTabState[] }>({
+    queryKey: ['emails', 'tab-states'],
+    queryFn: () => fetch('/api/emails/tab-states').then((r) => r.json()),
+    staleTime: 0,
+  })
+
+  const markTabSeenMutation = useMutation({
+    mutationFn: async (bucket: Tab) => {
+      const res = await fetch('/api/emails/tab-states/seen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bucket }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to mark tab seen')
+      return bucket
+    },
+    onSuccess: (bucket) => {
+      queryClient.setQueryData<{ data: EmailTabState[] }>(['emails', 'tab-states'], (current) => {
+        if (!current?.data) return current
+        return {
+          ...current,
+          data: current.data.map((state) =>
+            state.bucket === bucket ? { ...state, newCount: 0, lastSeenAt: new Date().toISOString() } : state
+          ),
+        }
+      })
+    },
+  })
+
   // Authoritative unclassified count, shared with the Header chip. Driving the
   // Unclassified tab off this (instead of a client-side filter over the
   // current page) keeps the two consistent even if some matching email isn't
@@ -601,6 +641,20 @@ function EmailsContent() {
 
   const emails = useMemo(() => (res?.data || []) as EmailItem[], [res?.data])
   const meta = (res as QueryResponse<EmailItem[]>)?.meta
+  const tabStateMap = useMemo(() => {
+    const map = new Map<Tab, EmailTabState>()
+    for (const state of tabStatesRes?.data ?? []) map.set(state.bucket, state)
+    return map
+  }, [tabStatesRes?.data])
+  const activeTabNewCount = tabStateMap.get(tab)?.newCount ?? 0
+
+  useEffect(() => {
+    if (!tabStatesRes?.data || activeTabNewCount <= 0) return
+    markTabSeenMutation.mutate(tab)
+    // Marking the active tab as seen is intentionally tied to tab changes and
+    // first state load only; the mutation's own cache update should not loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activeTabNewCount, tabStatesRes?.data])
 
   // Discover unique email accounts
   const accounts = useMemo(() => {
@@ -620,12 +674,11 @@ function EmailsContent() {
     dateRange,
   })
 
-  // Counts for tab badges
-  const needsActionCount = emails.filter(isNeedsActionPageEmail).length
-  const trackedCount = emails.filter(isTrackedEmail).length
-  const infoCount = emails.filter(isFyiEmail).length
-  const ignoredCount = emails.filter(isIgnoredEmail).length
-  const unclassifiedCount = unclassifiedRes?.data?.count ?? 0
+  const needsActionCount = tabStateMap.get('needs_action')?.totalCount ?? emails.filter(isNeedsActionPageEmail).length
+  const trackedCount = tabStateMap.get('tracked')?.totalCount ?? emails.filter(isTrackedEmail).length
+  const infoCount = tabStateMap.get('fyi')?.totalCount ?? emails.filter(isFyiEmail).length
+  const ignoredCount = tabStateMap.get('ignored')?.totalCount ?? emails.filter(isIgnoredEmail).length
+  const unclassifiedCount = tabStateMap.get('unclassified')?.totalCount ?? unclassifiedRes?.data?.count ?? 0
   const pendingCount = emails.filter((e) => e.processingStatus === 'pending').length
 
   const tabs: { key: Tab; label: string; count: number }[] = [
@@ -654,7 +707,7 @@ function EmailsContent() {
               {unclassifiedCount} unclassified email{unclassifiedCount === 1 ? '' : 's'}
             </p>
             <p className="mt-0.5 text-xs text-warning">
-              AI was either unsure or hit your free plan limit. Open any of them to classify manually, or upgrade to Pro.
+              Uncertain emails need your judgment. Unclassified emails are not classified yet or were skipped by quota.
             </p>
           </div>
           <Button
@@ -691,16 +744,10 @@ function EmailsContent() {
             setPage(1)
             updateEmailUrlFilter({ tab: nextTab })
           }}
-          options={tabs.map(({ key, label, count }) => ({
+          options={tabs.map(({ key, label }) => ({
             value: key,
             label,
-            badge: (
-              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                tab === key ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {count}
-              </span>
-            ),
+            badge: renderEmailTabNewBadge(tabStateMap.get(key)?.newCount ?? 0, key),
           }))}
         />
       </div>
@@ -1254,6 +1301,15 @@ function SyncBatchModal({
   )
 }
 
+function renderEmailTabNewBadge(count: number, bucket: Tab) {
+  if (bucket === 'ignored' || count <= 0) return undefined
+  return (
+    <span className="rounded-full bg-critical px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+      +{count}
+    </span>
+  )
+}
+
 /* ========== 2-level collapsible: identity -> project ========== */
 
 type EmailProjectGroup = { id: string; name: string; items: EmailItem[] }
@@ -1649,7 +1705,7 @@ function ClassBadge({
   // Unclassified. Tracked / FYI / Ignored rows stay clean: title aligns
   // straight after the checkbox with no phantom spacer column.
   const state = getEmailDisplayState({ classification, actioned })
-  if (state !== 'needs_action' && state !== 'unclassified') {
+  if (state !== 'needs_action' && state !== 'uncertain' && state !== 'unclassified') {
     return null
   }
   const cfg = EMAIL_DISPLAY_CONFIG[state]

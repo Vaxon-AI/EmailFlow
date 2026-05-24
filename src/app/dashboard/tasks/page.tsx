@@ -37,7 +37,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Suspense, useState, useMemo, useCallback } from 'react'
+import { Suspense, useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { GanttTimeline } from '@/components/gantt-timeline'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
@@ -54,6 +54,13 @@ import { CACHE_TIME } from '@/lib/query-cache'
 type ViewMode = 'list' | 'timeline' | 'calendar'
 type TaskStatus = 'ai_suggestion' | 'active' | 'completed'
 type StatusFilter = 'all' | 'ai_suggestion' | 'active' | 'completed'
+
+type TaskTabState = {
+  bucket: StatusFilter
+  totalCount: number
+  newCount: number
+  lastSeenAt: string | null
+}
 
 type TaskEmailLink = {
   email?: {
@@ -264,6 +271,49 @@ function TasksContent() {
     staleTime: CACHE_TIME.list,
     placeholderData: (previous) => previous,
   })
+
+  const { data: tabStatesRes } = useQuery<{ data: TaskTabState[] }>({
+    queryKey: ['tasks', 'tab-states'],
+    queryFn: () => fetch('/api/tasks/tab-states').then((r) => r.json()),
+    staleTime: 0,
+  })
+
+  const markTabSeenMutation = useMutation({
+    mutationFn: async (bucket: StatusFilter) => {
+      const res = await fetch('/api/tasks/tab-states/seen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bucket }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to mark tab seen')
+      return bucket
+    },
+    onSuccess: (bucket) => {
+      queryClient.setQueryData<{ data: TaskTabState[] }>(['tasks', 'tab-states'], (current) => {
+        if (!current?.data) return current
+        return {
+          ...current,
+          data: current.data.map((state) =>
+            state.bucket === bucket ? { ...state, newCount: 0, lastSeenAt: new Date().toISOString() } : state
+          ),
+        }
+      })
+    },
+  })
+
+  const tabStateMap = useMemo(() => {
+    const map = new Map<StatusFilter, TaskTabState>()
+    for (const state of tabStatesRes?.data ?? []) map.set(state.bucket, state)
+    return map
+  }, [tabStatesRes?.data])
+  const activeTabNewCount = tabStateMap.get(statusFilter)?.newCount ?? 0
+
+  useEffect(() => {
+    if (!tabStatesRes?.data || activeTabNewCount <= 0) return
+    markTabSeenMutation.mutate(statusFilter)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, activeTabNewCount, tabStatesRes?.data])
 
   const { data: projectsRes } = useQuery({
     queryKey: ['projects'],
@@ -541,6 +591,7 @@ function TasksContent() {
       const failedCards = draftCards.filter((_, i) => results[i].status === 'rejected')
 
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'tab-states'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
 
       if (failedCards.length === 0) {
@@ -575,6 +626,7 @@ function TasksContent() {
         emailIds: linkedEmailIds,
       })
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'tab-states'] })
       toast.success('Task created')
       setShowCreateModal(false)
       resetCreateModal()
@@ -622,6 +674,7 @@ function TasksContent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'tab-states'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
     },
   })
@@ -677,6 +730,7 @@ function TasksContent() {
   const handleDeleteTask = async (taskId: string) => {
     await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' })
     queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    queryClient.invalidateQueries({ queryKey: ['tasks', 'tab-states'] })
     queryClient.invalidateQueries({ queryKey: ['stats'] })
     setSelectedIds((prev) => { const next = new Set(prev); next.delete(taskId); return next })
     toast.success('Task deleted')
@@ -690,6 +744,7 @@ function TasksContent() {
       body: JSON.stringify({ ids, action }),
     })
     queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    queryClient.invalidateQueries({ queryKey: ['tasks', 'tab-states'] })
     queryClient.invalidateQueries({ queryKey: ['stats'] })
     clearSelection()
     const label = action === 'complete' ? 'completed' : action === 'activate' ? 'activated' : 'deleted'
@@ -949,6 +1004,7 @@ function TasksContent() {
                 o.value === 'completed'
                   ? {
                       ...o,
+                      badge: renderTaskTabNewBadge(tabStateMap.get(o.value as StatusFilter)?.newCount ?? 0, o.value as StatusFilter),
                       // Cleanup options sit inside the Completed tab and only
                       // expand when this tab is active — keeps other tabs at
                       // their normal width.
@@ -991,7 +1047,10 @@ function TasksContent() {
                         </DropdownMenu>
                       ),
                     }
-                  : o
+                  : {
+                      ...o,
+                      badge: renderTaskTabNewBadge(tabStateMap.get(o.value as StatusFilter)?.newCount ?? 0, o.value as StatusFilter),
+                    }
               )}
             />
           </div>
@@ -1384,6 +1443,15 @@ function parsePriorityFilter(value: string | null): PriorityFilter {
 
 function parseStatusFilter(value: string | null): StatusFilter {
   return value === 'ai_suggestion' || value === 'active' || value === 'completed' ? value : 'all'
+}
+
+function renderTaskTabNewBadge(count: number, bucket: StatusFilter) {
+  if (bucket === 'completed' || count <= 0) return undefined
+  return (
+    <span className="rounded-full bg-critical px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+      +{count}
+    </span>
+  )
 }
 
 function matchesPriorityFilter(task: TaskItem, priority: unknown) {

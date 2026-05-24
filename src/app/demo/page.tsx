@@ -21,6 +21,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { SegmentedControl } from '@/components/segmented-control'
 import { getPriorityBand } from '@/types'
@@ -44,13 +45,13 @@ const UNCATEGORIZED_OPTION: ContextMultiOption = { id: UNCATEGORIZED_ID, name: '
 type View = 'all' | 'week' | 'today'
 
 const VIEW_OPTIONS: Array<{ value: View; label: string }> = [
-  { value: 'all', label: 'All Time' },
   { value: 'week', label: 'This Week' },
   { value: 'today', label: 'Today' },
+  { value: 'all', label: 'All Time' },
 ]
 
 function parseView(value: string | null): View {
-  return value === 'today' || value === 'week' || value === 'all' ? value : 'all'
+  return value === 'today' || value === 'all' ? value : 'week'
 }
 
 function setMultiParam(params: URLSearchParams, key: string, values: string[]) {
@@ -67,6 +68,26 @@ function startOfDay(d: Date): Date {
 function dayKey(iso: string): string {
   const d = new Date(iso)
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+function dateKeyIso(date: Date): string {
+  const d = startOfDay(date)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseMomentumEnd(value: string | null): string | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const parsed = new Date(`${value}T00:00:00`)
+  return Number.isNaN(parsed.getTime()) ? null : value
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = startOfDay(date)
+  next.setDate(next.getDate() + days)
+  return next
 }
 
 function windowStart(view: View, now: Date): Date | null {
@@ -107,6 +128,7 @@ function DashboardContent() {
   const selectedIdentityIds = useMemo(() => searchParams.getAll('identity'), [searchParams])
   const selectedProjectIds = useMemo(() => searchParams.getAll('project'), [searchParams])
   const view = parseView(searchParams.get('view'))
+  const momentumEnd = parseMomentumEnd(searchParams.get('momentumEnd'))
   const ws = useMemo(() => windowStart(view, now), [view, now])
 
   // Identity options = demo identities + Uncategorized sentinel
@@ -156,7 +178,7 @@ function DashboardContent() {
   )
 
   const updateFilter = useCallback(
-    (next: { identities?: string[]; projects?: string[]; view?: View }) => {
+    (next: { identities?: string[]; projects?: string[]; view?: View; momentumEnd?: string | null }) => {
       const params = new URLSearchParams(searchParams.toString())
       if (next.identities !== undefined) {
         setMultiParam(params, 'identity', next.identities)
@@ -164,7 +186,14 @@ function DashboardContent() {
         params.delete('project')
       }
       if (next.projects !== undefined) setMultiParam(params, 'project', next.projects)
-      if (next.view !== undefined) params.set('view', next.view)
+      if (next.view !== undefined) {
+        params.set('view', next.view)
+        if (next.view !== 'all') params.delete('momentumEnd')
+      }
+      if (next.momentumEnd !== undefined) {
+        if (next.momentumEnd) params.set('momentumEnd', next.momentumEnd)
+        else params.delete('momentumEnd')
+      }
       const q = params.toString()
       router.replace(q ? `/demo?${q}` : '/demo', { scroll: false })
     },
@@ -179,11 +208,12 @@ function DashboardContent() {
       setMultiParam(params, 'identity', selectedIdentityIds)
       setMultiParam(params, 'project', effectiveProjectIds)
       params.set('view', view)
+      if (view === 'all' && momentumEnd) params.set('momentumEnd', momentumEnd)
       for (const [k, v] of Object.entries(extra ?? {})) params.set(k, v)
       const q = params.toString()
       return q ? `${path}?${q}` : path
     },
-    [selectedIdentityIds, effectiveProjectIds, view],
+    [selectedIdentityIds, effectiveProjectIds, momentumEnd, view],
   )
 
   const stats = useMemo(() => {
@@ -246,7 +276,9 @@ function DashboardContent() {
 
   const momentum = useMemo<MomentumPoint[]>(() => {
     const days = momentumDaysFor(view)
-    const today = startOfDay(now)
+    const today = view === 'all' && momentumEnd
+      ? startOfDay(new Date(`${momentumEnd}T00:00:00`))
+      : startOfDay(now)
     const scopedTasks = tasks.filter((t) => inScope(t.projectId))
     const scopedEmails = emails.filter((e) => inScope(e.projectId))
     const completedBy = new Map<string, number>()
@@ -278,7 +310,17 @@ function DashboardContent() {
       })
     }
     return out
-  }, [tasks, emails, now, view, inScope])
+  }, [tasks, emails, momentumEnd, now, view, inScope])
+
+  const updateMomentumWindow = useCallback((direction: 'previous' | 'next' | 'latest') => {
+    const latest = startOfDay(now)
+    const current = momentumEnd ? startOfDay(new Date(`${momentumEnd}T00:00:00`)) : latest
+    let next = latest
+    if (direction === 'previous') next = addDays(current, -14)
+    if (direction === 'next') next = addDays(current, 14)
+    if (next > latest) next = latest
+    updateFilter({ momentumEnd: dateKeyIso(next) })
+  }, [momentumEnd, now, updateFilter])
 
   const momentumTotals = useMemo(
     () => ({
@@ -518,10 +560,31 @@ function DashboardContent() {
       {/* Completion Momentum — mirrors real CompletionMomentumCard L1308-1382 */}
       <Card className="overflow-hidden border-gray-200/80 bg-white shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <TrendingUp className="h-4 w-4 text-brand-600" />
-            Completion Momentum
-          </CardTitle>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <TrendingUp className="h-4 w-4 text-brand-600" />
+              Completion Momentum
+            </CardTitle>
+            {view === 'all' && (
+              <div className="flex items-center gap-1.5">
+                <Button size="sm" variant="utility" className="h-7 px-2 text-xs" onClick={() => updateMomentumWindow('previous')}>
+                  Previous
+                </Button>
+                <Button
+                  size="sm"
+                  variant="utility"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => updateMomentumWindow('next')}
+                  disabled={!momentumEnd || momentumEnd >= dateKeyIso(now)}
+                >
+                  Next
+                </Button>
+                <Button size="sm" variant="utility" className="h-7 px-2 text-xs" onClick={() => updateMomentumWindow('latest')}>
+                  Latest
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] lg:items-center">

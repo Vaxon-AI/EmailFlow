@@ -5,7 +5,7 @@ import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
 import { getDashboardSummary } from '@/repositories/dashboard-summary-repo'
 
 const EMPTY_SUMMARY = {
-  view: 'all',
+  view: 'week',
   stats: {
     emails: { total: 0, action: 0, awareness: 0, ignore: 0, uncertain: 0, linkedAction: 0, needsReview: 0, tracked: 0, unclassified: 0 },
     tasks: { total: 0, pending: 0, active: 0, completed: 0 },
@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
       identityIds: parseMultiParam(req.nextUrl.searchParams, 'identity'),
       projectIds: parseMultiParam(req.nextUrl.searchParams, 'project'),
       view: parseView(req.nextUrl.searchParams.get('view')),
+      momentumEnd: parseDateParam(req.nextUrl.searchParams.get('momentumEnd')),
       timezoneOffset: parseTimezoneOffset(req.nextUrl.searchParams.get('timezoneOffset')),
     })
     return success(summary)
@@ -59,7 +60,13 @@ export async function GET(req: NextRequest) {
 }
 
 function parseView(value: string | null) {
-  return value === 'today' || value === 'week' ? value : 'all'
+  return value === 'today' || value === 'all' ? value : 'week'
+}
+
+function parseDateParam(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  return Number.isNaN(parsed.getTime()) ? undefined : value
 }
 
 function parseTimezoneOffset(value: string | null) {

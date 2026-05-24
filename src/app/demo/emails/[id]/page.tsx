@@ -89,7 +89,7 @@ export default function DemoEmailDetailPage() {
     linkedTasks.length > 0 ||
     !!email.aiReplyDraft
   const hasAiAnalysis = !!email.classReasoning && email.classConfidence !== null
-  const pickerValue: EmailBucket | '' = state === 'unclassified' ? '' : state
+  const pickerValue: EmailBucket | '' = state === 'unclassified' || state === 'uncertain' ? '' : state
 
   const generateReply = async () => {
     setReplyLoading(true)

@@ -11,6 +11,7 @@ import {
   GanttChartSquare,
   List,
   Plus,
+  Search,
   Sparkles,
   ThumbsUp,
   Trash2,
@@ -20,6 +21,7 @@ import { toast } from 'sonner'
 import { PageHeader } from '@/components/page-header'
 import { SegmentedControl } from '@/components/segmented-control'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +42,7 @@ import { EmptyHint } from '../_components/demo-bits'
 type ViewMode = 'list' | 'timeline' | 'calendar'
 type StatusFilter = 'all' | DemoTaskStatus
 type PriorityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low'
+type SortMode = 'priority' | 'due' | 'created' | 'title'
 
 const STATUS_VALUES: ReadonlySet<string> = new Set([
   'all',
@@ -64,6 +67,31 @@ function parsePriority(value: string | null): PriorityFilter {
   return value && PRIORITY_VALUES.has(value) ? (value as PriorityFilter) : 'all'
 }
 
+function effectiveTaskTime(task: DemoTask): number {
+  const raw = task.userSetDeadline ?? task.explicitDeadline ?? task.inferredDeadline ?? task.startDate ?? task.createdAt
+  return new Date(raw).getTime()
+}
+
+function countDemoTaskTabs(tasks: DemoTask[]): Record<StatusFilter, number> {
+  const aiSuggestion = tasks.filter((task) => task.status === 'ai_suggestion').length
+  const active = tasks.filter((task) => task.status === 'active').length
+  return {
+    all: aiSuggestion + active,
+    ai_suggestion: aiSuggestion,
+    active,
+    completed: tasks.filter((task) => task.status === 'completed').length,
+  }
+}
+
+function renderDemoTaskNewBadge(count: number, bucket: StatusFilter) {
+  if (bucket === 'completed' || count <= 0) return undefined
+  return (
+    <span className="rounded-full bg-critical px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+      +{count}
+    </span>
+  )
+}
+
 export default function DemoTasksPage() {
   return (
     <Suspense fallback={null}>
@@ -80,6 +108,10 @@ function TasksContent() {
   const priorityFilter = parsePriority(searchParams.get('priority'))
   const focusProjectId = searchParams.get('project') ?? undefined
   const [view, setView] = useState<ViewMode>('list')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [sortMode, setSortMode] = useState<SortMode>('priority')
   const [createOpen, setCreateOpen] = useState(false)
   const [pasteOpen, setPasteOpen] = useState(false)
 
@@ -107,22 +139,26 @@ function TasksContent() {
 
   const [showBatchReassign, setShowBatchReassign] = useState(false)
 
-  const setStatusFilter = (next: StatusFilter) => {
+  const tabCounts = useMemo(() => countDemoTaskTabs(tasks), [tasks])
+  const [seenCounts, setSeenCounts] = useState<Record<StatusFilter, number>>(() => countDemoTaskTabs(tasks))
+  const newCounts = useMemo(
+    () => ({
+      all: statusFilter === 'all' ? 0 : Math.max(0, tabCounts.all - seenCounts.all),
+      ai_suggestion: statusFilter === 'ai_suggestion' ? 0 : Math.max(0, tabCounts.ai_suggestion - seenCounts.ai_suggestion),
+      active: statusFilter === 'active' ? 0 : Math.max(0, tabCounts.active - seenCounts.active),
+      completed: 0,
+    }),
+    [seenCounts, statusFilter, tabCounts],
+  )
+
+  const setStatusFilter = useCallback((next: StatusFilter) => {
     const params = new URLSearchParams(searchParams.toString())
     if (next === 'all') params.delete('status')
     else params.set('status', next)
     const q = params.toString()
     router.replace(q ? `/demo/tasks?${q}` : '/demo/tasks', { scroll: false })
-  }
-
-  const counts = useMemo(
-    () => ({
-      pending: tasks.filter((t) => t.status === 'ai_suggestion').length,
-      active: tasks.filter((t) => t.status === 'active').length,
-      completed: tasks.filter((t) => t.status === 'completed').length,
-    }),
-    [tasks],
-  )
+    setSeenCounts((prev) => ({ ...prev, [next]: tabCounts[next] }))
+  }, [router, searchParams, tabCounts])
 
   const visibleTasks = useMemo<DemoTask[]>(() => {
     let result = tasks
@@ -136,8 +172,31 @@ function TasksContent() {
     if (priorityFilter !== 'all') {
       result = result.filter((t) => getPriorityBand(t.priorityScore) === priorityFilter)
     }
-    return result
-  }, [tasks, statusFilter, priorityFilter])
+    if (fromDate) {
+      const from = new Date(`${fromDate}T00:00:00`)
+      result = result.filter((t) => new Date(t.createdAt) >= from)
+    }
+    if (toDate) {
+      const to = new Date(`${toDate}T23:59:59`)
+      result = result.filter((t) => new Date(t.createdAt) <= to)
+    }
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      result = result.filter((t) =>
+        [t.title, t.summary, t.priorityReason].some((value) => value.toLowerCase().includes(q))
+      )
+    }
+    return [...result].sort((a, b) => {
+      if (sortMode === 'title') return a.title.localeCompare(b.title)
+      if (sortMode === 'created') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      if (sortMode === 'due') {
+        const aDue = effectiveTaskTime(a)
+        const bDue = effectiveTaskTime(b)
+        return aDue - bDue
+      }
+      return (b.priorityScore ?? 0) - (a.priorityScore ?? 0)
+    })
+  }, [fromDate, priorityFilter, searchQuery, sortMode, statusFilter, tasks, toDate])
 
   const ganttUpdate = useMemo(
     () => ({
@@ -198,7 +257,7 @@ function TasksContent() {
       <PageHeader
         title="Tasks"
         description="Everything EmailFlow pulled out of your inbox, ranked by what matters first."
-        meta={`${counts.pending + counts.active} open · ${counts.completed} completed`}
+        meta={`${tabCounts.all} open · ${tabCounts.completed} completed`}
         actions={
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-700">
@@ -225,9 +284,9 @@ function TasksContent() {
           value={statusFilter}
           onChange={(v) => setStatusFilter(v as StatusFilter)}
           options={[
-            { value: 'all', label: 'All' },
-            { value: 'ai_suggestion', label: 'AI Suggestions' },
-            { value: 'active', label: 'Active' },
+            { value: 'all', label: 'All', badge: renderDemoTaskNewBadge(newCounts.all, 'all') },
+            { value: 'ai_suggestion', label: 'AI Suggestions', badge: renderDemoTaskNewBadge(newCounts.ai_suggestion, 'ai_suggestion') },
+            { value: 'active', label: 'Active', badge: renderDemoTaskNewBadge(newCounts.active, 'active') },
             { value: 'completed', label: 'Completed' },
           ]}
         />
@@ -240,6 +299,45 @@ function TasksContent() {
             { value: 'calendar', label: 'Calendar', icon: <CalendarDays className="h-3.5 w-3.5" /> },
           ]}
         />
+      </div>
+
+      <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm backdrop-blur">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="border-gray-200 bg-white pl-9"
+            />
+          </div>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600"
+            aria-label="Task created from date"
+          />
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600"
+            aria-label="Task created to date"
+          />
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600"
+            aria-label="Sort tasks"
+          >
+            <option value="priority">Priority</option>
+            <option value="due">Due date</option>
+            <option value="created">Recently created</option>
+            <option value="title">Title A-Z</option>
+          </select>
+        </div>
       </div>
 
       {priorityFilter !== 'all' && (

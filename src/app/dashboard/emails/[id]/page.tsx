@@ -82,6 +82,7 @@ const DETAIL_SENDER_TONE: Record<EmailDisplayState, string> = {
   tracked: 'border-brand-50 bg-white/85',
   fyi: 'border-gray-100 bg-white/85',
   ignored: 'border-gray-100 bg-white/85',
+  uncertain: 'border-warning-50 bg-white/85',
   unclassified: 'border-warning-50 bg-white/85',
 }
 
@@ -467,7 +468,7 @@ export default function EmailDetailPage() {
   // Picker can't represent 'uncertain' (it's an AI-only state); leave the
   // Select unselected so the user is nudged to commit a real bucket.
   const pickerValue: EmailBucket | undefined =
-    displayState === 'unclassified' ? undefined : displayState
+    displayState === 'unclassified' || displayState === 'uncertain' ? undefined : displayState
   const senderName = email.sender?.split('<')[0]?.trim()
   const senderEmail = email.sender?.match(/<(.+?)>/)?.[1] || email.sender
   const senderInitial = (senderName || 'U')[0].toUpperCase()

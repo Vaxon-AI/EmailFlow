@@ -127,9 +127,9 @@ type DashboardFeedback = {
 const UNCATEGORIZED_ID = '__uncategorized__'
 const UNCATEGORIZED_OPTION = { id: UNCATEGORIZED_ID, name: 'Uncategorized' }
 const DASHBOARD_VIEWS: Array<{ id: DashboardView; label: string }> = [
-  { id: 'all', label: 'All Time' },
   { id: 'week', label: 'This Week' },
   { id: 'today', label: 'Today' },
+  { id: 'all', label: 'All Time' },
 ]
 
 export default function DashboardPage() {
@@ -147,6 +147,7 @@ function DashboardContent() {
   const selectedIdentityIds = useMemo(() => parseContextParam(searchParams, 'identity'), [searchParams])
   const selectedProjectIds = useMemo(() => parseContextParam(searchParams, 'project'), [searchParams])
   const selectedView = useMemo(() => parseDashboardView(searchParams.get('view')), [searchParams])
+  const selectedMomentumEnd = useMemo(() => parseMomentumEnd(searchParams.get('momentumEnd')), [searchParams])
   const timezoneOffset = useMemo(() => new Date().getTimezoneOffset(), [])
   const { openSyncSetup, openUpgrade } = useSyncSetup()
 
@@ -211,7 +212,7 @@ function DashboardContent() {
     [projectOptions, selectedProjectIds]
   )
 
-  const updateDashboardFilter = useCallback((next: { identities?: string[]; projects?: string[]; view?: DashboardView }) => {
+  const updateDashboardFilter = useCallback((next: { identities?: string[]; projects?: string[]; view?: DashboardView; momentumEnd?: string | null }) => {
     const params = new URLSearchParams(searchParams.toString())
     params.delete('gmail_connected')
     params.delete('gmail_error')
@@ -227,6 +228,12 @@ function DashboardContent() {
 
     if (next.view !== undefined) {
       params.set('view', next.view)
+      if (next.view !== 'all') params.delete('momentumEnd')
+    }
+
+    if (next.momentumEnd !== undefined) {
+      if (next.momentumEnd) params.set('momentumEnd', next.momentumEnd)
+      else params.delete('momentumEnd')
     }
 
     const query = params.toString()
@@ -249,12 +256,13 @@ function DashboardContent() {
   const quota = quotaRes?.data
 
   const { data: summaryRes, isLoading: summaryLoading } = useQuery<DashboardSummaryResponse>({
-    queryKey: ['dashboard-summary', selectedIdentityIds.join(','), effectiveProjectIds.join(','), selectedView, timezoneOffset],
+    queryKey: ['dashboard-summary', selectedIdentityIds.join(','), effectiveProjectIds.join(','), selectedView, selectedMomentumEnd, timezoneOffset],
     queryFn: () => {
       const params = new URLSearchParams()
       setMultiParam(params, 'identity', selectedIdentityIds)
       setMultiParam(params, 'project', effectiveProjectIds)
       params.set('view', selectedView)
+      if (selectedView === 'all' && selectedMomentumEnd) params.set('momentumEnd', selectedMomentumEnd)
       params.set('timezoneOffset', String(timezoneOffset))
       const query = params.toString()
       return fetch(`/api/dashboard/summary${query ? `?${query}` : ''}`).then((r) => r.json())
@@ -293,8 +301,9 @@ function DashboardContent() {
     setMultiParam(params, 'identity', selectedIdentityIds)
     setMultiParam(params, 'project', effectiveProjectIds)
     params.set('view', selectedView)
+    if (selectedView === 'all' && selectedMomentumEnd) params.set('momentumEnd', selectedMomentumEnd)
     return params.toString()
-  }, [effectiveProjectIds, selectedIdentityIds, selectedView])
+  }, [effectiveProjectIds, selectedIdentityIds, selectedMomentumEnd, selectedView])
   const dashboardLink = useCallback((path: string, params?: Record<string, string>) => {
     const next = new URLSearchParams(dashboardQuery)
     for (const [key, value] of Object.entries(params ?? {})) {
@@ -303,6 +312,15 @@ function DashboardContent() {
     const query = next.toString()
     return query ? `${path}?${query}` : path
   }, [dashboardQuery])
+  const updateMomentumWindow = useCallback((direction: 'previous' | 'next' | 'latest') => {
+    const currentEnd = selectedMomentumEnd ? new Date(`${selectedMomentumEnd}T00:00:00`) : startOfLocalDay(new Date())
+    const latestEnd = startOfLocalDay(new Date())
+    let nextEnd = latestEnd
+    if (direction === 'previous') nextEnd = addLocalDays(currentEnd, -14)
+    if (direction === 'next') nextEnd = addLocalDays(currentEnd, 14)
+    if (nextEnd > latestEnd) nextEnd = latestEnd
+    updateDashboardFilter({ momentumEnd: formatDateKey(nextEnd) })
+  }, [selectedMomentumEnd, updateDashboardFilter])
 
   return (
     <div className="space-y-6">
@@ -595,6 +613,8 @@ function DashboardContent() {
             view={selectedView}
             feedback={summary?.feedback}
             allTimeCompletedTasks={allTimeCompletedTasks}
+            momentumEnd={selectedView === 'all' ? selectedMomentumEnd : null}
+            onMomentumWindowChange={selectedView === 'all' ? updateMomentumWindow : undefined}
           />
         )}
       </div>
@@ -778,11 +798,15 @@ function CompletionMomentumCard({
   view,
   feedback,
   allTimeCompletedTasks,
+  momentumEnd,
+  onMomentumWindowChange,
 }: {
   data: Array<{ date: string; completedTasks: number; createdTasks: number; actionEmails: number }>
   view: DashboardView
   feedback?: DashboardFeedback
   allTimeCompletedTasks: number
+  momentumEnd?: string | null
+  onMomentumWindowChange?: (direction: 'previous' | 'next' | 'latest') => void
 }) {
   const totalCompleted = data.reduce((sum, day) => sum + day.completedTasks, 0)
   const totalCreated = data.reduce((sum, day) => sum + day.createdTasks, 0)
@@ -793,10 +817,31 @@ function CompletionMomentumCard({
   return (
     <Card className="overflow-hidden border-gray-200/80 bg-white shadow-sm">
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <TrendingUp className="h-4 w-4 text-brand-600" />
-          Completion Momentum
-        </CardTitle>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <TrendingUp className="h-4 w-4 text-brand-600" />
+            Completion Momentum
+          </CardTitle>
+          {view === 'all' && onMomentumWindowChange ? (
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" variant="utility" className="h-7 px-2 text-xs" onClick={() => onMomentumWindowChange('previous')}>
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="utility"
+                className="h-7 px-2 text-xs"
+                onClick={() => onMomentumWindowChange('next')}
+                disabled={isLatestMomentumWindow(momentumEnd)}
+              >
+                Next
+              </Button>
+              <Button size="sm" variant="utility" className="h-7 px-2 text-xs" onClick={() => onMomentumWindowChange('latest')}>
+                Latest
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] lg:items-center">
@@ -1124,7 +1169,13 @@ function parseContextParam(params: URLSearchParams, key: string) {
 }
 
 function parseDashboardView(value: string | null): DashboardView {
-  return value === 'today' || value === 'week' ? value : 'all'
+  return value === 'today' || value === 'all' ? value : 'week'
+}
+
+function parseMomentumEnd(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const parsed = new Date(`${value}T00:00:00`)
+  return Number.isNaN(parsed.getTime()) ? null : value
 }
 
 function setMultiParam(params: URLSearchParams, key: string, values: string[]) {
@@ -1133,7 +1184,7 @@ function setMultiParam(params: URLSearchParams, key: string, values: string[]) {
 }
 
 function getViewLabel(view: DashboardView) {
-  return DASHBOARD_VIEWS.find((item) => item.id === view)?.label ?? 'All Time'
+  return DASHBOARD_VIEWS.find((item) => item.id === view)?.label ?? 'This Week'
 }
 
 function getViewPeriodLabel(view: DashboardView) {
@@ -1185,4 +1236,28 @@ function formatMomentumDate(date: string) {
   const [, month, day] = date.split('-')
   const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   return `${monthLabels[Math.max(0, Number(month) - 1)]} ${Number(day)}`
+}
+
+function startOfLocalDay(date: Date) {
+  const next = new Date(date)
+  next.setHours(0, 0, 0, 0)
+  return next
+}
+
+function addLocalDays(date: Date, days: number) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return startOfLocalDay(next)
+}
+
+function formatDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function isLatestMomentumWindow(momentumEnd?: string | null) {
+  if (!momentumEnd) return true
+  return momentumEnd >= formatDateKey(new Date())
 }

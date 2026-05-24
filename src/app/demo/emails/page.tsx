@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Inbox,
   Loader2,
+  Search,
   Tag,
   X,
   Zap,
@@ -16,6 +17,7 @@ import { toast } from 'sonner'
 import { PageHeader } from '@/components/page-header'
 import { SegmentedControl } from '@/components/segmented-control'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +34,7 @@ import { displayStateOf, EmptyHint } from '../_components/demo-bits'
 // Mirrors the real inbox (src/app/dashboard/emails) — five mutually-exclusive
 // buckets, no "All Mail" tab. Unclassified only appears when it has emails.
 type Tab = 'unclassified' | 'needs_action' | 'tracked' | 'fyi' | 'ignored'
+type SortMode = 'newest' | 'oldest' | 'sender'
 
 const TAB_VALUES: ReadonlySet<string> = new Set([
   'unclassified',
@@ -43,11 +46,24 @@ const TAB_VALUES: ReadonlySet<string> = new Set([
 
 function tabOf(email: DemoEmail): Tab {
   const state = displayStateOf(email)
+  if (state === 'uncertain') return 'unclassified'
   return state
 }
 
 function parseTab(value: string | null): Tab {
   return value && TAB_VALUES.has(value) ? (value as Tab) : 'needs_action'
+}
+
+function countDemoEmailTabs(emails: DemoEmail[]): Record<Tab, number> {
+  const counts: Record<Tab, number> = {
+    unclassified: 0,
+    needs_action: 0,
+    tracked: 0,
+    fyi: 0,
+    ignored: 0,
+  }
+  for (const email of emails) counts[tabOf(email)] += 1
+  return counts
 }
 
 export default function DemoEmailsPage() {
@@ -61,6 +77,7 @@ export default function DemoEmailsPage() {
 function EmailsContent() {
   const {
     emails,
+    getProject,
     classifyEmail,
     setEmailActioned,
     simulateExtractTask,
@@ -69,6 +86,11 @@ function EmailsContent() {
   const searchParams = useSearchParams()
   const tab = parseTab(searchParams.get('tab'))
   const focusIdentityId = searchParams.get('identity') ?? undefined
+  const focusProjectId = searchParams.get('project') ?? undefined
+  const [searchQuery, setSearchQuery] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [sortMode, setSortMode] = useState<SortMode>('newest')
 
   // Selection state scoped to active tab — switching tabs clears it
   // (mirrors real emails page L273-281).
@@ -96,25 +118,53 @@ function EmailsContent() {
   const [showBatchReassign, setShowBatchReassign] = useState(false)
   const [generating, setGenerating] = useState(false)
 
-  const setTab = (next: Tab) => {
+  const counts = useMemo(() => countDemoEmailTabs(emails), [emails])
+  const [seenCounts, setSeenCounts] = useState<Record<Tab, number>>(() => countDemoEmailTabs(emails))
+
+  const newCounts = useMemo(() => {
+    const seen = seenCounts
+    return {
+      unclassified: tab === 'unclassified' ? 0 : Math.max(0, counts.unclassified - seen.unclassified),
+      needs_action: tab === 'needs_action' ? 0 : Math.max(0, counts.needs_action - seen.needs_action),
+      tracked: tab === 'tracked' ? 0 : Math.max(0, counts.tracked - seen.tracked),
+      fyi: tab === 'fyi' ? 0 : Math.max(0, counts.fyi - seen.fyi),
+      ignored: 0,
+    } satisfies Record<Tab, number>
+  }, [counts, seenCounts, tab])
+
+  const setTab = useCallback((next: Tab) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', next)
     router.replace(`/demo/emails?${params.toString()}`, { scroll: false })
-  }
+    setSeenCounts((prev) => ({ ...prev, [next]: counts[next] }))
+  }, [counts, router, searchParams])
 
-  const counts = useMemo(() => {
-    const c: Record<Tab, number> = {
-      unclassified: 0,
-      needs_action: 0,
-      tracked: 0,
-      fyi: 0,
-      ignored: 0,
+  const visible = useMemo(() => {
+    let result = emails.filter((e) => tabOf(e) === tab)
+    if (focusProjectId) result = result.filter((e) => e.projectId === focusProjectId)
+    else if (focusIdentityId) {
+      result = result.filter((e) => getProject(e.projectId)?.identityId === focusIdentityId)
     }
-    for (const e of emails) c[tabOf(e)] += 1
-    return c
-  }, [emails])
-
-  const visible = useMemo(() => emails.filter((e) => tabOf(e) === tab), [emails, tab])
+    if (fromDate) {
+      const from = new Date(`${fromDate}T00:00:00`)
+      result = result.filter((e) => new Date(e.receivedAt) >= from)
+    }
+    if (toDate) {
+      const to = new Date(`${toDate}T23:59:59`)
+      result = result.filter((e) => new Date(e.receivedAt) <= to)
+    }
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      result = result.filter((e) =>
+        [e.subject, e.senderName, e.sender, e.bodyPreview].some((value) => value.toLowerCase().includes(q))
+      )
+    }
+    return [...result].sort((a, b) => {
+      if (sortMode === 'sender') return a.senderName.localeCompare(b.senderName)
+      const diff = new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
+      return sortMode === 'oldest' ? diff : -diff
+    })
+  }, [emails, focusIdentityId, focusProjectId, fromDate, getProject, searchQuery, sortMode, tab, toDate])
 
   const toggleSelect = useCallback(
     (id: string) =>
@@ -202,15 +252,12 @@ function EmailsContent() {
     clearSelection()
   }
 
-  const badge = (n: number, active: boolean) => (
-    <span
-      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-        active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
-      }`}
-    >
-      {n}
-    </span>
-  )
+  const badge = (n: number, bucket: Tab) =>
+    bucket !== 'ignored' && n > 0 ? (
+      <span className="rounded-full bg-critical px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+        +{n}
+      </span>
+    ) : undefined
 
   // Unclassified leads when present — mirrors the real inbox (L610-619).
   const options = [
@@ -219,14 +266,14 @@ function EmailsContent() {
           {
             value: 'unclassified',
             label: 'Unclassified',
-            badge: badge(counts.unclassified, tab === 'unclassified'),
+            badge: badge(newCounts.unclassified, 'unclassified'),
           },
         ]
       : []),
-    { value: 'needs_action', label: 'Needs Action', badge: badge(counts.needs_action, tab === 'needs_action') },
-    { value: 'tracked', label: 'Tracked', badge: badge(counts.tracked, tab === 'tracked') },
-    { value: 'fyi', label: 'FYI', badge: badge(counts.fyi, tab === 'fyi') },
-    { value: 'ignored', label: 'Ignored', badge: badge(counts.ignored, tab === 'ignored') },
+    { value: 'needs_action', label: 'Needs Action', badge: badge(newCounts.needs_action, 'needs_action') },
+    { value: 'tracked', label: 'Tracked', badge: badge(newCounts.tracked, 'tracked') },
+    { value: 'fyi', label: 'FYI', badge: badge(newCounts.fyi, 'fyi') },
+    { value: 'ignored', label: 'Ignored' },
   ]
 
   return (
@@ -238,6 +285,44 @@ function EmailsContent() {
       />
 
       <SegmentedControl value={tab} onChange={(v) => setTab(v as Tab)} options={options} />
+
+      <div className="rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm backdrop-blur">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              placeholder="Search emails..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="border-gray-200 bg-white pl-9"
+            />
+          </div>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600"
+            aria-label="Email from date"
+          />
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs text-gray-600"
+            aria-label="Email to date"
+          />
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600"
+            aria-label="Sort emails"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="sender">Sender A-Z</option>
+          </select>
+        </div>
+      </div>
 
       {/* Batch action bar — only when something is selected. Mirrors real
           emails page L965-1049. */}

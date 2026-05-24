@@ -39,6 +39,7 @@ type DashboardFilters = {
   identityIds?: string[]
   projectIds?: string[]
   view?: DashboardView
+  momentumEnd?: string
   timezoneOffset?: number
 }
 
@@ -54,16 +55,16 @@ const WEEK_MOMENTUM_DAYS = 7
 export type DashboardView = 'today' | 'week' | 'all'
 
 export async function getDashboardSummary(userId: string, filters: DashboardFilters = {}) {
-  const view = filters.view ?? 'all'
+  const view = filters.view ?? 'week'
   const now = new Date()
   const period = getPeriodRange(view, filters.timezoneOffset ?? 0, now)
   const isAllView = period === null
+  const momentumRange = getMomentumRange(view, filters.momentumEnd, filters.timezoneOffset ?? 0, now)
   const baseTaskWhere = buildTaskWhere(userId, filters)
   const baseEmailWhere = await buildEmailWhere(userId, filters)
   const taskWhere = applyTaskPeriod(baseTaskWhere, period, now)
   const emailWhere = applyEmailPeriod(baseEmailWhere, period)
   const momentumDays = view === 'today' ? 1 : view === 'week' ? WEEK_MOMENTUM_DAYS : MOMENTUM_DAYS
-  const momentumStart = startOfUtcDay(addUtcDays(period?.start ?? now, -(momentumDays - 1)))
 
   // Needs Action page (now action-only): high-confidence action emails ready
   // for extraction. Uncertain emails moved to the unified "Unclassified"
@@ -201,18 +202,18 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
       ? Promise.resolve(null)
       : prisma.email.count({ where: { ...baseEmailWhere, ...attentionEmailWhere } }),
     prisma.task.findMany({
-      where: { ...taskWhere, completedAt: { gte: momentumStart } },
+      where: { ...taskWhere, completedAt: { gte: momentumRange.start, lt: momentumRange.end } },
       select: { completedAt: true },
     }),
     prisma.task.findMany({
-      where: { ...taskWhere, createdAt: { gte: momentumStart } },
+      where: { ...taskWhere, createdAt: { gte: momentumRange.start, lt: momentumRange.end } },
       select: { createdAt: true },
     }),
     prisma.email.findMany({
       where: {
         ...emailWhere,
         classification: 'action',
-        ...(period ? { receivedAt: { gte: momentumStart, lt: period.end } } : { receivedAt: { gte: momentumStart } }),
+        receivedAt: { gte: momentumRange.start, lt: momentumRange.end },
       },
       select: { receivedAt: true },
     }),
@@ -280,7 +281,7 @@ export async function getDashboardSummary(userId: string, filters: DashboardFilt
     createdMomentumTasks,
     actionMomentumEmails,
     momentumDays,
-    period?.start,
+    momentumRange.start,
     filters.timezoneOffset ?? 0
   )
   const allTimeStats = buildStats(
@@ -659,6 +660,27 @@ function getPeriodRange(view: DashboardView, timezoneOffset: number, now: Date):
   const start = new Date(localStart.getTime() + timezoneOffset * 60000)
   const end = addUtcDays(start, view === 'week' ? 7 : 1)
   return { start, end }
+}
+
+function getMomentumRange(view: DashboardView, momentumEnd: string | undefined, timezoneOffset: number, now: Date): DateRange {
+  const period = getPeriodRange(view, timezoneOffset, now)
+  if (period) return period
+
+  const endLocal = parseLocalDateKey(momentumEnd) ?? new Date(now.getTime() - timezoneOffset * 60000)
+  const cappedEndLocal = new Date(Math.min(
+    startOfUtcDay(endLocal).getTime(),
+    startOfUtcDay(new Date(now.getTime() - timezoneOffset * 60000)).getTime()
+  ))
+  const localStart = addUtcDays(cappedEndLocal, -(MOMENTUM_DAYS - 1))
+  const start = new Date(localStart.getTime() + timezoneOffset * 60000)
+  const end = new Date(addUtcDays(cappedEndLocal, 1).getTime() + timezoneOffset * 60000)
+  return { start, end }
+}
+
+function parseLocalDateKey(value: string | undefined) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day))
 }
 
 function dueDateConditions(filter: Prisma.DateTimeNullableFilter): Prisma.TaskWhereInput[] {
