@@ -22,7 +22,7 @@ import {
   Mail,
   X, ChevronDown, FolderOpen, Loader2, Zap, EyeOff, Tag,
 } from 'lucide-react'
-import { Suspense, useState, useCallback } from 'react'
+import { Suspense, useState, useCallback, useEffect, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { DateRange } from 'react-day-picker'
 import { ReassignProjectModal } from '@/components/reassign-project-modal'
@@ -57,7 +57,16 @@ function EmailsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const focusIdentityId = searchParams.get('identity') ?? undefined
-  const tab = parseEmailTab(searchParams.get('tab'), searchParams.get('classification'))
+  // tab is mirrored as local state so clicks flip the visual highlight in the
+  // same frame instead of waiting for router.replace → URL sync → re-render.
+  // The URL stays authoritative for back/forward and external links via the
+  // effect below.
+  const urlTab = parseEmailTab(searchParams.get('tab'), searchParams.get('classification'))
+  const [tab, setTab] = useState<Tab>(urlTab)
+  useEffect(() => {
+    setTab(urlTab)
+  }, [urlTab])
+  const [, startTabTransition] = useTransition()
   const [accountFilter, setAccountFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -369,9 +378,10 @@ function EmailsContent() {
         <SegmentedControl
           value={tab}
           onChange={(nextTab) => {
+            setTab(nextTab)
             clearSelection()
             setPage(1)
-            updateEmailUrlFilter({ tab: nextTab })
+            startTabTransition(() => updateEmailUrlFilter({ tab: nextTab }))
           }}
           options={tabs.map(({ key, label }) => ({
             value: key,

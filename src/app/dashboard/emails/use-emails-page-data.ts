@@ -178,8 +178,13 @@ export function useEmailsPageData(input: {
   const unclassifiedCount = tabStateMap.get('unclassified')?.totalCount ?? unclassifiedRes?.data?.count ?? 0
   const pendingCount = emails.filter((email) => email.processingStatus === 'pending').length
 
+  // Keep Unclassified visible if the user is currently on it, even if count
+  // dropped to 0 mid-session (e.g. classification mutation invalidated counts).
+  // Without this guard, the tab disappears while still being the active value,
+  // leaving SegmentedControl with no matching option and no highlight.
+  const showUnclassified = unclassifiedCount > 0 || tab === 'unclassified'
   const tabs: { key: Tab; label: string; count: number }[] = [
-    ...(unclassifiedCount > 0 ? [{ key: 'unclassified' as const, label: 'Unclassified', count: unclassifiedCount }] : []),
+    ...(showUnclassified ? [{ key: 'unclassified' as const, label: 'Unclassified', count: unclassifiedCount }] : []),
     { key: 'needs_action', label: 'Needs Action', count: needsActionCount },
     { key: 'tracked', label: 'Tracked', count: trackedCount },
     { key: 'fyi', label: 'FYI', count: infoCount },

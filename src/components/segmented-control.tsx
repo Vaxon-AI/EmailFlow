@@ -21,6 +21,7 @@ type SegmentedControlProps<T extends string> = {
   onChange: (value: T) => void
   options: SegmentedOption<T>[]
   className?: string
+  disabled?: boolean
 }
 
 export function SegmentedControl<T extends string>({
@@ -28,11 +29,17 @@ export function SegmentedControl<T extends string>({
   onChange,
   options,
   className,
+  disabled,
 }: SegmentedControlProps<T>) {
+  // Fallback so we never render with zero highlighted tabs if `value` falls out
+  // of `options` (e.g. a count-driven tab disappears while it was active).
+  const hasMatch = options.some((o) => o.value === value)
+  const effectiveValue = hasMatch ? value : options[0]?.value
+
   return (
     <div className={cn("inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm transition-colors duration-200", className)}>
       {options.map((option) => {
-        const active = option.value === value
+        const active = option.value === effectiveValue
         const hasTrailing = !!option.trailing
         const showTrailing = active && hasTrailing
 
@@ -40,20 +47,25 @@ export function SegmentedControl<T extends string>({
         // content, since trailing usually contains its own <button> (e.g. a
         // dropdown trigger) and HTML disallows nested buttons.
         const Wrapper = hasTrailing ? "div" : "button"
-        const handleSelect = () => onChange(option.value)
+        const handleSelect = () => {
+          if (disabled) return
+          onChange(option.value)
+        }
         const wrapperProps = hasTrailing
           ? {
               role: "button" as const,
-              tabIndex: 0,
+              tabIndex: disabled ? -1 : 0,
+              "aria-disabled": disabled || undefined,
               onClick: handleSelect,
               onKeyDown: (e: React.KeyboardEvent) => {
+                if (disabled) return
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault()
                   handleSelect()
                 }
               },
             }
-          : { type: "button" as const, onClick: handleSelect }
+          : { type: "button" as const, onClick: handleSelect, disabled }
 
         return (
           <Wrapper
@@ -64,7 +76,8 @@ export function SegmentedControl<T extends string>({
               active
                 ? "translate-y-0 bg-brand-600 text-white shadow-sm hover:bg-brand-700"
                 : "text-gray-500 hover:bg-brand-50 hover:text-brand-700",
-              showTrailing && "pr-1.5"
+              showTrailing && "pr-1.5",
+              disabled && "cursor-not-allowed opacity-60"
             )}
           >
             {option.icon}
