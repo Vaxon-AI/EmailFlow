@@ -1,14 +1,12 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
 import * as emailRepo from '@/repositories/email-repo'
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; emailId: string }> }
-) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/tasks/[id]/emails/[emailId] POST', message: 'Failed to link email' },
+  async (req: NextRequest, { params }: { params: Promise<{ id: string; emailId: string }> }) => {
     const user = await getAuthUser()
     const { id: taskId, emailId } = await params
 
@@ -22,17 +20,12 @@ export async function POST(
     await emailRepo.bulkMarkActioned(user.id, [emailId])
 
     return success({ message: 'Email linked to task' })
-  } catch (err) {
-    console.error('[api/tasks/[id]/emails/[emailId] POST]', err)
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to link email', 500)
-  }
-}
+  },
+)
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; emailId: string }> }
-) {
-  try {
+export const DELETE = defineRoute(
+  { tag: 'api/tasks/[id]/emails/[emailId] DELETE', message: 'Failed to unlink email' },
+  async (req: NextRequest, { params }: { params: Promise<{ id: string; emailId: string }> }) => {
     const user = await getAuthUser()
     const { id: taskId, emailId } = await params
 
@@ -41,8 +34,5 @@ export async function DELETE(
 
     await taskRepo.unlinkTaskFromEmail(emailId, taskId)
     return success({ message: 'Email unlinked from task' })
-  } catch (err) {
-    console.error('[api/tasks/[id]/emails/[emailId]]', err)
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to unlink email', 500)
-  }
-}
+  },
+)

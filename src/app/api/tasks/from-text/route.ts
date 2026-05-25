@@ -1,12 +1,13 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import { extractTask } from '@/ai/skills/extract-task'
 import { scorePriority } from '@/ai/skills/score-priority'
 import { FREE_PASTE_TEXT_LIMIT, getPasteTextRemaining, incrementPasteTextUsed } from '@/lib/quota'
 
-export async function POST(req: NextRequest) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/tasks/from-text POST', message: 'Failed to extract task' },
+  async (req: NextRequest) => {
     const user = await getAuthUser()
 
     const { text } = await req.json()
@@ -65,8 +66,5 @@ export async function POST(req: NextRequest) {
     }
 
     return success({ tasks })
-  } catch (err) {
-    console.error('[api/tasks/from-text POST]', err)
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to extract task', 500)
-  }
-}
+  },
+)

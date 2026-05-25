@@ -1,13 +1,11 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import * as projectContextRepo from '@/repositories/project-context-repo'
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const PATCH = defineRoute(
+  { tag: 'api/projects/[id] PATCH', code: 'INTERNAL', message: 'Failed to rename project' },
+  async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id } = await params
     const { name } = await req.json()
@@ -19,8 +17,5 @@ export async function PATCH(
 
     const updated = await projectContextRepo.confirmProject(id, { name: name.trim() })
     return success(updated)
-  } catch (err) {
-    console.error('[api/projects/[id] PATCH]', err)
-    return errorFromException(err, 'INTERNAL', 'Failed to rename project', 500)
-  }
-}
+  },
+)

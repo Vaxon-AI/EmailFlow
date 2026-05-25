@@ -1,12 +1,10 @@
-import { errorFromException, success, error } from '@/lib/api-helpers'
+import { defineRoute, error, success } from '@/lib/api-helpers'
 import { requireCurrentSessionContext } from '@/lib/auth-sessions'
 import { revokeSessionById } from '@/lib/auth-sessions'
 
-export async function POST(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/sessions/[id]/revoke', code: 'SYNC_FAILED', message: 'Failed to revoke session' },
+  async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
     const context = await requireCurrentSessionContext()
 
     const { id } = await params
@@ -17,8 +15,5 @@ export async function POST(
     }
 
     return success(undefined)
-  } catch (err) {
-    console.error('[api/auth/sessions/[id]/revoke]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to revoke session', 500)
-  }
-}
+  },
+)

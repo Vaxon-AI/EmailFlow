@@ -1,14 +1,15 @@
 import { verify } from 'otplib'
 import { z } from 'zod'
-import { success, errorFromException, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, parseJsonBody, success } from '@/lib/api-helpers'
 
 const verifyTotpSchema = z.object({
   token: z.string().min(1, 'Token and secret are required'),
   secret: z.string().min(1, 'Token and secret are required'),
 })
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/totp/verify', code: 'SYNC_FAILED', message: 'Failed to verify code' },
+  async (req: Request) => {
     const { token, secret } = await parseJsonBody(req, verifyTotpSchema, {
       code: 'VALIDATION_ERROR',
     })
@@ -16,8 +17,5 @@ export async function POST(req: Request) {
     const result = await verify({ token, secret })
 
     return success({ isValid: result.valid })
-  } catch (err) {
-    console.error('[api/auth/totp/verify]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to verify code', 500)
-  }
-}
+  },
+)

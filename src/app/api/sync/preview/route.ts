@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { error, errorFromException, getAuthUser, success } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import { getEmailProvider } from '@/integrations/provider-registry'
 import { getClassifyRemaining } from '@/lib/quota'
 import { listSyncReadyAccounts } from '@/repositories/user-repo'
@@ -14,8 +14,9 @@ import { listSyncReadyAccounts } from '@/repositories/user-repo'
 // (resultSizeEstimate, no body fetch). The actual fetch behavior is unchanged
 // — non-Primary mail still gets stored but skipped by pre-filter, so this
 // number is the AI quota burn estimate, not the total mail count.
-export async function GET(req: Request) {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/sync/preview GET', code: 'SYNC_PREVIEW_FAILED', message: 'Failed to preview sync window' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const url = new URL(req.url)
     const daysParam = url.searchParams.get('days')
@@ -59,7 +60,5 @@ export async function GET(req: Request) {
       quotaRemaining: remaining,
       wouldExceedQuota: remaining !== null && preview.quotaImpactCount > remaining,
     })
-  } catch (err) {
-    return errorFromException(err, 'SYNC_PREVIEW_FAILED', 'Failed to preview sync window', 500)
-  }
-}
+  },
+)

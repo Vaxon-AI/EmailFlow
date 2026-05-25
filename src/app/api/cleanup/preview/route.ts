@@ -5,17 +5,16 @@
  * the authenticated user. Read-only — no emails are modified.
  */
 
-import { getAuthUser, success, errorFromException } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, success } from '@/lib/api-helpers'
 import { previewRetention } from '@/services/retention-service'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/cleanup/preview GET', code: 'PREVIEW_FAILED', message: 'Failed to compute cleanup preview' },
+  async () => {
     const user = await getAuthUser()
     const preview = await previewRetention(user.id)
     return success(preview)
-  } catch (err) {
-    return errorFromException(err, 'PREVIEW_FAILED', 'Failed to compute cleanup preview', 500)
-  }
-}
+  },
+)

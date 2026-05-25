@@ -1,12 +1,10 @@
-import { getAuthUser, errorFromException, error, success } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import * as emailRepo from '@/repositories/email-repo'
 import { createTaskFromClassifiedEmail, processEmail } from '@/workflows'
 
-export async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/emails/[id]/extract-task POST', code: 'EXTRACT_FAILED', message: 'Failed to extract task' },
+  async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id: emailId } = await params
 
@@ -56,7 +54,5 @@ export async function POST(
       deduped: result.dedupedTaskIds?.length ?? 0,
       noCandidates: result.noCandidates ?? false,
     })
-  } catch (err) {
-    return errorFromException(err, 'EXTRACT_FAILED', 'Failed to extract task', 500)
-  }
-}
+  },
+)

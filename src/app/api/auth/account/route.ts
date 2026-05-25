@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { requireCurrentSessionContext } from '@/lib/auth-sessions'
-import { errorFromException, error as apiError, parseJsonBody, success } from '@/lib/api-helpers'
+import { defineRoute, error as apiError, parseJsonBody, success } from '@/lib/api-helpers'
 import { clearSessionCookie } from '@/lib/auth-token'
 import { deleteUserWithQuotaSnapshot } from '@/repositories/user-repo'
 
@@ -24,8 +24,9 @@ const deleteAccountSchema = z.object({
  * so all related records (sessions, emails, tasks, memories, etc.) are removed
  * automatically.
  */
-export async function DELETE(req: Request) {
-  try {
+export const DELETE = defineRoute(
+  { tag: 'api/auth/account', code: 'SYNC_FAILED', message: 'Failed to delete account' },
+  async (req: Request) => {
     const context = await requireCurrentSessionContext()
 
     const { userId } = context.session
@@ -52,8 +53,5 @@ export async function DELETE(req: Request) {
     await clearSessionCookie()
 
     return success(undefined)
-  } catch (err) {
-    console.error('[api/auth/account]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to delete account', 500)
-  }
-}
+  },
+)

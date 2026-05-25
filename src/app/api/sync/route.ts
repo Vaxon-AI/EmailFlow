@@ -1,10 +1,11 @@
 export const dynamic = "force-dynamic"
 import { after } from 'next/server'
-import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, success } from '@/lib/api-helpers'
 import { syncEmailsPhase1, syncEmailsPhase2 } from '@/services/email-sync-service'
 
-export async function POST() {
-  try {
+export const POST = defineRoute(
+  { tag: 'Sync failed', message: 'Email sync failed' },
+  async () => {
     const user = await getAuthUser()
 
     // Phase 1: provider fetch + email storage + updateLastSync.
@@ -33,8 +34,5 @@ export async function POST() {
       // true when new emails were stored and AI will classify them in the background
       processing: phase1.storedEmails.length > 0,
     })
-  } catch (err) {
-    console.error('Sync failed:', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Email sync failed', 500)
-  }
-}
+  },
+)

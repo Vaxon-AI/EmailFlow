@@ -1,14 +1,12 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import * as emailRepo from '@/repositories/email-repo'
 import { sanitizeEmailHtml } from '@/lib/sanitize-email-html'
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/emails/[id] GET', message: 'Failed to load email' },
+  async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id } = await params
     const email = await emailRepo.findEmailById(user.id, id)
@@ -17,16 +15,12 @@ export async function GET(
       ? { ...email, bodyHtml: sanitizeEmailHtml(email.bodyHtml) }
       : email
     return success(safeEmail)
-  } catch (err) {
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to load email', 500)
-  }
-}
+  },
+)
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const PATCH = defineRoute(
+  { tag: 'api/emails/[id] PATCH', message: 'Failed to update email' },
+  async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id } = await params
     const body = await req.json()
@@ -62,7 +56,5 @@ export async function PATCH(
     }
 
     return error('BAD_REQUEST', 'No valid fields to update', 400)
-  } catch (err) {
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to update email', 500)
-  }
-}
+  },
+)

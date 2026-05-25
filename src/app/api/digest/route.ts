@@ -1,12 +1,13 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, success } from '@/lib/api-helpers'
 import { createDailyDigest, createWeeklyDigest, previewDigest } from '@/workflows/digest-pipeline'
 import * as digestRepo from '@/repositories/digest-repo'
 
 // GET /api/digest — get latest digests
-export async function GET(req: NextRequest) {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/digest GET', code: 'DIGEST_FAILED', message: 'Failed to load digests' },
+  async (req: NextRequest) => {
     const user = await getAuthUser()
 
     const url = req.nextUrl
@@ -24,16 +25,14 @@ export async function GET(req: NextRequest) {
       totalPages: Math.ceil(total / limit),
       totalCount: total,
     })
-  } catch (err) {
-    console.error('[api/digest GET]', err)
-    return errorFromException(err, 'DIGEST_FAILED', 'Failed to load digests', 500)
-  }
-}
+  },
+)
 
 // POST /api/digest — generate a new digest
 // Body: { period?: 'daily' | 'weekly' }  — defaults to 'daily'
-export async function POST(req: NextRequest) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/digest POST', code: 'DIGEST_FAILED', message: 'Failed to generate digest' },
+  async (req: NextRequest) => {
     const user = await getAuthUser()
 
     const body = await req.json().catch(() => ({}))
@@ -44,8 +43,5 @@ export async function POST(req: NextRequest) {
       : await createDailyDigest(user.id)
 
     return success(digest)
-  } catch (err) {
-    console.error('[api/digest POST]', err)
-    return errorFromException(err, 'DIGEST_FAILED', 'Failed to generate digest', 500)
-  }
-}
+  },
+)

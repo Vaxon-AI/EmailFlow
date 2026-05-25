@@ -1,13 +1,14 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, success, error } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { isTaskStatus } from '@/lib/task-status'
 import { createManualTask } from '@/services/manual-task-service'
 
-export async function GET(req: NextRequest) {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/tasks GET', message: 'Failed to load tasks' },
+  async (req: NextRequest) => {
     const user = await getAuthUser()
 
     const url = req.nextUrl
@@ -37,18 +38,16 @@ export async function GET(req: NextRequest) {
       totalPages: Math.ceil(total / limit),
       totalCount: total,
     })
-  } catch (err) {
-    console.error('[api/tasks GET]', err)
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to load tasks', 500)
-  }
-}
+  },
+)
 
 function isPriorityFilter(value: string | null): value is 'critical' | 'high' | 'medium' | 'low' {
   return value === 'critical' || value === 'high' || value === 'medium' || value === 'low'
 }
 
-export async function POST(req: NextRequest) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/tasks POST', message: 'Failed to create task' },
+  async (req: NextRequest) => {
     const user = await getAuthUser()
 
     const { title, summary, actionItems, userSetDeadline, startDate, urgency, impact, priorityScore, projectId, source, emailIds } = await req.json()
@@ -77,8 +76,5 @@ export async function POST(req: NextRequest) {
 
     invalidateStatsCache(user.id)
     return success(task)
-  } catch (err) {
-    console.error('[api/tasks POST]', err)
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to create task', 500)
-  }
-}
+  },
+)

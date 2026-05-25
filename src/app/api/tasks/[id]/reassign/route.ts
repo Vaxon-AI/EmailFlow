@@ -1,4 +1,4 @@
-import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import { findTaskOwnedBy, setMatter } from '@/repositories/task-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
 import { z } from 'zod'
@@ -7,11 +7,9 @@ const reassignTaskSchema = z.object({
   projectId: z.string().min(1, 'projectId is required'),
 })
 
-export async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/tasks/reassign', code: 'INTERNAL', message: 'Failed to reassign task' },
+  async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id: taskId } = await params
     const { projectId } = await parseJsonBody(req, reassignTaskSchema)
@@ -24,8 +22,5 @@ export async function POST(
     await setMatter(user.id, taskId, matter.id)
 
     return success({ taskId, matterId: matter.id })
-  } catch (err) {
-    console.error('[api/tasks/reassign]', err)
-    return errorFromException(err, 'INTERNAL', 'Failed to reassign task', 500)
-  }
-}
+  },
+)

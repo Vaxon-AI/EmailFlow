@@ -1,4 +1,4 @@
-import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import { isValidTimezone } from '@/lib/timezone'
 import { updateTimezone } from '@/repositories/user-repo'
 import { z } from 'zod'
@@ -10,8 +10,9 @@ const timezoneSchema = z.object({
   ),
 })
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/settings/timezone POST', code: 'UPDATE_FAILED', message: 'Failed to update timezone' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const { timezone } = await parseJsonBody(req, timezoneSchema, {
       code: 'INVALID_INPUT',
@@ -24,7 +25,5 @@ export async function POST(req: Request) {
     await updateTimezone(user.id, timezone)
 
     return success({ timezone })
-  } catch (err) {
-    return errorFromException(err, 'UPDATE_FAILED', 'Failed to update timezone', 500)
-  }
-}
+  },
+)

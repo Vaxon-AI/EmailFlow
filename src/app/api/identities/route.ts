@@ -1,4 +1,4 @@
-import { errorFromException, getAuthUser, success, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import * as identityRepo from '@/repositories/identity-repo'
 import { z } from 'zod'
 
@@ -7,20 +7,19 @@ const createIdentitySchema = z.object({
   description: z.string().optional(),
 })
 
-export async function GET() {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/identities GET', code: 'INTERNAL', message: 'Failed to load identities' },
+  async () => {
     const user = await getAuthUser()
 
     const identities = await identityRepo.findAllForUser(user.id)
     return success(identities)
-  } catch (err) {
-    console.error('[api/identities GET]', err)
-    return errorFromException(err, 'INTERNAL', 'Failed to load identities', 500)
-  }
-}
+  },
+)
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/identities POST', code: 'INTERNAL', message: 'Failed to create identity' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const { name, description } = await parseJsonBody(req, createIdentitySchema)
 
@@ -29,8 +28,5 @@ export async function POST(req: Request) {
       description: description?.trim() || null,
     })
     return success(identity)
-  } catch (err) {
-    console.error('[api/identities POST]', err)
-    return errorFromException(err, 'INTERNAL', 'Failed to create identity', 500)
-  }
-}
+  },
+)

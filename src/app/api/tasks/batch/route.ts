@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic'
-import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
@@ -11,8 +11,9 @@ const batchTaskSchema = z.object({
   projectId: z.string().optional(),
 })
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/tasks/batch', code: 'INTERNAL', message: 'Batch operation failed' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const { ids, action, projectId } = await parseJsonBody(req, batchTaskSchema)
 
@@ -45,8 +46,5 @@ export async function POST(req: Request) {
 
     invalidateStatsCache(user.id)
     return success({ affected: ids.length })
-  } catch (err) {
-    console.error('[api/tasks/batch]', err)
-    return errorFromException(err, 'INTERNAL', 'Batch operation failed', 500)
-  }
-}
+  },
+)

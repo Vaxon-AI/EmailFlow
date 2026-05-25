@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, success } from '@/lib/api-helpers'
 import { getDashboardSummary } from '@/repositories/dashboard-summary-repo'
 
 const EMPTY_SUMMARY = {
@@ -40,8 +40,9 @@ const EMPTY_SUMMARY = {
   allTime: null,
 }
 
-export async function GET(req: NextRequest) {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/dashboard/summary GET', message: 'Failed to load dashboard summary' },
+  async (req: NextRequest) => {
     const user = await getAuthUser()
     if (!user) return success(EMPTY_SUMMARY)
 
@@ -53,11 +54,8 @@ export async function GET(req: NextRequest) {
       timezoneOffset: parseTimezoneOffset(req.nextUrl.searchParams.get('timezoneOffset')),
     })
     return success(summary)
-  } catch (err) {
-    console.error('[api/dashboard/summary GET]', err)
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to load dashboard summary', 500)
-  }
-}
+  },
+)
 
 function parseView(value: string | null) {
   return value === 'today' || value === 'all' ? value : 'week'

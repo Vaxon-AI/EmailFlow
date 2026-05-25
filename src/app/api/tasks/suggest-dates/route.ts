@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
-import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import { findOwnedById as findProjectOwnedById } from '@/repositories/project-context-repo'
 import { findRecentDatedTasksForProject } from '@/repositories/task-repo'
 import { suggestTaskDates } from '@/ai/skills/suggest-task-dates'
@@ -12,8 +12,9 @@ const suggestDatesSchema = z.object({
   projectId: z.string().optional(),
 })
 
-export async function POST(req: NextRequest) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/tasks/suggest-dates POST', message: 'Failed to suggest dates' },
+  async (req: NextRequest) => {
     const user = await getAuthUser()
 
     if (user.plan === 'free') {
@@ -59,8 +60,5 @@ export async function POST(req: NextRequest) {
     })
 
     return success(result)
-  } catch (err) {
-    console.error('[api/tasks/suggest-dates POST]', err)
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to suggest dates', 500)
-  }
-}
+  },
+)

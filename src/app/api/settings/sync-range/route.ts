@@ -1,4 +1,4 @@
-import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import { setSyncStartDate } from '@/repositories/user-repo'
 import { z } from 'zod'
 
@@ -11,8 +11,9 @@ const syncRangeSchema = z.object({
   customDate: z.string({ message: 'customDate must be an ISO 8601 string' }).optional(),
 })
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/settings/sync-range POST', code: 'UPDATE_FAILED', message: 'Failed to update sync range' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const { days, customDate } = await parseJsonBody(req, syncRangeSchema, {
       code: 'INVALID_INPUT',
@@ -49,7 +50,5 @@ export async function POST(req: Request) {
     await setSyncStartDate(user.id, startDate)
 
     return success({ syncStartDate: startDate })
-  } catch (err) {
-    return errorFromException(err, 'UPDATE_FAILED', 'Failed to update sync range', 500)
-  }
-}
+  },
+)

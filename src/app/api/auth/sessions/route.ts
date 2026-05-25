@@ -1,9 +1,10 @@
-import { errorFromException, success } from '@/lib/api-helpers'
+import { defineRoute, success } from '@/lib/api-helpers'
 import { requireCurrentSessionContext } from '@/lib/auth-sessions'
 import { listActiveSessions } from '@/lib/auth-sessions'
 
-export async function GET() {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/auth/sessions', code: 'SYNC_FAILED', message: 'Failed to load sessions' },
+  async () => {
     const context = await requireCurrentSessionContext()
 
     const sessions = await listActiveSessions(context.user.id)
@@ -14,8 +15,5 @@ export async function GET() {
         isCurrent: session.id === context.session.id,
       })),
     })
-  } catch (err) {
-    console.error('[api/auth/sessions]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to load sessions', 500)
-  }
-}
+  },
+)

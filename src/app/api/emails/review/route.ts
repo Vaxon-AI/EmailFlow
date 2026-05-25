@@ -1,10 +1,11 @@
 import { after } from 'next/server'
-import { getAuthUser, errorFromException, error, success } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import * as emailRepo from '@/repositories/email-repo'
 import { createTaskFromClassifiedEmail } from '@/workflows'
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/emails/review POST', code: 'REVIEW_FAILED', message: 'Failed to process review action' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const body = await req.json()
     const { action, emailIds } = body as { action: 'approve' | 'ignore'; emailIds: string[] }
@@ -34,7 +35,5 @@ export async function POST(req: Request) {
     })
 
     return success({ action, count: emailIds.length })
-  } catch (err) {
-    return errorFromException(err, 'REVIEW_FAILED', 'Failed to process review action', 500)
-  }
-}
+  },
+)

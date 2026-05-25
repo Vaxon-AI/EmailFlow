@@ -1,11 +1,12 @@
 import { NextRequest } from 'next/server'
-import { errorFromException, success, error } from '@/lib/api-helpers'
+import { defineRoute, error, success } from '@/lib/api-helpers'
 import { getEmailProvider } from '@/integrations/provider-registry'
 import { requireCurrentUser } from '@/lib/auth-sessions'
 import { findPasswordHash, findOwnedAccountById } from '@/repositories/user-repo'
 
-export async function POST(req: NextRequest) {
-  try {
+export const POST = defineRoute(
+  { tag: 'google disconnect', code: 'SYNC_FAILED', message: 'Failed to disconnect email account' },
+  async (req: NextRequest) => {
     const user = await requireCurrentUser()
     const { accountId } = await req.json().catch(() => ({ accountId: undefined }))
 
@@ -30,8 +31,5 @@ export async function POST(req: NextRequest) {
     await getEmailProvider(account?.provider ?? 'google').disconnect(user.id, accountId)
 
     return success(undefined)
-  } catch (err) {
-    console.error('[google disconnect]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to disconnect email account', 500)
-  }
-}
+  },
+)

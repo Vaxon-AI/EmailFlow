@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { requireCurrentUser } from '@/lib/auth-sessions'
-import { errorFromException, success, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, parseJsonBody, success } from '@/lib/api-helpers'
 import { verifyStepUp } from '@/lib/step-up-auth'
 
 const stepUpVerifySchema = z.object({
@@ -15,8 +15,9 @@ const stepUpVerifySchema = z.object({
  * Verifies the TOTP code or email OTP and returns a short-lived step-up token.
  * The client must include this token in the subsequent sensitive operation request.
  */
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/step-up/verify', code: 'SYNC_FAILED', message: 'Verification failed' },
+  async (req: Request) => {
     const user = await requireCurrentUser()
 
     const { action, code } = await parseJsonBody(req, stepUpVerifySchema, {
@@ -26,8 +27,5 @@ export async function POST(req: Request) {
     const stepUpToken = await verifyStepUp(user.id, code.trim(), action)
 
     return success({ stepUpToken })
-  } catch (err) {
-    console.error('[api/auth/step-up/verify]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Verification failed', 500)
-  }
-}
+  },
+)

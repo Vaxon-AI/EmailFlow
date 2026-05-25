@@ -1,5 +1,5 @@
 import { after } from 'next/server'
-import { getAuthUser, errorFromException, success, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import { setManualReviewMode } from '@/repositories/user-repo'
 import { findAwaitingReviewIds } from '@/repositories/email-repo'
 import { createTaskFromClassifiedEmail } from '@/workflows'
@@ -9,8 +9,9 @@ const reviewModeSchema = z.object({
   manualReviewMode: z.boolean({ message: 'manualReviewMode must be a boolean' }),
 })
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/settings/review-mode POST', code: 'UPDATE_FAILED', message: 'Failed to update review mode' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const { manualReviewMode } = await parseJsonBody(req, reviewModeSchema, {
       code: 'INVALID_INPUT',
@@ -36,7 +37,5 @@ export async function POST(req: Request) {
     }
 
     return success({ manualReviewMode })
-  } catch (err) {
-    return errorFromException(err, 'UPDATE_FAILED', 'Failed to update review mode', 500)
-  }
-}
+  },
+)

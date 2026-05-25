@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCurrentSessionContext } from '@/lib/auth-sessions'
-import { errorFromException, error } from '@/lib/api-helpers'
+import { defineRoute, error } from '@/lib/api-helpers'
 import { findFullProfile } from '@/repositories/user-repo'
 
 // Note: success responses use a non-standard `user` top-level field instead of
 // the standard success() helper because the frontend (use-auth, settings page)
 // reads `json.user` directly. See src/lib/use-auth.ts:35.
 
-export async function GET(request: NextRequest) {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/auth/me', code: 'SYNC_FAILED', message: 'Failed to get current user' },
+  async (request: NextRequest) => {
     const context = await requireCurrentSessionContext()
     const includeDetails = request.nextUrl.searchParams.get('details') === 'full'
 
@@ -65,8 +66,5 @@ export async function GET(request: NextRequest) {
         currentSessionId: context.session.id,
       },
     })
-  } catch (err) {
-    console.error('[api/auth/me]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to get current user', 500)
-  }
-}
+  },
+)

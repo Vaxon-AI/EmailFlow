@@ -1,4 +1,4 @@
-import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import { countEmailsByThread } from '@/repositories/email-repo'
 import { bulkSetMatter } from '@/repositories/task-repo'
 import { upsertManualMatterAssignment } from '@/repositories/thread-memory-repo'
@@ -12,8 +12,9 @@ const reassignThreadSchema = z.object({
   taskIds: z.array(z.string()).optional(),
 })
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/threads/reassign', code: 'INTERNAL', message: 'Failed to reassign thread' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const {
       threadId,
@@ -52,8 +53,5 @@ export async function POST(req: Request) {
     const affectedTasks = taskIds?.length ?? 0
 
     return success({ affectedEmails, affectedTasks })
-  } catch (err) {
-    console.error('[api/threads/reassign]', err)
-    return errorFromException(err, 'INTERNAL', 'Failed to reassign thread', 500)
-  }
-}
+  },
+)

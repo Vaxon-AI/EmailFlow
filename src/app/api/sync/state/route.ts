@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, success } from '@/lib/api-helpers'
 import { findSyncStateFields } from '@/repositories/user-repo'
 import { classifySyncState } from '@/lib/sync-state'
 
@@ -8,8 +8,9 @@ import { classifySyncState } from '@/lib/sync-state'
 //   fresh  → skip modal, run incremental sync directly
 //   stale  → open the "welcome back" modal with stale-aware presets
 //   never  → first-time setup modal
-export async function GET() {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/sync/state GET', message: 'Failed to load sync state' },
+  async () => {
     const user = await getAuthUser()
     const u = await findSyncStateFields(user.id)
 
@@ -17,8 +18,5 @@ export async function GET() {
       state: classifySyncState(u?.lastSyncAt ?? null),
       syncStartDate: u?.syncStartDate?.toISOString() ?? null,
     })
-  } catch (err) {
-    console.error('[api/sync/state GET]', err)
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to load sync state', 500)
-  }
-}
+  },
+)

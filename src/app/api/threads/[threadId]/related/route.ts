@@ -1,12 +1,10 @@
-import { errorFromException, getAuthUser, success } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, success } from '@/lib/api-helpers'
 import { countEmailsByThread } from '@/repositories/email-repo'
 import { findActiveTasksLinkedToThread } from '@/repositories/task-repo'
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ threadId: string }> }
-) {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/threads/related', code: 'INTERNAL', message: 'Failed to load related items' },
+  async (_req: Request, { params }: { params: Promise<{ threadId: string }> }) => {
     const user = await getAuthUser()
     const { threadId } = await params
 
@@ -30,8 +28,5 @@ export async function GET(
     }))
 
     return success({ threadId, emailCount, tasks: enrichedTasks })
-  } catch (err) {
-    console.error('[api/threads/related]', err)
-    return errorFromException(err, 'INTERNAL', 'Failed to load related items', 500)
-  }
-}
+  },
+)

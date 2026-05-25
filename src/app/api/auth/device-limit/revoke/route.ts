@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { success, error, errorFromException, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, parseJsonBody, success } from '@/lib/api-helpers'
 import { verifyToken } from '@/lib/auth-token'
 import { revokeSessionById } from '@/lib/auth-sessions'
 
@@ -8,8 +8,9 @@ const revokeDeviceSchema = z.object({
   sessionId: z.string().min(1, 'Device limit token and session are required'),
 })
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/device-limit/revoke', code: 'SYNC_FAILED', message: 'Failed to sign out device' },
+  async (req: Request) => {
     const { token, sessionId } = await parseJsonBody(req, revokeDeviceSchema, {
       code: 'VALIDATION_ERROR',
     })
@@ -25,8 +26,5 @@ export async function POST(req: Request) {
     }
 
     return success(undefined)
-  } catch (err) {
-    console.error('[api/auth/device-limit/revoke]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to sign out device', 500)
-  }
-}
+  },
+)

@@ -9,16 +9,14 @@
  *  - The email provider cannot return the message (deleted, token invalid, etc.)
  */
 
-import { getAuthUser, success, error, errorFromException } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import { restoreEmail } from '@/services/retention-service'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/emails/[id]/restore POST', code: 'RESTORE_FAILED', message: 'Failed to restore email' },
+  async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id: emailId } = await params
 
@@ -29,7 +27,5 @@ export async function POST(
     }
 
     return success({ restored: true, emailId: result.emailId })
-  } catch (err) {
-    return errorFromException(err, 'RESTORE_FAILED', 'Failed to restore email', 500)
-  }
-}
+  },
+)

@@ -1,9 +1,10 @@
 import { generateSecret, generateURI } from 'otplib'
 import QRCode from 'qrcode'
-import { success, errorFromException } from '@/lib/api-helpers'
+import { defineRoute, success } from '@/lib/api-helpers'
 
-export async function POST() {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/totp/setup', code: 'SYNC_FAILED', message: 'Failed to generate QR code' },
+  async () => {
     const secret = generateSecret()
 
     const uri = generateURI({
@@ -17,8 +18,5 @@ export async function POST() {
     console.log('SECRET:', secret)
 
     return success({ secret, qrCodeDataUrl })
-  } catch (err) {
-    console.error('[api/auth/totp/setup]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to generate QR code', 500)
-  }
-}
+  },
+)

@@ -4,7 +4,7 @@
  *   Body: { ruleType: 'CONTACT' | 'DOMAIN' | 'LABEL', value: string }
  */
 
-import { getAuthUser, success, error, errorFromException, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import * as retentionRepo from '@/repositories/retention-repo'
 import type { ProtectionRuleType } from '@prisma/client'
 import { z } from 'zod'
@@ -19,30 +19,32 @@ const retentionWhitelistSchema = z.object({
   value: z.string().trim().min(1, 'value is required and must be a non-empty string'),
 })
 
-export async function GET() {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/settings/retention-whitelist GET', code: 'FETCH_FAILED', message: 'Failed to fetch whitelist rules' },
+  async () => {
     const user = await getAuthUser()
     const rules = await retentionRepo.getProtectionRulesWithIds(user.id)
     return success(rules)
-  } catch (err) {
-    return errorFromException(err, 'FETCH_FAILED', 'Failed to fetch whitelist rules', 500)
-  }
-}
+  },
+)
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/settings/retention-whitelist POST', code: 'CREATE_FAILED', message: 'Failed to add whitelist rule' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const { ruleType, value } = await parseJsonBody(req, retentionWhitelistSchema, {
       code: 'INVALID_INPUT',
     })
 
-    const rule = await retentionRepo.addProtectionRule(user.id, ruleType, value)
-    return success(rule)
-  } catch (err) {
-    // Unique constraint violation → duplicate rule
-    if (err instanceof Error && err.message.includes('Unique constraint')) {
-      return error('DUPLICATE_RULE', 'This rule already exists', 409)
+    try {
+      const rule = await retentionRepo.addProtectionRule(user.id, ruleType, value)
+      return success(rule)
+    } catch (err) {
+      // Unique constraint violation → duplicate rule
+      if (err instanceof Error && err.message.includes('Unique constraint')) {
+        return error('DUPLICATE_RULE', 'This rule already exists', 409)
+      }
+      throw err
     }
-    return errorFromException(err, 'CREATE_FAILED', 'Failed to add whitelist rule', 500)
-  }
-}
+  },
+)

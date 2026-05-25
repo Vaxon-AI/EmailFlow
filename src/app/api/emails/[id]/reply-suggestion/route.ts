@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest } from 'next/server'
 import { generateReplyDraft } from '@/ai'
-import { error, errorFromException, getAuthUser, success } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import { getPriorityBand, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import * as emailRepo from '@/repositories/email-repo'
 
@@ -97,11 +97,9 @@ function buildTaskContext(task: LinkedTask) {
   }
 }
 
-export async function POST(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/emails/[id]/reply-suggestion POST', code: 'REPLY_DRAFT_FAILED', message: 'Failed to generate reply draft' },
+  async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id } = await params
     const email = await emailRepo.findEmailById(user.id, id) as EmailWithTasks | null
@@ -134,16 +132,12 @@ export async function POST(
 
     await emailRepo.updateReplyDraft(user.id, id, result.reply, true)
     return success({ reply: result.reply })
-  } catch (err) {
-    return errorFromException(err, 'REPLY_DRAFT_FAILED', 'Failed to generate reply draft', 500)
-  }
-}
+  },
+)
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const PATCH = defineRoute(
+  { tag: 'api/emails/[id]/reply-suggestion PATCH', code: 'REPLY_DRAFT_SAVE_FAILED', message: 'Failed to save reply draft' },
+  async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id } = await params
     const body = await req.json()
@@ -155,7 +149,5 @@ export async function PATCH(
     if (updated.count === 0) return error('NOT_FOUND', 'Email not found', 404)
 
     return success({ reply: draft })
-  } catch (err) {
-    return errorFromException(err, 'REPLY_DRAFT_SAVE_FAILED', 'Failed to save reply draft', 500)
-  }
-}
+  },
+)

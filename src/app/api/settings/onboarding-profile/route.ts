@@ -1,4 +1,4 @@
-import { errorFromException, getAuthUser, success, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import { AppError } from '@/lib/app-errors'
 import * as userPreferenceRepo from '@/repositories/user-preference-repo'
 import {
@@ -19,8 +19,9 @@ const onboardingProfileSchema = z.object({
   focusAreas: z.unknown().optional(),
 })
 
-export async function GET() {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/settings/onboarding-profile GET', code: 'LOAD_FAILED', message: 'Failed to load onboarding profile' },
+  async () => {
     const user = await getAuthUser()
     const pref = await userPreferenceRepo.findByUserId(user.id)
     if (!pref) return success(null)
@@ -30,13 +31,12 @@ export async function GET() {
       focusAreas: pref.focusAreas,
       updatedAt: pref.updatedAt.toISOString(),
     })
-  } catch (err) {
-    return errorFromException(err, 'LOAD_FAILED', 'Failed to load onboarding profile', 500)
-  }
-}
+  },
+)
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/settings/onboarding-profile POST', code: 'UPDATE_FAILED', message: 'Failed to save onboarding profile' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const body = await parseJsonBody(req, onboardingProfileSchema, {
       code: 'INVALID_INPUT',
@@ -55,10 +55,8 @@ export async function POST(req: Request) {
       focusAreas: pref.focusAreas,
       updatedAt: pref.updatedAt.toISOString(),
     })
-  } catch (err) {
-    return errorFromException(err, 'UPDATE_FAILED', 'Failed to save onboarding profile', 500)
-  }
-}
+  },
+)
 
 function sanitize(
   raw: unknown,

@@ -1,11 +1,12 @@
 import { AppError } from '@/lib/app-errors'
-import { errorFromException, success, error } from '@/lib/api-helpers'
+import { defineRoute, error, success } from '@/lib/api-helpers'
 import { hashPassword, verifyPassword } from '@/lib/auth-password'
 import { hashResetToken } from '@/lib/password-reset'
 import { findByTokenHashWithUser, applyResetPassword } from '@/repositories/password-reset-repo'
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/reset-password', code: 'SYNC_FAILED', message: 'Failed to reset password' },
+  async (req: Request) => {
     const { token, newPassword, confirmPassword } = await req.json()
 
     if (!token || !newPassword || !confirmPassword) {
@@ -49,8 +50,5 @@ export async function POST(req: Request) {
     })
 
     return success({ message: 'Password has been reset successfully. You can now sign in.' })
-  } catch (err) {
-    console.error('[api/auth/reset-password]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to reset password', 500)
-  }
-}
+  },
+)

@@ -7,14 +7,15 @@
  * Body: { stepUpToken: string }
  */
 
-import { getAuthUser, success, error, errorFromException } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import { consumeStepUpToken } from '@/lib/step-up-auth'
 import { executeRetention } from '@/services/retention-service'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/cleanup/run POST', code: 'CLEANUP_FAILED', message: 'Failed to run cleanup' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const body = await req.json()
     const { stepUpToken } = body
@@ -27,7 +28,5 @@ export async function POST(req: Request) {
 
     const result = await executeRetention(user.id, 'manual')
     return success(result)
-  } catch (err) {
-    return errorFromException(err, 'CLEANUP_FAILED', 'Failed to run cleanup', 500)
-  }
-}
+  },
+)

@@ -78,3 +78,33 @@ export function errorFromException(
 
   return error(fallbackCode, fallbackMessage, fallbackStatus)
 }
+
+type DefineRouteOptions = {
+  tag: string
+  code?: string
+  message?: string
+  status?: number
+}
+
+// Wraps a route handler with the standard try/catch + console.error +
+// errorFromException pattern used across the API. `tag` is the log prefix
+// (e.g. 'api/tasks GET'); `code`/`message`/`status` are the fallback error
+// values when the thrown error is not an AppError.
+export function defineRoute<TArgs extends unknown[]>(
+  options: DefineRouteOptions,
+  handler: (...args: TArgs) => Promise<NextResponse>,
+): (...args: TArgs) => Promise<NextResponse> {
+  return async (...args: TArgs) => {
+    try {
+      return await handler(...args)
+    } catch (err) {
+      console.error(`[${options.tag}]`, err)
+      return errorFromException(
+        err,
+        options.code ?? 'INTERNAL_ERROR',
+        options.message ?? 'Request failed',
+        options.status ?? 500,
+      )
+    }
+  }
+}

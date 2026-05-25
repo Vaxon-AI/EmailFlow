@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { errorFromException, success, error, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, parseJsonBody, success } from '@/lib/api-helpers'
 import { requireCurrentUser } from '@/lib/auth-sessions'
 import { findTotpEnabled, disableTotp } from '@/repositories/user-repo'
 import { consumeStepUpToken } from '@/lib/step-up-auth'
@@ -19,8 +19,9 @@ const disableTotpSchema = z.object({
  * will ask for a TOTP code — this confirms the user still has access to
  * their authenticator app before removing it.
  */
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/totp/disable', code: 'SYNC_FAILED', message: 'Failed to disable 2FA' },
+  async (req: Request) => {
     const user = await requireCurrentUser()
 
     const { stepUpToken } = await parseJsonBody(req, disableTotpSchema, {
@@ -38,8 +39,5 @@ export async function POST(req: Request) {
     await disableTotp(user.id)
 
     return success(undefined)
-  } catch (err) {
-    console.error('[api/auth/totp/disable]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to disable 2FA', 500)
-  }
-}
+  },
+)

@@ -1,5 +1,5 @@
 import { requireCurrentSessionContext } from '@/lib/auth-sessions'
-import { errorFromException, success, error } from '@/lib/api-helpers'
+import { defineRoute, error, success } from '@/lib/api-helpers'
 import { findPasswordHash, setPasswordHash } from '@/repositories/user-repo'
 import { hashPassword, verifyPassword } from '@/lib/auth-password'
 import { consumeStepUpToken } from '@/lib/step-up-auth'
@@ -18,8 +18,9 @@ import { revokeOtherSessions } from '@/lib/auth-sessions'
  * On success: updates the password and revokes all OTHER active sessions
  * (the current session stays active so the user is not immediately logged out).
  */
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/change-password', code: 'SYNC_FAILED', message: 'Failed to change password' },
+  async (req: Request) => {
     const context = await requireCurrentSessionContext()
 
     const { userId } = context.session
@@ -65,8 +66,5 @@ export async function POST(req: Request) {
     await revokeOtherSessions(userId, context.session.id)
 
     return success(undefined)
-  } catch (err) {
-    console.error('[api/auth/change-password]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to change password', 500)
-  }
-}
+  },
+)

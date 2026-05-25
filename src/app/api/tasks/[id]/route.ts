@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
 import { Prisma } from '@prisma/client'
-import { errorFromException, getAuthUser, success, error } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { isTaskStatus } from '@/lib/task-status'
@@ -18,26 +18,20 @@ type AllowedTaskField =
   | 'checkedActionItems'
   | 'actionItems'
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/tasks/[id] GET', message: 'Failed to load task' },
+  async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id } = await params
     const task = await taskRepo.findTaskById(user.id, id)
     if (!task) return error('NOT_FOUND', 'Task not found', 404)
     return success(task)
-  } catch (err) {
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to load task', 500)
-  }
-}
+  },
+)
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const DELETE = defineRoute(
+  { tag: 'api/tasks/[id] DELETE', message: 'Failed to delete task' },
+  async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id } = await params
     const existing = await taskRepo.findTaskById(user.id, id)
@@ -45,16 +39,12 @@ export async function DELETE(
     await taskRepo.deleteTask(id, user.id)
     invalidateStatsCache(user.id)
     return success({ deleted: true })
-  } catch (err) {
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to delete task', 500)
-  }
-}
+  },
+)
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export const PATCH = defineRoute(
+  { tag: 'api/tasks/[id] PATCH', message: 'Failed to update task' },
+  async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id } = await params
     const body = await req.json()
@@ -142,7 +132,5 @@ export async function PATCH(
     const updated = await taskRepo.updateTask(id, data)
     if (body.status !== undefined) invalidateStatsCache(user.id)
     return success(updated)
-  } catch (err) {
-    return errorFromException(err, 'INTERNAL_ERROR', 'Failed to update task', 500)
-  }
-}
+  },
+)

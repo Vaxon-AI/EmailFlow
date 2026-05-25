@@ -1,7 +1,7 @@
 import { AppError } from '@/lib/app-errors'
 import { getSessionToken, setSessionCookie } from '@/lib/auth-token'
 import { rotateSessionToken, requireSessionToken } from '@/lib/auth-sessions'
-import { errorFromException, success } from '@/lib/api-helpers'
+import { defineRoute, success } from '@/lib/api-helpers'
 
 /**
  * POST /api/auth/refresh
@@ -18,8 +18,9 @@ import { errorFromException, success } from '@/lib/api-helpers'
  * If the old token is replayed after the grace window, auth-sessions.ts treats
  * it as a possible session hijack: revokes all sessions and sends an alert email.
  */
-export async function POST() {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/refresh', code: 'SYNC_FAILED', message: 'Refresh failed' },
+  async () => {
     const oldToken = await getSessionToken()
     if (!oldToken) {
       throw new AppError('UNAUTHORIZED', 'Authentication required.', 401)
@@ -37,8 +38,5 @@ export async function POST() {
     await setSessionCookie(result.newRawToken, context.session.remember)
 
     return success({ rotated: true })
-  } catch (err) {
-    console.error('[api/auth/refresh]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Refresh failed', 500)
-  }
-}
+  },
+)

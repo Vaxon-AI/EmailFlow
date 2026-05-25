@@ -3,7 +3,7 @@
  * POST /api/settings/retention-policy  — update one or more policy fields
  */
 
-import { getAuthUser, success, error, errorFromException, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import * as retentionRepo from '@/repositories/retention-repo'
 import { z } from 'zod'
 
@@ -32,18 +32,18 @@ const retentionPolicySchema = z.object({
     .optional(),
 })
 
-export async function GET() {
-  try {
+export const GET = defineRoute(
+  { tag: 'api/settings/retention-policy GET', code: 'FETCH_FAILED', message: 'Failed to fetch retention policy' },
+  async () => {
     const user = await getAuthUser()
     const policy = await retentionRepo.getRawPolicy(user.id)
     return success(policy)
-  } catch (err) {
-    return errorFromException(err, 'FETCH_FAILED', 'Failed to fetch retention policy', 500)
-  }
-}
+  },
+)
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/settings/retention-policy POST', code: 'UPDATE_FAILED', message: 'Failed to update retention policy' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const updates = await parseJsonBody(req, retentionPolicySchema, {
       code: 'INVALID_INPUT',
@@ -55,7 +55,5 @@ export async function POST(req: Request) {
 
     const policy = await retentionRepo.updatePolicy(user.id, updates)
     return success(policy)
-  } catch (err) {
-    return errorFromException(err, 'UPDATE_FAILED', 'Failed to update retention policy', 500)
-  }
-}
+  },
+)

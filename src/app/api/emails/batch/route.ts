@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { after } from 'next/server'
-import { errorFromException, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import * as emailRepo from '@/repositories/email-repo'
 import { upsertManualMatterAssignment } from '@/repositories/thread-memory-repo'
 import { processEmail } from '@/workflows'
@@ -24,8 +24,9 @@ const batchEmailSchema = z.object({
   bucket: z.string().optional(),
 })
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/emails/batch', code: 'INTERNAL', message: 'Batch operation failed' },
+  async (req: Request) => {
     const user = await getAuthUser()
     const { ids, action, projectId, bucket } = await parseJsonBody(req, batchEmailSchema) as BatchBody
 
@@ -125,8 +126,5 @@ export async function POST(req: Request) {
     }
 
     return error('BAD_REQUEST', `Unknown action: ${action}`, 400)
-  } catch (err) {
-    console.error('[api/emails/batch]', err)
-    return errorFromException(err, 'INTERNAL', 'Batch operation failed', 500)
-  }
-}
+  },
+)

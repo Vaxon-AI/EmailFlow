@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { getAuthUser, success, error, errorFromException } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import { sendPasswordResetEmail } from '@/lib/mailer'
 import { hashResetToken, getTokenTtlMs, RATE_LIMIT_SECONDS } from '@/lib/password-reset'
 import { findByEmail, findById } from '@/repositories/user-repo'
@@ -9,8 +9,9 @@ import {
   createResetToken,
 } from '@/repositories/password-reset-repo'
 
-export async function POST(req: Request) {
-  try {
+export const POST = defineRoute(
+  { tag: 'api/auth/request-password-reset', code: 'SYNC_FAILED', message: 'Failed to send reset email' },
+  async (req: Request) => {
     // Support two modes:
     // 1. Authenticated (logged-in user from Settings) — no body needed
     // 2. Unauthenticated (forgot-password from login page) — pass { email } in body
@@ -76,8 +77,5 @@ export async function POST(req: Request) {
     return sessionUser
       ? success({ message: 'Password reset email sent. Check your inbox.' })
       : genericOk()
-  } catch (err) {
-    console.error('[api/auth/request-password-reset]', err)
-    return errorFromException(err, 'SYNC_FAILED', 'Failed to send reset email', 500)
-  }
-}
+  },
+)
