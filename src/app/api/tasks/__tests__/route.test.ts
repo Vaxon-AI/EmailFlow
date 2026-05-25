@@ -113,6 +113,32 @@ describe('POST /api/tasks', () => {
     expect(mockCreateManualTask).not.toHaveBeenCalled()
   })
 
+  it('returns 400 for malformed JSON', async () => {
+    const req = new NextRequest('http://localhost/api/tasks', {
+      method: 'POST',
+      body: '{',
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(400)
+    expect(mockCreateManualTask).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when the request body is not an object', async () => {
+    const req = new NextRequest('http://localhost/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify('bad-body'),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(400)
+    expect(mockCreateManualTask).not.toHaveBeenCalled()
+  })
+
   it('delegates manual task creation with the normalized payload', async () => {
     const deadline = '2026-05-01T10:00:00.000Z'
     mockCreateManualTask.mockResolvedValue({ id: 'task-1', title: 'Follow up' } as never)
@@ -235,6 +261,22 @@ describe('POST /api/tasks', () => {
       markLinkedEmailsActioned: true,
     }))
     expect(res.status).toBe(200)
+  })
+
+  it('normalizes non-array emailIds to an empty array', async () => {
+    mockCreateManualTask.mockResolvedValue({ id: 'task-1', title: 'Plain' } as never)
+
+    const req = new NextRequest('http://localhost/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Plain', emailIds: 'email-1' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    await POST(req)
+
+    expect(mockCreateManualTask).toHaveBeenCalledWith(expect.objectContaining({
+      emailIds: [],
+    }))
   })
 
   it('skips email linking when emailIds is empty or omitted', async () => {

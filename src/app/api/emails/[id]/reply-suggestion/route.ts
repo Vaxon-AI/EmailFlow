@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest } from 'next/server'
+import { z } from 'zod'
 import { generateReplyDraft } from '@/ai'
-import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
+import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import { getPriorityBand, getPriorityLabel, getTaskStatusLabel } from '@/types'
 import * as emailRepo from '@/repositories/email-repo'
 
@@ -39,6 +40,8 @@ type EmailWithTasks = {
   retentionStatus?: string | null
   taskLinks?: Array<{ task: LinkedTask }>
 }
+
+const saveReplyDraftBodySchema = z.object({}).catchall(z.unknown())
 
 function parseActionItems(raw?: string | null): ChecklistItem[] {
   if (!raw) return []
@@ -97,6 +100,10 @@ function buildTaskContext(task: LinkedTask) {
   }
 }
 
+function normalizeReplyDraft(body: Record<string, unknown>) {
+  return typeof body.reply === 'string' ? body.reply.trim() : ''
+}
+
 export const POST = defineRoute(
   { tag: 'api/emails/[id]/reply-suggestion POST', code: 'REPLY_DRAFT_FAILED', message: 'Failed to generate reply draft' },
   async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -140,8 +147,12 @@ export const PATCH = defineRoute(
   async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const user = await getAuthUser()
     const { id } = await params
-    const body = await req.json()
-    const draft = typeof body.reply === 'string' ? body.reply.trim() : ''
+    const body = await parseJsonBody(req, saveReplyDraftBodySchema, {
+      code: 'BAD_REQUEST',
+      message: 'Invalid request body',
+      status: 400,
+    })
+    const draft = normalizeReplyDraft(body)
     if (!draft) return error('BAD_REQUEST', 'Reply draft cannot be empty', 400)
     if (draft.length > 4000) return error('BAD_REQUEST', 'Reply draft is too long', 400)
 

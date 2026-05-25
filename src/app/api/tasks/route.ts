@@ -1,10 +1,13 @@
 export const dynamic = "force-dynamic"
 import { NextRequest } from 'next/server'
-import { defineRoute, getAuthUser, success, error } from '@/lib/api-helpers'
+import { z } from 'zod'
+import { defineRoute, getAuthUser, success, error, parseJsonBody } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { isTaskStatus } from '@/lib/task-status'
 import { createManualTask } from '@/services/manual-task-service'
+
+const createTaskBodySchema = z.object({}).catchall(z.unknown())
 
 export const GET = defineRoute(
   { tag: 'api/tasks GET', message: 'Failed to load tasks' },
@@ -45,34 +48,44 @@ function isPriorityFilter(value: string | null): value is 'critical' | 'high' | 
   return value === 'critical' || value === 'high' || value === 'medium' || value === 'low'
 }
 
+function buildCreateTaskInput(
+  userId: string,
+  body: Record<string, unknown>,
+) {
+  return {
+    userId,
+    title: body.title as string,
+    summary: body.summary as string | undefined,
+    actionItems: body.actionItems as string | undefined,
+    userSetDeadline: body.userSetDeadline as string | undefined,
+    startDate: body.startDate as string | undefined,
+    urgency: body.urgency as number | undefined,
+    impact: body.impact as number | undefined,
+    priorityScore: body.priorityScore as number | undefined,
+    projectId: body.projectId as string | undefined,
+    source: (body.source as string | undefined) ?? 'manual',
+    emailIds: Array.isArray(body.emailIds) ? body.emailIds : [],
+    markLinkedEmailsActioned: true,
+    emptyActionItemsValue: '[]',
+  }
+}
+
 export const POST = defineRoute(
   { tag: 'api/tasks POST', message: 'Failed to create task' },
   async (req: NextRequest) => {
     const user = await getAuthUser()
 
-    const { title, summary, actionItems, userSetDeadline, startDate, urgency, impact, priorityScore, projectId, source, emailIds } = await req.json()
-    const taskSource = source ?? 'manual'
+    const body = await parseJsonBody(req, createTaskBodySchema, {
+      code: 'BAD_REQUEST',
+      message: 'Invalid request body',
+      status: 400,
+    })
 
-    if (!title) {
+    if (!body.title) {
       return error('BAD_REQUEST', 'Title is required', 400)
     }
 
-    const task = await createManualTask({
-      userId: user.id,
-      title,
-      summary,
-      actionItems,
-      userSetDeadline,
-      startDate,
-      urgency,
-      impact,
-      priorityScore,
-      projectId,
-      source: taskSource,
-      emailIds: Array.isArray(emailIds) ? emailIds : [],
-      markLinkedEmailsActioned: true,
-      emptyActionItemsValue: '[]',
-    })
+    const task = await createManualTask(buildCreateTaskInput(user.id, body))
 
     invalidateStatsCache(user.id)
     return success(task)

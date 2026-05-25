@@ -135,6 +135,32 @@ describe('PATCH /api/emails/[id]/reply-suggestion', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 400 for malformed JSON', async () => {
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: '{',
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'email-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(mockUpdateReplyDraft).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when the request body is not an object', async () => {
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: JSON.stringify('bad-body'),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'email-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(mockUpdateReplyDraft).not.toHaveBeenCalled()
+  })
+
   it('returns 400 when reply exceeds 4000 characters', async () => {
     const req = new NextRequest('http://localhost', {
       method: 'PATCH',
@@ -161,6 +187,20 @@ describe('PATCH /api/emails/[id]/reply-suggestion', () => {
     expect(mockUpdateReplyDraft).toHaveBeenCalledWith('user-1', 'email-1', 'I will get back to you soon.')
     expect(res.status).toBe(200)
     expect((await res.json()).data.reply).toBe('I will get back to you soon.')
+  })
+
+  it('trims reply draft before saving', async () => {
+    mockUpdateReplyDraft.mockResolvedValue({ count: 1 } as never)
+
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: JSON.stringify({ reply: '  I will get back to you soon.  ' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    await PATCH(req, { params: Promise.resolve({ id: 'email-1' }) })
+
+    expect(mockUpdateReplyDraft).toHaveBeenCalledWith('user-1', 'email-1', 'I will get back to you soon.')
   })
 
   it('returns 404 when email does not exist', async () => {

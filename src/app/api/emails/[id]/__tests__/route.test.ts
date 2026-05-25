@@ -99,6 +99,36 @@ describe('PATCH /api/emails/[id]', () => {
     expect((await res.json()).data.classification).toBe('ignore')
   })
 
+  it('returns 400 for malformed JSON', async () => {
+    mockFindEmailById.mockResolvedValue(STORED_EMAIL as never)
+
+    const req = new NextRequest('http://localhost/api/emails/email-1', {
+      method: 'PATCH',
+      body: '{',
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'email-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when the request body is not an object', async () => {
+    mockFindEmailById.mockResolvedValue(STORED_EMAIL as never)
+
+    const req = new NextRequest('http://localhost/api/emails/email-1', {
+      method: 'PATCH',
+      body: JSON.stringify('bad-body'),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'email-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
+  })
+
   it('returns 400 when no valid fields are provided', async () => {
     mockFindEmailById.mockResolvedValue(STORED_EMAIL as never)
 
@@ -175,6 +205,21 @@ describe('PATCH /api/emails/[id]', () => {
 
     expect(mockSetEmailBucket).toHaveBeenCalledWith('email-1', 'fyi')
     expect(mockUpdateClassification).not.toHaveBeenCalled()
+  })
+
+  it('rejects unknown legacy classification values', async () => {
+    mockFindEmailById.mockResolvedValue(STORED_EMAIL as never)
+
+    const req = new NextRequest('http://localhost/api/emails/email-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ classification: 'spam' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'email-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
   })
 })
 

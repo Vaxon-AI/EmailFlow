@@ -137,6 +137,32 @@ describe('PATCH /api/tasks/[id]', () => {
     )
   })
 
+  it('returns 400 for malformed JSON', async () => {
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: '{',
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'task-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(mockUpdateTask).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when the request body is not an object', async () => {
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: JSON.stringify('bad-body'),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'task-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(mockUpdateTask).not.toHaveBeenCalled()
+  })
+
   it('sets activeAt when status changes to active', async () => {
     const req = new NextRequest('http://localhost', {
       method: 'PATCH',
@@ -219,6 +245,21 @@ describe('PATCH /api/tasks/[id]', () => {
     expect(mockUpdateTask).toHaveBeenCalledWith(
       'task-1',
       expect.objectContaining({ urgency: 5, impact: 4, priorityScore: 20 })
+    )
+  })
+
+  it('recalculates priorityScore when only urgency changes using existing impact', async () => {
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: JSON.stringify({ urgency: 5 }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    await PATCH(req, { params: Promise.resolve({ id: 'task-1' }) })
+
+    expect(mockUpdateTask).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({ urgency: 5, priorityScore: 20 })
     )
   })
 
