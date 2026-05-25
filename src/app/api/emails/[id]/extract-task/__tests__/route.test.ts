@@ -31,8 +31,15 @@ vi.mock('@/workflows', () => ({
   processEmail: vi.fn(),
 }))
 
+vi.mock('@/lib/quota', () => ({
+  FREE_EXTRACT_LIMIT: 10,
+  getExtractRemaining: vi.fn(),
+  incrementExtractUsed: vi.fn(),
+}))
+
 import { getAuthUser } from '@/lib/api-helpers'
 import * as emailRepo from '@/repositories/email-repo'
+import { getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 import { createTaskFromClassifiedEmail, processEmail } from '@/workflows'
 import { POST } from '../route'
 
@@ -42,6 +49,8 @@ const mockSetEmailBucket = vi.mocked(emailRepo.setEmailBucket)
 const mockRestoreAwaitingReview = vi.mocked(emailRepo.restoreAwaitingReview)
 const mockCreateTaskFromClassifiedEmail = vi.mocked(createTaskFromClassifiedEmail)
 const mockProcessEmail = vi.mocked(processEmail)
+const mockGetExtractRemaining = vi.mocked(getExtractRemaining)
+const mockIncrementExtractUsed = vi.mocked(incrementExtractUsed)
 
 function makeEmail(overrides: Record<string, unknown> = {}) {
   return {
@@ -77,11 +86,13 @@ function makePipelineResult(overrides: Record<string, unknown> = {}) {
 describe('POST /api/emails/[id]/extract-task', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetAuthUser.mockResolvedValue({ id: 'user-1' } as never)
+    mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'pro' } as never)
     mockSetEmailBucket.mockResolvedValue({} as never)
     mockRestoreAwaitingReview.mockResolvedValue({} as never)
     mockCreateTaskFromClassifiedEmail.mockResolvedValue(makePipelineResult() as never)
     mockProcessEmail.mockResolvedValue(makePipelineResult() as never)
+    mockGetExtractRemaining.mockResolvedValue(Infinity)
+    mockIncrementExtractUsed.mockResolvedValue(undefined)
     afterMock.mockImplementation((callback: () => void | Promise<void>) => {
       void callback()
     })
@@ -217,6 +228,109 @@ describe('POST /api/emails/[id]/extract-task', () => {
     expect(res.status).toBe(400)
     expect(mockProcessEmail).not.toHaveBeenCalled()
     expect(mockSetEmailBucket).not.toHaveBeenCalled()
+  })
+
+  describe('quota tracking for free users', () => {
+    it('increments extractUsed after a successful extraction', async () => {
+      mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'free' } as never)
+      mockFindEmailById.mockResolvedValue(makeEmail() as never)
+      mockProcessEmail.mockResolvedValue(
+        makePipelineResult({ taskIds: ['task-1'], createdTaskIds: ['task-1'], taskCreated: true }) as never
+      )
+
+      const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+        params: Promise.resolve({ id: 'email-1' }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(mockIncrementExtractUsed).toHaveBeenCalledWith('user-1')
+    })
+
+    it('increments extractUsed when the pipeline dedupes onto an existing task', async () => {
+      mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'free' } as never)
+      mockFindEmailById.mockResolvedValue(makeEmail() as never)
+      mockProcessEmail.mockResolvedValue(
+        makePipelineResult({ taskIds: ['task-1'], dedupedTaskIds: ['task-1'] }) as never
+      )
+
+      const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+        params: Promise.resolve({ id: 'email-1' }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(mockIncrementExtractUsed).toHaveBeenCalledWith('user-1')
+    })
+
+    it('does not increment when the pipeline reports no candidates', async () => {
+      mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'free' } as never)
+      mockFindEmailById.mockResolvedValue(makeEmail() as never)
+      mockProcessEmail.mockResolvedValue(makePipelineResult({ noCandidates: true }) as never)
+
+      const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+        params: Promise.resolve({ id: 'email-1' }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(mockIncrementExtractUsed).not.toHaveBeenCalled()
+    })
+
+    it('returns 402 when the free quota is exhausted', async () => {
+      mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'free' } as never)
+      mockFindEmailById.mockResolvedValue(makeEmail() as never)
+      mockGetExtractRemaining.mockResolvedValue(0)
+
+      const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+        params: Promise.resolve({ id: 'email-1' }),
+      })
+
+      expect(res.status).toBe(402)
+      expect(mockProcessEmail).not.toHaveBeenCalled()
+      expect(mockIncrementExtractUsed).not.toHaveBeenCalled()
+    })
+
+    it('increments extractUsed on the awaitingReview path when a task is created', async () => {
+      mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'free' } as never)
+      mockFindEmailById.mockResolvedValue(makeEmail({ awaitingReview: true }) as never)
+      mockCreateTaskFromClassifiedEmail.mockResolvedValue(
+        makePipelineResult({ taskIds: ['task-1'], createdTaskIds: ['task-1'], taskCreated: true }) as never
+      )
+
+      const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+        params: Promise.resolve({ id: 'email-1' }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(mockIncrementExtractUsed).toHaveBeenCalledWith('user-1')
+    })
+
+    it('does not increment on the awaitingReview alreadyClaimed race', async () => {
+      mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'free' } as never)
+      mockFindEmailById.mockResolvedValue(makeEmail({ awaitingReview: true }) as never)
+      mockCreateTaskFromClassifiedEmail.mockResolvedValue(null as never)
+
+      const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+        params: Promise.resolve({ id: 'email-1' }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(mockIncrementExtractUsed).not.toHaveBeenCalled()
+    })
+
+    it('does not increment for pro users', async () => {
+      mockGetAuthUser.mockResolvedValue({ id: 'user-1', plan: 'pro' } as never)
+      mockFindEmailById.mockResolvedValue(makeEmail() as never)
+      mockProcessEmail.mockResolvedValue(
+        makePipelineResult({ taskIds: ['task-1'], createdTaskIds: ['task-1'], taskCreated: true }) as never
+      )
+
+      const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+        params: Promise.resolve({ id: 'email-1' }),
+      })
+
+      expect(res.status).toBe(200)
+      expect(mockGetExtractRemaining).not.toHaveBeenCalled()
+      expect(mockIncrementExtractUsed).not.toHaveBeenCalled()
+    })
   })
 
   it('reprocesses when an active task is already linked so workflow can dedupe', async () => {

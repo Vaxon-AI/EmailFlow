@@ -1,5 +1,6 @@
 import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import * as emailRepo from '@/repositories/email-repo'
+import { FREE_EXTRACT_LIMIT, getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 import { createTaskFromClassifiedEmail, processEmail } from '@/workflows'
 
 export const POST = defineRoute(
@@ -13,6 +14,13 @@ export const POST = defineRoute(
     const canExtract = email.classification === 'action' || email.classification === 'uncertain' || !email.classification
     if (!canExtract) {
       return error('INVALID_STATE', 'Only Needs Action or Unclassified emails can be extracted into tasks', 400)
+    }
+
+    if (user.plan === 'free') {
+      const remaining = await getExtractRemaining(user.id)
+      if (remaining <= 0) {
+        return error('QUOTA_EXCEEDED', `Free plan limit of ${FREE_EXTRACT_LIMIT} task extractions per month reached. Upgrade to Pro for unlimited access.`, 402)
+      }
     }
 
     // Extraction first: only mark the email as tracked if the pipeline
@@ -33,6 +41,9 @@ export const POST = defineRoute(
         // The atomic claim flipped awaitingReview to false; put it back so the
         // email stays in the review queue exactly as before the click.
         await emailRepo.restoreAwaitingReview(emailId)
+      }
+      if (user.plan === 'free' && (created > 0 || deduped > 0)) {
+        await incrementExtractUsed(user.id)
       }
       return success({
         created,
@@ -55,9 +66,15 @@ export const POST = defineRoute(
       forceAction: true,
     })
 
+    const created = result.createdTaskIds?.length ?? 0
+    const deduped = result.dedupedTaskIds?.length ?? 0
+    if (user.plan === 'free' && (created > 0 || deduped > 0)) {
+      await incrementExtractUsed(user.id)
+    }
+
     return success({
-      created: result.createdTaskIds?.length ?? 0,
-      deduped: result.dedupedTaskIds?.length ?? 0,
+      created,
+      deduped,
       noCandidates: result.noCandidates ?? false,
     })
   },
