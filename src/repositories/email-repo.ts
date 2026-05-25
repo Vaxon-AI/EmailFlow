@@ -716,7 +716,6 @@ export async function findEmailForPipelineById(userId: string, emailId: string) 
       labels: true,
       threadId: true,
       awaitingReview: true,
-      taskStatus: true,
     },
   })
 }

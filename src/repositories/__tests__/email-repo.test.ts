@@ -615,7 +615,6 @@ describe('findEmailForPipelineById', () => {
         labels: true,
         threadId: true,
         awaitingReview: true,
-        taskStatus: true,
       },
     })
   })

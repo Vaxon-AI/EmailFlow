@@ -13,6 +13,7 @@ import type { MatterMemory } from '@/repositories/matter-memory-repo'
 import type { UserIdentity } from '@/repositories/identity-repo'
 import type { ProjectContext } from '@/repositories/project-context-repo'
 import type { TaskCandidate } from '@/ai'
+import type { ClassificationResult } from '@/ai'
 import { prisma } from '@/lib/prisma'
 
 // ============================================================
@@ -87,20 +88,12 @@ type SavedClassificationState = {
 }
 
 type ClassificationStageResult = {
-  classification: {
-    category: string
-    confidence: number
-    reasoning: string
-    isWorkRelated: boolean
-  }
+  classification: ClassificationResult
   shouldReturn: boolean
   result?: PipelineResult
 }
 
-function saveClassificationState(state: SavedClassificationState, classification: PipelineResult | {
-  category: string
-  confidence: number
-}) {
+function saveClassificationState(state: SavedClassificationState, classification: ClassificationResult) {
   state.saved = true
   state.category = classification.category
   state.confidence = classification.confidence
@@ -140,12 +133,7 @@ function buildDedupedTaskResult(
 
 async function persistClassificationStage(args: {
   email: ProcessEmailInput
-  classification: {
-    category: string
-    confidence: number
-    reasoning: string
-    isWorkRelated: boolean
-  }
+  classification: ClassificationResult
   savedClassification: SavedClassificationState
 }): Promise<ClassificationStageResult> {
   const { email, classification, savedClassification } = args
@@ -529,7 +517,7 @@ async function stepClassify(
     bodyFull: string | null
   },
   memoryContext: string
-) {
+): Promise<ClassificationResult> {
   const rawBody = email.bodyFull || email.bodyPreview
   const cleanedBody = prepareForClassification(rawBody)
 
@@ -814,8 +802,9 @@ async function linkEmailToTask(taskId: string, emailId: string, relationship = '
 async function updateSenderMemory(
   userId: string,
   sender: string,
-  category: 'action' | 'awareness' | 'ignore',
+  category: 'action' | 'awareness' | 'ignore' | 'uncertain',
 ) {
+  if (category === 'uncertain') return
   await senderMemoryRepo.incrementSenderMemory(userId, sender, category)
 }
 
@@ -866,7 +855,7 @@ export async function processEmail(
   )
 
   // ── 3. Classify ────────────────────────────────────────────
-  const classification = email.forceAction
+  const classification: ClassificationResult = email.forceAction
     ? {
         category: 'action',
         confidence: 1,

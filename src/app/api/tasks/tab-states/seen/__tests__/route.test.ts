@@ -36,7 +36,7 @@ describe('POST /api/tasks/tab-states/seen', () => {
   })
 
   it('returns ok when the user is not authenticated', async () => {
-    mockGetAuthUser.mockResolvedValue(null)
+    mockGetAuthUser.mockResolvedValue(null as never)
 
     const res = await POST(postRequest({ bucket: 'active' }))
 
