@@ -35,7 +35,7 @@ export function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string |
     return {
       exactPreset,
       label: exactPreset ? `Last ${exactPreset} days` : `Custom range: ${days} days`,
-      helper: `Sync starts from ${startDate.toLocaleDateString()}.`,
+      helper: `Sync starts from ${startDate.toLocaleDateString('en-US')}.`,
     }
   })()
 
@@ -121,7 +121,7 @@ export function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string |
               <div className="border-t border-gray-100 bg-brand-50/40 px-4 py-3">
                 <p className="text-xs font-medium text-gray-900">
                   {pendingDate
-                    ? `Selected start date: ${pendingDate.toLocaleDateString()}`
+                    ? `Selected start date: ${pendingDate.toLocaleDateString('en-US')}`
                     : 'Pick a start date to preview the next sync window.'}
                 </p>
                 <p className="mt-1 text-xs text-brand-700/80">

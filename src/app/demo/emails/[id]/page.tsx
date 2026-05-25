@@ -518,7 +518,7 @@ export default function DemoEmailDetailPage() {
                   <div className="flex justify-between">
                     <dt className="text-gray-400">Received</dt>
                     <dd className="font-medium text-gray-700">
-                      {new Date(email.receivedAt).toLocaleDateString()}
+                      {new Date(email.receivedAt).toLocaleDateString('en-US')}
                     </dd>
                   </div>
                   <div className="flex justify-between">

@@ -360,8 +360,8 @@ function TasksContent() {
         <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-2.5 text-sm">
           <span className="text-brand-700">
             Showing tasks from{' '}
-            <strong>{dateFilter.from?.toLocaleDateString() || '—'}</strong>
-            {dateFilter.to ? <> to <strong>{dateFilter.to.toLocaleDateString()}</strong></> : null}
+            <strong>{dateFilter.from?.toLocaleDateString('en-US') || '—'}</strong>
+            {dateFilter.to ? <> to <strong>{dateFilter.to.toLocaleDateString('en-US')}</strong></> : null}
           </span>
           <button
             type="button"

@@ -109,9 +109,9 @@ export function LinkAccountCard({
                         </div>
                         <p className="text-xs text-gray-400">
                           {reauthRequired
-                            ? `Last valid connection: ${account.reauthAt || providerReauthAt ? new Date(account.reauthAt || providerReauthAt || '').toLocaleString() : 'unknown'}`
+                            ? `Last valid connection: ${account.reauthAt || providerReauthAt ? new Date(account.reauthAt || providerReauthAt || '').toLocaleString('en-US') : 'unknown'}`
                             : syncedAt
-                              ? `Last synced ${new Date(syncedAt).toLocaleString()}`
+                              ? `Last synced ${new Date(syncedAt).toLocaleString('en-US')}`
                               : 'Connection is ready. Your next sync will use the current window below.'}
                         </p>
                       </div>

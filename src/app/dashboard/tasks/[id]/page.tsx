@@ -1276,13 +1276,13 @@ export default function TaskDetailPage() {
                 {startDate && (
                   <div className="flex justify-between">
                     <dt className="text-gray-400">Start</dt>
-                    <dd className="font-medium text-gray-700">{new Date(startDate).toLocaleDateString()}</dd>
+                    <dd className="font-medium text-gray-700">{new Date(startDate).toLocaleDateString('en-US')}</dd>
                   </div>
                 )}
                 {deadline && (
                   <div className="flex justify-between">
                     <dt className="text-gray-400">Due</dt>
-                    <dd className="font-medium text-gray-700">{new Date(deadline).toLocaleDateString()}</dd>
+                    <dd className="font-medium text-gray-700">{new Date(deadline).toLocaleDateString('en-US')}</dd>
                   </div>
                 )}
                 {scheduleDuration && (
@@ -1293,7 +1293,7 @@ export default function TaskDetailPage() {
                 )}
                 <div className="flex justify-between">
                   <dt className="text-gray-400">Created</dt>
-                  <dd className="font-medium text-gray-700">{new Date(task.createdAt).toLocaleDateString()}</dd>
+                  <dd className="font-medium text-gray-700">{new Date(task.createdAt).toLocaleDateString('en-US')}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-400">Source emails</dt>

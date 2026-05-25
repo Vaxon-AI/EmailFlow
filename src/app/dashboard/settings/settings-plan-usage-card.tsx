@@ -132,7 +132,7 @@ export function SettingsPlanUsageCard({ plan, quota }: SettingsPlanUsageCardProp
               )}
               <p className="text-xs text-gray-400">
                 Resets on{' '}
-                {new Date(quota.classify.resetAt).toLocaleDateString(undefined, {
+                {new Date(quota.classify.resetAt).toLocaleDateString('en-US', {
                   month: 'long',
                   day: 'numeric',
                   year: 'numeric',

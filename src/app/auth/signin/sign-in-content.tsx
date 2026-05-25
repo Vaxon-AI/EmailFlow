@@ -162,7 +162,7 @@ export function SignInContent() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-gray-900">{device.deviceName || 'Unknown device'}</p>
                     <p className="truncate text-xs text-gray-500">{[device.browser, device.os].filter(Boolean).join(' · ') || 'Unknown environment'}</p>
-                    <p className="text-[11px] text-gray-400">Last active {new Date(device.lastActiveAt).toLocaleString()}</p>
+                    <p className="text-[11px] text-gray-400">Last active {new Date(device.lastActiveAt).toLocaleString('en-US')}</p>
                   </div>
                   {revokingDeviceId === device.id ? <Loader2 className="h-4 w-4 animate-spin text-brand-600" /> : null}
                 </button>

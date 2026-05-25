@@ -631,11 +631,11 @@ export default function DemoTaskDetailPage() {
                   <Detail label="Urgency" value={`${task.urgency} / 5`} />
                   <Detail label="Impact" value={`${task.impact} / 5`} />
                   {task.startDate && (
-                    <Detail label="Start" value={new Date(task.startDate).toLocaleDateString()} />
+                    <Detail label="Start" value={new Date(task.startDate).toLocaleDateString('en-US')} />
                   )}
-                  {deadline && <Detail label="Due" value={new Date(deadline).toLocaleDateString()} />}
+                  {deadline && <Detail label="Due" value={new Date(deadline).toLocaleDateString('en-US')} />}
                   {duration && <Detail label="Duration" value={duration} />}
-                  <Detail label="Created" value={new Date(task.createdAt).toLocaleDateString()} />
+                  <Detail label="Created" value={new Date(task.createdAt).toLocaleDateString('en-US')} />
                   <Detail label="Source" value={task.source === 'email' ? 'From an email' : 'Created manually'} />
                 </dl>
               </CardContent>

@@ -595,7 +595,7 @@ function DashboardContent() {
                     <div className="ml-3 flex items-center gap-2">
                       {(task.explicitDeadline || task.inferredDeadline || task.userSetDeadline) && (
                         <span className="text-xs text-gray-400">
-                          Due {new Date(task.userSetDeadline ?? task.explicitDeadline ?? task.inferredDeadline ?? '').toLocaleDateString()}
+                          Due {new Date(task.userSetDeadline ?? task.explicitDeadline ?? task.inferredDeadline ?? '').toLocaleDateString('en-US')}
                         </span>
                       )}
                       <Badge variant="outline" className={getPriorityColor(band)}>
