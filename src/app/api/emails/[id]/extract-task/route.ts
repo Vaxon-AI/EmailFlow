@@ -3,6 +3,24 @@ import * as emailRepo from '@/repositories/email-repo'
 import { FREE_EXTRACT_LIMIT, getExtractRemaining, incrementExtractUsed } from '@/lib/quota'
 import { createTaskFromClassifiedEmail, processEmail } from '@/workflows'
 
+function summarizeExtractionResult(result: {
+  createdTaskIds?: string[]
+  dedupedTaskIds?: string[]
+  noCandidates?: boolean
+}) {
+  return {
+    created: result.createdTaskIds?.length ?? 0,
+    deduped: result.dedupedTaskIds?.length ?? 0,
+    noCandidates: result.noCandidates ?? false,
+  }
+}
+
+async function incrementUsageIfNeeded(userId: string, plan: string, summary: { created: number; deduped: number }) {
+  if (plan === 'free' && (summary.created > 0 || summary.deduped > 0)) {
+    await incrementExtractUsed(userId)
+  }
+}
+
 export const POST = defineRoute(
   { tag: 'api/emails/[id]/extract-task POST', code: 'EXTRACT_FAILED', message: 'Failed to extract task' },
   async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
@@ -35,21 +53,14 @@ export const POST = defineRoute(
         // Another concurrent click already claimed it; nothing for us to do.
         return success({ created: 0, deduped: 0, noCandidates: false, alreadyClaimed: true })
       }
-      const created = result.createdTaskIds?.length ?? 0
-      const deduped = result.dedupedTaskIds?.length ?? 0
-      if (created === 0 && deduped === 0) {
+      const summary = summarizeExtractionResult(result)
+      if (summary.created === 0 && summary.deduped === 0) {
         // The atomic claim flipped awaitingReview to false; put it back so the
         // email stays in the review queue exactly as before the click.
         await emailRepo.restoreAwaitingReview(emailId)
       }
-      if (user.plan === 'free' && (created > 0 || deduped > 0)) {
-        await incrementExtractUsed(user.id)
-      }
-      return success({
-        created,
-        deduped,
-        noCandidates: result.noCandidates ?? false,
-      })
+      await incrementUsageIfNeeded(user.id, user.plan, summary)
+      return success(summary)
     }
 
     const result = await processEmail(user.id, {
@@ -66,16 +77,9 @@ export const POST = defineRoute(
       forceAction: true,
     })
 
-    const created = result.createdTaskIds?.length ?? 0
-    const deduped = result.dedupedTaskIds?.length ?? 0
-    if (user.plan === 'free' && (created > 0 || deduped > 0)) {
-      await incrementExtractUsed(user.id)
-    }
+    const summary = summarizeExtractionResult(result)
+    await incrementUsageIfNeeded(user.id, user.plan, summary)
 
-    return success({
-      created,
-      deduped,
-      noCandidates: result.noCandidates ?? false,
-    })
+    return success(summary)
   },
 )

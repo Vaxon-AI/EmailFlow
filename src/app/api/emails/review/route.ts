@@ -1,22 +1,25 @@
 import { after } from 'next/server'
-import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
+import { z } from 'zod'
+import { defineRoute, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import * as emailRepo from '@/repositories/email-repo'
 import { createTaskFromClassifiedEmail } from '@/workflows'
+
+const reviewActionSchema = z.object({
+  action: z.enum(['approve', 'ignore'], {
+    error: () => ({ message: 'action must be approve or ignore' }),
+  }),
+  emailIds: z.array(z.string()).min(1, 'Missing action or emailIds'),
+})
 
 export const POST = defineRoute(
   { tag: 'api/emails/review POST', code: 'REVIEW_FAILED', message: 'Failed to process review action' },
   async (req: Request) => {
     const user = await getAuthUser()
-    const body = await req.json()
-    const { action, emailIds } = body as { action: 'approve' | 'ignore'; emailIds: string[] }
-
-    if (!action || !Array.isArray(emailIds) || emailIds.length === 0) {
-      return error('INVALID_INPUT', 'Missing action or emailIds', 400)
-    }
-
-    if (action !== 'approve' && action !== 'ignore') {
-      return error('INVALID_INPUT', 'action must be approve or ignore', 400)
-    }
+    const { action, emailIds } = await parseJsonBody(req, reviewActionSchema, {
+      code: 'INVALID_INPUT',
+      message: 'Missing action or emailIds',
+      status: 400,
+    })
 
     if (action === 'ignore') {
       await emailRepo.dismissReviewEmails(emailIds)

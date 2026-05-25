@@ -68,6 +68,18 @@ describe('POST /api/emails/review', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 400 for malformed JSON', async () => {
+    const req = new Request('http://localhost/api/emails/review', {
+      method: 'POST',
+      body: '{',
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await POST(req)
+
+    expect(res.status).toBe(400)
+  })
+
   it('dismisses emails on ignore action', async () => {
     const res = await POST(postRequest({ action: 'ignore', emailIds: ['email-1', 'email-2'] }))
 
