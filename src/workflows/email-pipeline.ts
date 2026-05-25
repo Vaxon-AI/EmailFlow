@@ -820,7 +820,7 @@ export async function processEmail(
       }
     }
     // Non-action: clear awaitingReview so thread memory and sender memory are updated
-    await prisma.email.update({ where: { id: email.id }, data: { awaitingReview: false } })
+    await emailRepo.clearAwaitingReview(email.id)
   }
 
   await emailRepo.updateClassification(email.id, classification)
@@ -1066,10 +1066,7 @@ export async function createTaskFromClassifiedEmail(
   taskStatus: 'ai_suggestion' | 'active' = 'ai_suggestion'
 ): Promise<PipelineResult | null> {
   // Atomic claim: only the first caller sees count=1; subsequent callers see count=0
-  const { count } = await prisma.email.updateMany({
-    where: { id: emailId, userId, awaitingReview: true },
-    data: { awaitingReview: false },
-  })
+  const { count } = await emailRepo.claimAwaitingReviewEmail(userId, emailId)
 
   if (count === 0) return null
 

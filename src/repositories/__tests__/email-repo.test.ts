@@ -31,6 +31,8 @@ import {
   saveClassificationFields,
   dismissReviewEmails,
   bulkIgnoreEmails,
+  clearAwaitingReview,
+  claimAwaitingReviewEmail,
   markClassificationFailed,
   fixStuckEmails,
   markQuotaSkipped,
@@ -282,6 +284,33 @@ describe('bulkIgnoreEmails', () => {
 
     expect(result).toEqual({ count: 0 })
     expect(mockPrismaEmail.updateMany).not.toHaveBeenCalled()
+  })
+})
+
+describe('clearAwaitingReview', () => {
+  it('clears awaitingReview on a single email', async () => {
+    mockPrismaEmail.update.mockResolvedValue({} as any)
+
+    await clearAwaitingReview('email-1')
+
+    expect(mockPrismaEmail.update).toHaveBeenCalledWith({
+      where: { id: 'email-1' },
+      data: { awaitingReview: false },
+    })
+  })
+})
+
+describe('claimAwaitingReviewEmail', () => {
+  it('atomically claims a review email for a user', async () => {
+    mockPrismaEmail.updateMany.mockResolvedValue({ count: 1 } as any)
+
+    const result = await claimAwaitingReviewEmail('user-1', 'email-1')
+
+    expect(result).toEqual({ count: 1 })
+    expect(mockPrismaEmail.updateMany).toHaveBeenCalledWith({
+      where: { id: 'email-1', userId: 'user-1', awaitingReview: true },
+      data: { awaitingReview: false },
+    })
   })
 })
 

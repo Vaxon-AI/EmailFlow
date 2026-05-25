@@ -5,6 +5,7 @@ import { AppError } from '@/lib/app-errors'
 import { prisma } from '@/lib/prisma'
 import { sendNewDeviceLoginEmail, sendSuspiciousActivityEmail } from '@/lib/mailer'
 import { getSessionToken, SESSION_MAX_AGE_REMEMBER_SECONDS } from '@/lib/auth-token'
+import { getDeviceInfo, type DeviceInfo } from '@/lib/session-device'
 
 const ACTIVE_STATUS = 'active'
 const EXPIRED_STATUS = 'expired'
@@ -14,8 +15,6 @@ const MAX_ACTIVE_SESSIONS = 3
 const SESSION_INACTIVITY_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000
 // After rotation, the old token is accepted for this many ms (handles in-flight concurrent requests)
 const ROTATION_GRACE_PERIOD_MS = 30 * 1000
-
-type DeviceType = 'desktop' | 'mobile' | 'tablet' | 'bot' | 'unknown'
 
 type ActiveSessionDevice = {
   id: string
@@ -75,114 +74,6 @@ export interface SessionContext {
   user: SessionUser
 }
 
-function getIpAddress(request: Request) {
-  const forwarded = request.headers.get('x-forwarded-for')
-  if (forwarded) {
-    return forwarded.split(',')[0]?.trim() || ''
-  }
-
-  return request.headers.get('x-real-ip') || ''
-}
-
-function detectDeviceType(userAgent: string): DeviceType {
-  const ua = userAgent.toLowerCase()
-
-  if (!ua) return 'unknown'
-  if (/bot|crawler|spider|crawling/.test(ua)) return 'bot'
-  if (/ipad|tablet/.test(ua)) return 'tablet'
-  if (/mobi|iphone|android/.test(ua)) return 'mobile'
-  if (/macintosh|windows|linux|x11/.test(ua)) return 'desktop'
-
-  return 'unknown'
-}
-
-function detectBrowser(userAgent: string) {
-  if (!userAgent) return 'Unknown'
-  if (/Edg\//.test(userAgent)) return 'Edge'
-  if (/OPR\//.test(userAgent) || /Opera/.test(userAgent)) return 'Opera'
-  if (/Firefox\//.test(userAgent)) return 'Firefox'
-  if (/Chrome\//.test(userAgent) || /CriOS\//.test(userAgent)) return 'Chrome'
-  if (/Safari\//.test(userAgent) && !/Chrome\//.test(userAgent) && !/CriOS\//.test(userAgent)) return 'Safari'
-  if (/MSIE|Trident\//.test(userAgent)) return 'Internet Explorer'
-  return 'Unknown'
-}
-
-function detectOs(userAgent: string) {
-  if (!userAgent) return 'Unknown'
-  if (/Windows NT/.test(userAgent)) return 'Windows'
-  if (/iPhone|iPad|iPod/.test(userAgent)) return 'iOS'
-  if (/Android/.test(userAgent)) return 'Android'
-  if (/Mac OS X|Macintosh/.test(userAgent)) return 'macOS'
-  if (/Linux|X11/.test(userAgent)) return 'Linux'
-  return 'Unknown'
-}
-
-function formatDeviceName(deviceType: DeviceType, os: string, browser: string) {
-  const typeLabel =
-    deviceType === 'mobile'
-      ? 'Mobile'
-      : deviceType === 'tablet'
-        ? 'Tablet'
-        : deviceType === 'bot'
-          ? 'Bot'
-          : 'Desktop'
-
-  if (os !== 'Unknown') {
-    return `${typeLabel} · ${os}`
-  }
-
-  if (browser !== 'Unknown') {
-    return `${typeLabel} · ${browser}`
-  }
-
-  return 'Unknown device'
-}
-
-function createDeviceFingerprint(input: {
-  deviceName: string
-  deviceType: string
-  browser: string
-  os: string
-  userAgent: string
-}) {
-  const normalized = [
-    input.deviceName,
-    input.deviceType,
-    input.browser,
-    input.os,
-    input.userAgent.toLowerCase(),
-  ]
-    .map((value) => value.trim().toLowerCase())
-    .join('|')
-
-  return crypto.createHash('sha256').update(normalized).digest('hex')
-}
-
-function getDeviceInfo(request: Request) {
-  const userAgent = request.headers.get('user-agent') || ''
-  const deviceType = detectDeviceType(userAgent)
-  const browser = detectBrowser(userAgent)
-  const os = detectOs(userAgent)
-
-  const deviceName = formatDeviceName(deviceType, os, browser)
-
-  return {
-    deviceName,
-    deviceType,
-    browser,
-    os,
-    ipAddress: getIpAddress(request),
-    userAgent,
-    deviceFingerprint: createDeviceFingerprint({
-      deviceName,
-      deviceType,
-      browser,
-      os,
-      userAgent,
-    }),
-  }
-}
-
 function sessionTokenHash(token: string) {
   return crypto.createHash('sha256').update(token).digest('hex')
 }
@@ -204,7 +95,7 @@ function deviceKey(session: Pick<ActiveSessionDevice, 'id' | 'deviceName' | 'bro
   ].map((value) => String(value || '').trim().toLowerCase()).join('|') || session.id
 }
 
-function isSameDevice(session: ActiveSessionDevice, device: ReturnType<typeof getDeviceInfo>) {
+function isSameDevice(session: ActiveSessionDevice, device: DeviceInfo) {
   if (session.deviceFingerprint && session.deviceFingerprint === device.deviceFingerprint) return true
   return (
     session.deviceName === device.deviceName &&

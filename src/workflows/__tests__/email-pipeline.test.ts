@@ -17,6 +17,8 @@ vi.mock('@/repositories/email-repo', () => ({
   markClassificationFailed: vi.fn(),
   saveClassificationFields: vi.fn(),
   markActioned: vi.fn(),
+  clearAwaitingReview: vi.fn(),
+  claimAwaitingReviewEmail: vi.fn(),
 }))
 
 vi.mock('@/repositories/task-repo', () => ({
@@ -183,6 +185,8 @@ beforeEach(() => {
   // Email repo
   vi.mocked(emailRepo.updateClassification).mockResolvedValue({} as any)
   vi.mocked(emailRepo.markClassificationFailed).mockResolvedValue({} as any)
+  vi.mocked(emailRepo.clearAwaitingReview).mockResolvedValue({} as any)
+  vi.mocked(emailRepo.claimAwaitingReviewEmail).mockResolvedValue({ count: 1 } as any)
 
   // Task repo
   vi.mocked(taskRepo.createTask).mockResolvedValue({ id: 'task-1', title: 'Review contract' } as any)
@@ -458,13 +462,42 @@ describe('processEmail — action classification (full pipeline)', () => {
   it('creates AI suggestion tasks when a manual review email is approved', async () => {
     await createTaskFromClassifiedEmail('user-1', 'email-1')
 
-    expect(prisma.email.updateMany).toHaveBeenCalledWith({
-      where: { id: 'email-1', userId: 'user-1', awaitingReview: true },
-      data: { awaitingReview: false },
-    })
+    expect(emailRepo.claimAwaitingReviewEmail).toHaveBeenCalledWith('user-1', 'email-1')
     expect(taskRepo.createTask).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'ai_suggestion' })
     )
+  })
+
+  it('clears awaitingReview through the repository when a reviewed email is non-actionable', async () => {
+    vi.mocked(ai.classifyEmail).mockResolvedValue({
+      category: 'awareness',
+      confidence: 0.85,
+      reasoning: 'Informational update',
+      isWorkRelated: true,
+    })
+
+    await processEmail('user-1', makeEmail({ awaitingReview: true }))
+
+    expect(emailRepo.clearAwaitingReview).toHaveBeenCalledWith('email-1')
+  })
+
+  it('does not clear awaitingReview when a reviewed email stays actionable', async () => {
+    await processEmail('user-1', makeEmail({ awaitingReview: true }))
+
+    expect(emailRepo.clearAwaitingReview).not.toHaveBeenCalled()
+    expect(emailRepo.saveClassificationFields).toHaveBeenCalledWith(
+      'email-1',
+      expect.objectContaining({ category: 'action' }),
+    )
+  })
+
+  it('does nothing when the review email claim is lost', async () => {
+    vi.mocked(emailRepo.claimAwaitingReviewEmail).mockResolvedValue({ count: 0 } as any)
+
+    const result = await createTaskFromClassifiedEmail('user-1', 'email-1')
+
+    expect(result).toBeNull()
+    expect(prisma.email.findUnique).not.toHaveBeenCalled()
   })
 
   it('links task to thread memory after creation', async () => {

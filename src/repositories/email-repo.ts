@@ -133,6 +133,20 @@ export async function approveReviewEmails(emailIds: string[]) {
   })
 }
 
+export async function clearAwaitingReview(emailId: string) {
+  return prisma.email.update({
+    where: { id: emailId },
+    data: { awaitingReview: false },
+  })
+}
+
+export async function claimAwaitingReviewEmail(userId: string, emailId: string) {
+  return prisma.email.updateMany({
+    where: { id: emailId, userId, awaitingReview: true },
+    data: { awaitingReview: false },
+  })
+}
+
 // User-driven "I don't want to deal with this" — equivalent to soft-delete.
 // Collapses the email into the ignore bucket: classification flips to 'ignore'
 // and actioned=true marks it user-handled (so dashboard counts and the
