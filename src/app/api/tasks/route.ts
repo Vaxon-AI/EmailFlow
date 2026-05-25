@@ -48,6 +48,12 @@ function isPriorityFilter(value: string | null): value is 'critical' | 'high' | 
   return value === 'critical' || value === 'high' || value === 'medium' || value === 'low'
 }
 
+type ManualTaskSource = 'manual' | 'copy_text'
+
+function normalizeManualTaskSource(value: unknown): ManualTaskSource {
+  return value === 'copy_text' ? 'copy_text' : 'manual'
+}
+
 function buildCreateTaskInput(
   userId: string,
   body: Record<string, unknown>,
@@ -63,7 +69,7 @@ function buildCreateTaskInput(
     impact: body.impact as number | undefined,
     priorityScore: body.priorityScore as number | undefined,
     projectId: body.projectId as string | undefined,
-    source: (body.source as string | undefined) ?? 'manual',
+    source: normalizeManualTaskSource(body.source),
     emailIds: Array.isArray(body.emailIds) ? body.emailIds : [],
     markLinkedEmailsActioned: true,
     emptyActionItemsValue: '[]',
