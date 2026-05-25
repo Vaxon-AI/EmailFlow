@@ -29,6 +29,8 @@ import {
   storeEmail,
   updateClassification,
   saveClassificationFields,
+  dismissReviewEmails,
+  bulkIgnoreEmails,
   markClassificationFailed,
   fixStuckEmails,
   markQuotaSkipped,
@@ -239,6 +241,47 @@ describe('saveClassificationFields', () => {
       })
     )
     expect((mockPrismaEmail.update as ReturnType<typeof vi.fn>).mock.calls[0][0].data).not.toHaveProperty('awaitingReview')
+  })
+})
+
+describe('dismissReviewEmails', () => {
+  it('collapses review emails into ignore/actioned state', async () => {
+    mockPrismaEmail.updateMany.mockResolvedValue({ count: 2 } as any)
+
+    await dismissReviewEmails(['email-1', 'email-2'])
+
+    expect(mockPrismaEmail.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['email-1', 'email-2'] } },
+      data: {
+        classification: 'ignore',
+        actioned: true,
+        awaitingReview: false,
+      },
+    })
+  })
+})
+
+describe('bulkIgnoreEmails', () => {
+  it('scopes ignore collapse by userId', async () => {
+    mockPrismaEmail.updateMany.mockResolvedValue({ count: 2 } as any)
+
+    await bulkIgnoreEmails('user-1', ['email-1', 'email-2'])
+
+    expect(mockPrismaEmail.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['email-1', 'email-2'] }, userId: 'user-1' },
+      data: {
+        classification: 'ignore',
+        actioned: true,
+        awaitingReview: false,
+      },
+    })
+  })
+
+  it('short-circuits for an empty email list', async () => {
+    const result = await bulkIgnoreEmails('user-1', [])
+
+    expect(result).toEqual({ count: 0 })
+    expect(mockPrismaEmail.updateMany).not.toHaveBeenCalled()
   })
 })
 

@@ -95,14 +95,7 @@ export async function updateClassification(
 ) {
   return prisma.email.update({
     where: { id: emailId },
-    data: {
-      classification: classification.category,
-      classConfidence: classification.confidence,
-      classReasoning: classification.reasoning,
-      isWorkRelated: classification.isWorkRelated,
-      processedAt: new Date(),
-      processingStatus: 'done',
-    },
+    data: buildClassificationUpdateData(classification),
   })
 }
 
@@ -120,14 +113,7 @@ export async function saveClassificationFields(
 ) {
   return prisma.email.update({
     where: { id: emailId },
-    data: {
-      classification: classification.category,
-      classConfidence: classification.confidence,
-      classReasoning: classification.reasoning,
-      isWorkRelated: classification.isWorkRelated,
-      processedAt: new Date(),
-      processingStatus: 'done',
-    },
+    data: buildClassificationUpdateData(classification),
   })
 }
 
@@ -156,11 +142,7 @@ export async function dismissReviewEmails(emailIds: string[]) {
   if (emailIds.length === 0) return
   return prisma.email.updateMany({
     where: { id: { in: emailIds } },
-    data: {
-      classification: 'ignore',
-      actioned: true,
-      awaitingReview: false,
-    },
+    data: buildIgnoredEmailUpdateData(),
   })
 }
 
@@ -171,11 +153,7 @@ export async function bulkIgnoreEmails(userId: string, emailIds: string[]) {
   if (emailIds.length === 0) return { count: 0 }
   return prisma.email.updateMany({
     where: { id: { in: emailIds }, userId },
-    data: {
-      classification: 'ignore',
-      actioned: true,
-      awaitingReview: false,
-    },
+    data: buildIgnoredEmailUpdateData(),
   })
 }
 
@@ -514,6 +492,30 @@ function buildFailureResolutionData(reason: string) {
     classReasoning: reason,
     processedAt: new Date(),
     processingStatus: 'failed' as const,
+  }
+}
+
+function buildClassificationUpdateData(classification: {
+  category: string
+  confidence: number
+  reasoning: string
+  isWorkRelated: boolean
+}) {
+  return {
+    classification: classification.category,
+    classConfidence: classification.confidence,
+    classReasoning: classification.reasoning,
+    isWorkRelated: classification.isWorkRelated,
+    processedAt: new Date(),
+    processingStatus: 'done' as const,
+  }
+}
+
+function buildIgnoredEmailUpdateData() {
+  return {
+    classification: 'ignore' as const,
+    actioned: true,
+    awaitingReview: false,
   }
 }
 

@@ -17,6 +17,7 @@ vi.mock('@/lib/auth-password', () => ({
 }))
 
 vi.mock('@/lib/auth-token', () => ({
+  createToken: vi.fn().mockReturnValue('mock-device-limit-token'),
   setSessionCookie: vi.fn(),
 }))
 
@@ -28,6 +29,7 @@ import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/auth-password'
 import { setSessionCookie } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
+import { AppError } from '@/lib/app-errors'
 import { POST } from '../route'
 
 const mockUser = vi.mocked(prisma.user)
@@ -144,5 +146,29 @@ describe('POST /api/auth/register', () => {
         }),
       }),
     )
+  })
+
+  it('returns 409 with device choices when the browser/device limit is reached', async () => {
+    mockUser.findUnique.mockResolvedValue(null)
+    mockHashPassword.mockResolvedValue('$2b$hash' as never)
+    mockUser.create.mockResolvedValue({ id: 'user-1', email: 'alice@example.com', name: 'Alice' } as never)
+    mockCreateUserSession.mockRejectedValue(new AppError(
+      'DEVICE_LIMIT_REACHED',
+      'Device limit reached',
+      409,
+      {
+        userId: 'user-1',
+        remember: true,
+        devices: [{ id: 'session-1', deviceName: 'Desktop · macOS' }],
+      },
+    ))
+
+    const res = await POST(postRequest({ email: 'alice@example.com', password: 'password123', name: 'Alice' }))
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.code).toBe('DEVICE_LIMIT_REACHED')
+    expect(body.deviceLimitToken).toBe('mock-device-limit-token')
+    expect(body.data.devices).toHaveLength(1)
   })
 })

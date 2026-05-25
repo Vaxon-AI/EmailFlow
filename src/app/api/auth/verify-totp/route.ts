@@ -1,19 +1,25 @@
 import { NextResponse } from 'next/server'
 import { verify } from 'otplib'
+import { z } from 'zod'
 
-import { verifyToken, setSessionCookie, createToken } from '@/lib/auth-token'
+import { verifyToken, setSessionCookie } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
-import { isAppError } from '@/lib/app-errors'
+import { deviceLimitErrorResponse } from '@/lib/auth-api'
+import { error, errorFromException, parseJsonBody } from '@/lib/api-helpers'
 import { findForTotpVerify } from '@/repositories/user-repo'
-import { error } from '@/lib/api-helpers'
+
+const verifyTotpSchema = z.object({
+  tempToken: z.string().min(1, 'Verification token and code are required'),
+  totpCode: z.union([z.string(), z.number()]),
+})
 
 export async function POST(req: Request) {
   try {
-    const { tempToken, totpCode } = await req.json()
-
-    if (!tempToken || !totpCode) {
-      return error('VALIDATION_ERROR', 'Verification token and code are required', 400)
-    }
+    const { tempToken, totpCode } = await parseJsonBody(req, verifyTotpSchema, {
+      code: 'VALIDATION_ERROR',
+      message: 'Verification token and code are required',
+      status: 400,
+    })
 
     const payload = verifyToken(tempToken)
     if (!payload || payload.purpose !== 'pre-2fa') {
@@ -56,24 +62,9 @@ export async function POST(req: Request) {
       },
     })
   } catch (err) {
-    if (isAppError(err) && err.code === 'DEVICE_LIMIT_REACHED') {
-      // Non-standard shape: deviceLimitToken/code at top level (frontend reads them directly).
-      return NextResponse.json(
-        {
-          success: false,
-          error: err.message,
-          code: err.code,
-          deviceLimitToken: createToken({
-            userId: err.details?.userId as string,
-            purpose: 'device-limit',
-            remember: Boolean(err.details?.remember),
-          }),
-          data: err.details,
-        },
-        { status: 409 }
-      )
-    }
+    const deviceLimitResponse = deviceLimitErrorResponse(err)
+    if (deviceLimitResponse) return deviceLimitResponse
     console.error('[api/auth/verify-totp]', err)
-    return error('SYNC_FAILED', 'Verification failed', 500)
+    return errorFromException(err, 'SYNC_FAILED', 'Verification failed', 500)
   }
 }

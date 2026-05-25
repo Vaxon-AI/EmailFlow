@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { findByEmail, createUser } from '@/repositories/user-repo'
 import { hashPassword } from '@/lib/auth-password'
-import { createToken, setSessionCookie } from '@/lib/auth-token'
+import { setSessionCookie } from '@/lib/auth-token'
 import { createUserSession } from '@/lib/auth-sessions'
-import { isAppError } from '@/lib/app-errors'
+import { deviceLimitErrorResponse } from '@/lib/auth-api'
 import { getInheritedQuotaForEmail } from '@/repositories/quota-ledger-repo'
-import { success, error } from '@/lib/api-helpers'
+import { success, error, errorFromException, parseJsonBody } from '@/lib/api-helpers'
+
+const registerSchema = z.object({
+  email: z.string().min(1, 'Email and password are required'),
+  password: z.string().min(1, 'Email and password are required'),
+  name: z.string().optional(),
+})
 
 export async function POST(req: Request) {
   try {
-    const { email, password, name } = await req.json()
-
-    if (!email || !password) {
-      return error('VALIDATION_ERROR', 'Email and password are required', 400)
-    }
+    const { email, password, name } = await parseJsonBody(req, registerSchema, {
+      code: 'VALIDATION_ERROR',
+      message: 'Email and password are required',
+      status: 400,
+    })
 
     if (password.length < 8) {
       return error('VALIDATION_ERROR', 'Password must be at least 8 characters', 400)
@@ -47,24 +54,9 @@ export async function POST(req: Request) {
 
     return success({ id: user.id, email: user.email, name: user.name })
   } catch (err) {
-    if (isAppError(err) && err.code === 'DEVICE_LIMIT_REACHED') {
-      // Non-standard shape: deviceLimitToken/code at top level (frontend reads them directly).
-      return NextResponse.json(
-        {
-          success: false,
-          error: err.message,
-          code: err.code,
-          deviceLimitToken: createToken({
-            userId: err.details?.userId as string,
-            purpose: 'device-limit',
-            remember: Boolean(err.details?.remember),
-          }),
-          data: err.details,
-        },
-        { status: 409 }
-      )
-    }
+    const deviceLimitResponse = deviceLimitErrorResponse(err)
+    if (deviceLimitResponse) return deviceLimitResponse
     console.error('[api/auth/register]', err)
-    return error('REGISTER_FAILED', 'Registration failed', 500)
+    return errorFromException(err, 'REGISTER_FAILED', 'Registration failed', 500)
   }
 }
