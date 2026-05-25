@@ -318,7 +318,7 @@ function mergeParticipants(existing: string[] | null, incoming: string[]): strin
   return Array.from(new Set([...(existing ?? []), ...incoming]))
 }
 
-const SUBJECT_NOISE = /^(re|fwd?|fw|aw|回复|转发):\s*/gi
+const SUBJECT_NOISE = /^(re|fwd?|fw|aw):\s*/gi
 const STOP_WORDS = new Set([
   'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
   'of', 'with', 'by', 'from', 'is', 'are', 'was', 'be', 'your', 'my',
