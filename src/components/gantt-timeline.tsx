@@ -1,112 +1,34 @@
 'use client'
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
-import Link from 'next/link'
 import { MonthYearPanel } from '@/components/month-year-panel'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ChevronDown, ChevronLeft, ChevronRight, FolderOpen, GripVertical, UserRound } from 'lucide-react'
-import { getPriorityBand } from '@/types'
+import { ChevronDown, ChevronLeft, ChevronRight, FolderOpen, UserRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
-
-const DAY_MS = 86400000
-const COL_WIDTH = 48
-const ROW_HEIGHT = 60
-const LABEL_WIDTH = 240
-const HANDLE_WIDTH = 10
-const TIMELINE_ORDER_STORAGE_KEY = 'emailflow-ai:timeline-order'
-
-type TimelineTask = {
-  id: string
-  title: string
-  status: 'ai_suggestion' | 'active' | 'completed'
-  priorityScore?: number | null
-  startDate?: string | null
-  explicitDeadline?: string | null
-  inferredDeadline?: string | null
-  userSetDeadline?: string | null
-  project?: {
-    id: string
-    name: string
-    identity: { id: string; name: string } | null
-  } | null
-  matter?: { id: string; title: string } | null
-}
-
-type UpdateTaskMutation = {
-  mutate: (
-    vars: { id: string; data: { startDate?: string; userSetDeadline?: string } },
-    options?: { onSuccess?: () => void; onError?: () => void }
-  ) => void
-}
-
-type DragState = {
-  taskId: string
-  mode: 'move' | 'resize-left' | 'resize-right'
-  origStart: Date
-  origEnd: Date
-  startX: number
-}
-
-type DragSnapshot = Omit<DragState, 'startX'> & { delta: number }
-
-type PendingPosition = {
-  taskId: string
-  start: Date
-  end: Date
-}
-
-function toDateStr(d: Date) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-function formatShort(d: Date) {
-  return d.toLocaleDateString('en', { month: 'short', day: 'numeric' })
-}
-function startOfDay(d: Date) { const r = new Date(d); r.setHours(0, 0, 0, 0); return r }
-function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
-function startOfWeek(d: Date) {
-  const r = startOfDay(d)
-  r.setDate(r.getDate() - r.getDay())
-  return r
-}
-function diffDays(a: Date, b: Date) {
-  const aNoon = new Date(a.getFullYear(), a.getMonth(), a.getDate(), 12)
-  const bNoon = new Date(b.getFullYear(), b.getMonth(), b.getDate(), 12)
-  return Math.round((aNoon.getTime() - bNoon.getTime()) / DAY_MS)
-}
-
-function intersectsRange(
-  start: Date | null,
-  end: Date | null,
-  rangeStart: Date,
-  rangeEnd: Date
-) {
-  if (!start || !end) return false
-  return start <= rangeEnd && end >= rangeStart
-}
-
-function getTaskStart(task: TimelineTask): Date | null {
-  if (task.startDate) return startOfDay(new Date(task.startDate))
-  const end = getTaskEnd(task)
-  if (end) return addDays(end, -2)
-  return null
-}
-function getTaskEnd(task: TimelineTask): Date | null {
-  const raw = task.userSetDeadline || task.explicitDeadline || task.inferredDeadline
-  return raw ? startOfDay(new Date(raw)) : null
-}
-
-const BAND_COLORS: Record<string, { bar: string; border: string; text: string; dot: string }> = {
-  critical: { bar: 'bg-critical', border: 'border-critical-700/20', text: 'text-white', dot: 'bg-critical' },
-  high:     { bar: 'bg-orange',   border: 'border-orange-700/20',   text: 'text-white', dot: 'bg-orange' },
-  medium:   { bar: 'bg-yellow',   border: 'border-yellow-700/20',   text: 'text-white', dot: 'bg-yellow' },
-  low:      { bar: 'bg-slate-500', border: 'border-slate-600/20',    text: 'text-white', dot: 'bg-slate-500' },
-}
+import {
+  COL_WIDTH,
+  LABEL_WIDTH,
+  TIMELINE_ORDER_STORAGE_KEY,
+  addDays,
+  diffDays,
+  formatShort,
+  getTaskEnd,
+  getTaskStart,
+  intersectsRange,
+  startOfDay,
+  startOfWeek,
+  toDateStr,
+  type BarStyle,
+  type DragSnapshot,
+  type DragState,
+  type PendingPosition,
+  type TimelineTask,
+  type UpdateTaskMutation,
+} from './gantt-timeline-utils'
+import { GanttTaskRow } from './gantt-timeline-task-row'
 
 interface Props {
   tasks: TimelineTask[]
@@ -375,7 +297,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
 
   // Bar position — priority: live drag > pending override > task data
   const getBarStyle = useCallback(
-    (task: TimelineTask, activeDrag: DragSnapshot | null, activePending: PendingPosition | null) => {
+    (task: TimelineTask, activeDrag: DragSnapshot | null, activePending: PendingPosition | null): BarStyle | null => {
       let taskStart: Date | null
       let taskEnd: Date | null
 
@@ -546,6 +468,25 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
 
     return true
   }, [visibleTaskLookup])
+
+  const rowProps = {
+    days,
+    today,
+    gridWidth,
+    todayOffset,
+    draggedTaskId,
+    dropTargetTaskId,
+    hoveredTaskId,
+    dragSnapshot,
+    pendingSnapshot,
+    setDraggedTaskId,
+    setDropTargetTaskId,
+    setHoveredTaskId,
+    startDrag,
+    getBarStyle,
+    reorderTasks,
+    canReorderWithinSection,
+  }
 
   return (
     <Card className="border-0 bg-transparent shadow-none">
@@ -743,191 +684,9 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                           </button>
                         </div>
 
-                        {!projectCollapsed && project.tasks.map((task: TimelineTask) => {
-              const band = getPriorityBand(task.priorityScore || 0)
-              const colors = BAND_COLORS[band] || BAND_COLORS.low
-              const barStyle = getBarStyle(task, dragSnapshot, pendingSnapshot)
-              const isDragging = dragSnapshot?.taskId === task.id
-              const isHovered = hoveredTaskId === task.id
-              const origStart = getTaskStart(task)
-              const origEnd = getTaskEnd(task)
-              const isCompleted = task.status === 'completed'
-
-              return (
-                <div
-                  key={task.id}
-                  className={`flex border-b transition-colors ${
-                    isCompleted
-                      ? 'bg-slate-50/80 opacity-70'
-                      : dropTargetTaskId === task.id && draggedTaskId !== task.id
-                        ? 'bg-brand-50/80'
-                      : isDragging
-                        ? 'bg-brand-50/60'
-                        : 'hover:bg-brand-50/55'
-                  }`}
-                  style={{ height: ROW_HEIGHT }}
-                  onDragOver={(e) => {
-                    if (!draggedTaskId || draggedTaskId === task.id) return
-                    if (!canReorderWithinSection(draggedTaskId, task.id)) {
-                      setDropTargetTaskId(null)
-                      return
-                    }
-                    e.preventDefault()
-                    setDropTargetTaskId(task.id)
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    const sourceId = e.dataTransfer.getData('text/timeline-order')
-                    if (sourceId) {
-                      if (!canReorderWithinSection(sourceId, task.id)) {
-                        toast.warning('Reorder tasks only within the same project section')
-                      } else {
-                        reorderTasks(sourceId, task.id)
-                        toast.success('Timeline order updated')
-                      }
-                    }
-                    setDraggedTaskId(null)
-                    setDropTargetTaskId(null)
-                  }}
-                >
-                  {/* Label — two lines: title + due date */}
-                  <div
-                    style={{ width: LABEL_WIDTH }}
-                    className={`shrink-0 border-r flex items-center px-3 gap-2 z-20 relative ${
-                      isCompleted ? 'bg-slate-50/90' : 'bg-white'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.effectAllowed = 'move'
-                        e.dataTransfer.setData('text/timeline-order', task.id)
-                        setDraggedTaskId(task.id)
-                      }}
-                      onDragEnd={() => {
-                        setDraggedTaskId(null)
-                        setDropTargetTaskId(null)
-                      }}
-                      className={`shrink-0 rounded-md p-1 text-gray-300 transition-colors ${
-                        isCompleted ? 'cursor-grab text-gray-300/80' : 'cursor-grab hover:bg-brand-50 hover:text-brand-500'
-                      }`}
-                      title="Drag to reorder tasks"
-                    >
-                      <GripVertical className="h-4 w-4" />
-                    </button>
-                    <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${colors.dot}`} />
-                    <div className="min-w-0 flex-1">
-                      <Link
-                        href={`/dashboard/tasks/${task.id}`}
-                        className={`block text-xs font-medium leading-tight line-clamp-2 ${
-                          isCompleted
-                            ? 'text-gray-500 line-through'
-                            : 'text-gray-800 hover:text-brand-600'
-                        }`}
-                        title={task.title}
-                      >
-                        {task.title}
-                      </Link>
-                      {origEnd && (
-                        <span className="mt-0.5 block text-[9px] text-gray-400">
-                          Due {formatShort(origEnd)}
-                        </span>
-                      )}
-                      {task.matter?.title ? (
-                        <span className="mt-0.5 block truncate text-[9px] text-slate-400">
-                          {task.matter.title}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {/* Grid + bar */}
-                  <div className="relative flex overflow-hidden" style={{ width: gridWidth }}>
-                    {/* Grid columns */}
-                    {days.map((day) => (
-                      <div
-                        key={day.toISOString()}
-                        style={{ width: COL_WIDTH }}
-                        className={`shrink-0 border-r ${
-                          day.toDateString() === today.toDateString() ? 'bg-brand-50/70' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-slate-50/80' : ''
-                        }`}
-                      />
-                    ))}
-
-                    {/* Today line */}
-                    {todayOffset >= 0 && todayOffset < gridWidth && (
-                      <div className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-brand-500 z-10" style={{ left: todayOffset + COL_WIDTH / 2 }} />
-                    )}
-
-                    {/* Task bar */}
-                    {barStyle && origStart && origEnd && (
-                      <div
-                        className={`absolute rounded-md border shadow-sm cursor-grab active:cursor-grabbing ${
-                          isCompleted
-                            ? 'z-10 opacity-45 saturate-75'
-                            : isDragging
-                              ? 'shadow-lg ring-2 ring-brand-300 z-20'
-                              : 'z-10 hover:shadow-md'
-                        } ${colors.bar} ${colors.border}`}
-                        style={{
-                          left: barStyle.left,
-                          width: Math.max(barStyle.width, COL_WIDTH * 0.5),
-                          top: 8,
-                          height: ROW_HEIGHT - 16,
-                        }}
-                        onMouseEnter={() => setHoveredTaskId(task.id)}
-                        onMouseLeave={() => setHoveredTaskId(null)}
-                        onMouseDown={(e) => startDrag(e, task.id, 'move', origStart, origEnd)}
-                      >
-                        {/* Bar label */}
-                        <div className={`absolute inset-0 flex items-center truncate px-2.5 text-[10px] font-semibold leading-none pointer-events-none ${colors.text}`}>
-                          {barStyle.width >= COL_WIDTH * 2.5 ? task.title : ''}
-                        </div>
-
-                        {/* Left resize handle */}
-                        <div
-                          className="absolute left-0 top-0 bottom-0 cursor-ew-resize rounded-l-md z-10 hover:bg-black/20"
-                          style={{ width: HANDLE_WIDTH }}
-                          onMouseDown={(e) => { e.stopPropagation(); startDrag(e, task.id, 'resize-left', origStart, origEnd) }}
-                        >
-                          <div className="absolute left-1 top-1/2 -translate-y-1/2 h-3 w-0.5 rounded bg-white/60" />
-                        </div>
-
-                        {/* Right resize handle */}
-                        <div
-                          className="absolute right-0 top-0 bottom-0 cursor-ew-resize rounded-r-md z-10 hover:bg-black/20"
-                          style={{ width: HANDLE_WIDTH }}
-                          onMouseDown={(e) => { e.stopPropagation(); startDrag(e, task.id, 'resize-right', origStart, origEnd) }}
-                        >
-                          <div className="absolute right-1 top-1/2 -translate-y-1/2 h-3 w-0.5 rounded bg-white/60" />
-                        </div>
-
-                        {/* Hover tooltip */}
-                        {isHovered && !isDragging && (
-                          <div
-                            className="pointer-events-none absolute z-30 whitespace-nowrap rounded bg-gray-900 px-2.5 py-1.5 text-[10px] font-medium text-white shadow-lg"
-                            style={{ left: Math.max(barStyle.width, COL_WIDTH * 0.5) + 6, top: '50%', transform: 'translateY(-50%)' }}
-                          >
-                            <div>{task.title}</div>
-                            <div className="text-gray-400 text-[9px] mt-0.5">
-                              {formatShort(barStyle.taskStart)} — {formatShort(barStyle.taskEnd)}
-                            </div>
-                            <div className="absolute right-full top-1/2 -translate-y-1/2 h-0 w-0 border-r-4 border-t-4 border-b-4 border-transparent border-r-gray-900" />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {!barStyle && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-[10px] text-gray-400 italic">No dates</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-                        })}
+                        {!projectCollapsed && project.tasks.map((task: TimelineTask) => (
+                          <GanttTaskRow key={task.id} task={task} {...rowProps} />
+                        ))}
                       </div>
                     )
                   })}
@@ -946,177 +705,9 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
                     <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500 ring-1 ring-slate-200">{groupedTimeline.ungrouped.length} tasks</span>
                   </div>
                 </div>
-                {groupedTimeline.ungrouped.map((task: TimelineTask) => {
-                  const band = getPriorityBand(task.priorityScore || 0)
-                  const colors = BAND_COLORS[band] || BAND_COLORS.low
-                  const barStyle = getBarStyle(task, dragSnapshot, pendingSnapshot)
-                  const isDragging = dragSnapshot?.taskId === task.id
-                  const isHovered = hoveredTaskId === task.id
-                  const origStart = getTaskStart(task)
-                  const origEnd = getTaskEnd(task)
-                  const isCompleted = task.status === 'completed'
-
-                  return (
-                    <div
-                      key={task.id}
-                      className={`flex border-b transition-colors ${
-                        isCompleted
-                          ? 'bg-slate-50/80 opacity-70'
-                          : dropTargetTaskId === task.id && draggedTaskId !== task.id
-                            ? 'bg-brand-50/80'
-                            : isDragging
-                              ? 'bg-brand-50/60'
-                              : 'hover:bg-brand-50/55'
-                      }`}
-                      style={{ height: ROW_HEIGHT }}
-                      onDragOver={(e) => {
-                        if (!draggedTaskId || draggedTaskId === task.id) return
-                        if (!canReorderWithinSection(draggedTaskId, task.id)) {
-                          setDropTargetTaskId(null)
-                          return
-                        }
-                        e.preventDefault()
-                        setDropTargetTaskId(task.id)
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault()
-                        const sourceId = e.dataTransfer.getData('text/timeline-order')
-                        if (sourceId) {
-                          if (!canReorderWithinSection(sourceId, task.id)) {
-                            toast.warning('Reorder tasks only within the same project section')
-                          } else {
-                            reorderTasks(sourceId, task.id)
-                            toast.success('Timeline order updated')
-                          }
-                        }
-                        setDraggedTaskId(null)
-                        setDropTargetTaskId(null)
-                      }}
-                    >
-                      <div
-                        style={{ width: LABEL_WIDTH }}
-                        className={`shrink-0 border-r flex items-center px-3 gap-2 z-20 relative ${
-                          isCompleted ? 'bg-slate-50/90' : 'bg-white'
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.effectAllowed = 'move'
-                            e.dataTransfer.setData('text/timeline-order', task.id)
-                            setDraggedTaskId(task.id)
-                          }}
-                          onDragEnd={() => {
-                            setDraggedTaskId(null)
-                            setDropTargetTaskId(null)
-                          }}
-                          className={`shrink-0 rounded-md p-1 text-gray-300 transition-colors ${
-                            isCompleted ? 'cursor-grab text-gray-300/80' : 'cursor-grab hover:bg-brand-50 hover:text-brand-500'
-                          }`}
-                          title="Drag to reorder tasks"
-                        >
-                          <GripVertical className="h-4 w-4" />
-                        </button>
-                        <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${colors.dot}`} />
-                        <div className="min-w-0 flex-1">
-                          <Link
-                            href={`/dashboard/tasks/${task.id}`}
-                            className={`block text-xs font-medium leading-tight line-clamp-2 ${
-                              isCompleted ? 'text-gray-500 line-through' : 'text-gray-800 hover:text-brand-600'
-                            }`}
-                            title={task.title}
-                          >
-                            {task.title}
-                          </Link>
-                          {origEnd && (
-                            <span className="mt-0.5 block text-[9px] text-gray-400">
-                              Due {formatShort(origEnd)}
-                            </span>
-                          )}
-                          {task.matter?.title ? (
-                            <span className="mt-0.5 block truncate text-[9px] text-slate-400">
-                              {task.matter.title}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="relative flex overflow-hidden" style={{ width: gridWidth }}>
-                        {days.map((day) => (
-                          <div
-                            key={day.toISOString()}
-                            style={{ width: COL_WIDTH }}
-                            className={`shrink-0 border-r ${
-                              day.toDateString() === today.toDateString() ? 'bg-brand-50/70' : (day.getDay() === 0 || day.getDay() === 6) ? 'bg-slate-50/80' : ''
-                            }`}
-                          />
-                        ))}
-
-                        {todayOffset >= 0 && todayOffset < gridWidth && (
-                          <div className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-brand-500 z-10" style={{ left: todayOffset + COL_WIDTH / 2 }} />
-                        )}
-
-                        {barStyle && origStart && origEnd && (
-                          <div
-                            className={`absolute rounded-md border shadow-sm cursor-grab active:cursor-grabbing ${
-                              isCompleted
-                                ? 'z-10 opacity-45 saturate-75'
-                                : isDragging
-                                  ? 'shadow-lg ring-2 ring-brand-300 z-20'
-                                  : 'z-10 hover:shadow-md'
-                            } ${colors.bar} ${colors.border}`}
-                            style={{
-                              left: barStyle.left,
-                              width: Math.max(barStyle.width, COL_WIDTH * 0.5),
-                              top: 8,
-                              height: ROW_HEIGHT - 16,
-                            }}
-                            onMouseEnter={() => setHoveredTaskId(task.id)}
-                            onMouseLeave={() => setHoveredTaskId(null)}
-                            onMouseDown={(e) => startDrag(e, task.id, 'move', origStart, origEnd)}
-                          >
-                            <div className={`absolute inset-0 flex items-center truncate px-2.5 text-[10px] font-semibold leading-none pointer-events-none ${colors.text}`}>
-                              {barStyle.width >= COL_WIDTH * 2.5 ? task.title : ''}
-                            </div>
-                            <div
-                              className="absolute left-0 top-0 bottom-0 cursor-ew-resize rounded-l-md z-10 hover:bg-black/20"
-                              style={{ width: HANDLE_WIDTH }}
-                              onMouseDown={(e) => { e.stopPropagation(); startDrag(e, task.id, 'resize-left', origStart, origEnd) }}
-                            >
-                              <div className="absolute left-1 top-1/2 -translate-y-1/2 h-3 w-0.5 rounded bg-white/60" />
-                            </div>
-                            <div
-                              className="absolute right-0 top-0 bottom-0 cursor-ew-resize rounded-r-md z-10 hover:bg-black/20"
-                              style={{ width: HANDLE_WIDTH }}
-                              onMouseDown={(e) => { e.stopPropagation(); startDrag(e, task.id, 'resize-right', origStart, origEnd) }}
-                            >
-                              <div className="absolute right-1 top-1/2 -translate-y-1/2 h-3 w-0.5 rounded bg-white/60" />
-                            </div>
-                            {isHovered && !isDragging && (
-                              <div
-                                className="pointer-events-none absolute z-30 whitespace-nowrap rounded bg-gray-900 px-2.5 py-1.5 text-[10px] font-medium text-white shadow-lg"
-                                style={{ left: Math.max(barStyle.width, COL_WIDTH * 0.5) + 6, top: '50%', transform: 'translateY(-50%)' }}
-                              >
-                                <div>{task.title}</div>
-                                <div className="text-gray-400 text-[9px] mt-0.5">
-                                  {formatShort(barStyle.taskStart)} â€” {formatShort(barStyle.taskEnd)}
-                                </div>
-                                <div className="absolute right-full top-1/2 -translate-y-1/2 h-0 w-0 border-r-4 border-t-4 border-b-4 border-transparent border-r-gray-900" />
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {!barStyle && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-[10px] text-gray-400 italic">No dates</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                {groupedTimeline.ungrouped.map((task: TimelineTask) => (
+                  <GanttTaskRow key={task.id} task={task} {...rowProps} />
+                ))}
               </div>
             )}
           </div>
