@@ -703,6 +703,24 @@ export async function findEmailById(userId: string, emailId: string) {
   }
 }
 
+export async function findEmailForPipelineById(userId: string, emailId: string) {
+  return prisma.email.findFirst({
+    where: { id: emailId, userId },
+    select: {
+      id: true,
+      subject: true,
+      sender: true,
+      receivedAt: true,
+      bodyPreview: true,
+      bodyFull: true,
+      labels: true,
+      threadId: true,
+      awaitingReview: true,
+      taskStatus: true,
+    },
+  })
+}
+
 export async function updateReplyDraft(userId: string, emailId: string, draft: string, generated = false) {
   const now = new Date()
   return prisma.email.updateMany({

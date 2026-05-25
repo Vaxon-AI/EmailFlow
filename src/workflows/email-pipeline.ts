@@ -7,6 +7,7 @@ import * as threadMemoryRepo from '@/repositories/thread-memory-repo'
 import * as matterMemoryRepo from '@/repositories/matter-memory-repo'
 import * as identityRepo from '@/repositories/identity-repo'
 import * as projectContextRepo from '@/repositories/project-context-repo'
+import * as senderMemoryRepo from '@/repositories/sender-memory-repo'
 import type { ThreadMemory } from '@/repositories/thread-memory-repo'
 import type { MatterMemory } from '@/repositories/matter-memory-repo'
 import type { UserIdentity } from '@/repositories/identity-repo'
@@ -77,6 +78,100 @@ type ProcessEmailInput = {
   awaitingReview?: boolean
   taskStatus?: 'ai_suggestion' | 'active'
   forceAction?: boolean
+}
+
+type SavedClassificationState = {
+  saved: boolean
+  category: string | null
+  confidence: number
+}
+
+type ClassificationStageResult = {
+  classification: {
+    category: string
+    confidence: number
+    reasoning: string
+    isWorkRelated: boolean
+  }
+  shouldReturn: boolean
+  result?: PipelineResult
+}
+
+function saveClassificationState(state: SavedClassificationState, classification: PipelineResult | {
+  category: string
+  confidence: number
+}) {
+  state.saved = true
+  state.category = classification.category
+  state.confidence = classification.confidence
+}
+
+function buildNoTaskResult(
+  emailId: string,
+  classification: string,
+  confidence: number,
+  extra: Partial<PipelineResult> = {},
+): PipelineResult {
+  return {
+    emailId,
+    classification,
+    confidence,
+    taskCreated: false,
+    skippedByRule: false,
+    ...extra,
+  }
+}
+
+function buildDedupedTaskResult(
+  emailId: string,
+  classification: string,
+  confidence: number,
+  taskId: string,
+  reviewCandidate?: PipelineReviewCandidate,
+): PipelineResult {
+  return buildNoTaskResult(emailId, classification, confidence, {
+    taskId,
+    taskIds: [taskId],
+    createdTaskIds: [],
+    dedupedTaskIds: [taskId],
+    reviewCandidate,
+  })
+}
+
+async function persistClassificationStage(args: {
+  email: ProcessEmailInput
+  classification: {
+    category: string
+    confidence: number
+    reasoning: string
+    isWorkRelated: boolean
+  }
+  savedClassification: SavedClassificationState
+}): Promise<ClassificationStageResult> {
+  const { email, classification, savedClassification } = args
+
+  if (email.awaitingReview) {
+    if (classification.category === 'action') {
+      await emailRepo.saveClassificationFields(email.id, classification)
+      saveClassificationState(savedClassification, classification)
+      return {
+        classification,
+        shouldReturn: true,
+        result: buildNoTaskResult(email.id, classification.category, classification.confidence),
+      }
+    }
+
+    // Non-action: clear awaitingReview so thread memory and sender memory are updated
+    await emailRepo.clearAwaitingReview(email.id)
+  }
+
+  await emailRepo.updateClassification(email.id, classification)
+  saveClassificationState(savedClassification, classification)
+
+  return {
+    classification,
+    shouldReturn: false,
+  }
 }
 
 // ── Step 0: Rule-based pre-filter ────────────────────────────
@@ -182,9 +277,7 @@ async function buildMemoryContext(
   }
 
   // Learned sender behavior
-  const senderMemory = await prisma.senderMemory.findUnique({
-    where: { userId_sender: { userId, sender } },
-  })
+  const senderMemory = await senderMemoryRepo.findByUserAndSender(userId, sender)
 
   if (senderMemory) {
     const total = senderMemory.actionCount + senderMemory.awarenessCount + senderMemory.ignoreCount
@@ -718,32 +811,12 @@ async function linkEmailToTask(taskId: string, emailId: string, relationship = '
 
 // ── Sender memory update ──────────────────────────────────────
 
-async function updateSenderMemory(userId: string, sender: string, category: string) {
-  const existing = await prisma.senderMemory.findUnique({
-    where: { userId_sender: { userId, sender } },
-  })
-
-  if (!existing) {
-    await prisma.senderMemory.create({
-      data: {
-        userId,
-        sender,
-        actionCount: category === 'action' ? 1 : 0,
-        awarenessCount: category === 'awareness' ? 1 : 0,
-        ignoreCount: category === 'ignore' ? 1 : 0,
-      },
-    })
-    return
-  }
-
-  await prisma.senderMemory.update({
-    where: { userId_sender: { userId, sender } },
-    data: {
-      actionCount: existing.actionCount + (category === 'action' ? 1 : 0),
-      awarenessCount: existing.awarenessCount + (category === 'awareness' ? 1 : 0),
-      ignoreCount: existing.ignoreCount + (category === 'ignore' ? 1 : 0),
-    },
-  })
+async function updateSenderMemory(
+  userId: string,
+  sender: string,
+  category: 'action' | 'awareness' | 'ignore',
+) {
+  await senderMemoryRepo.incrementSenderMemory(userId, sender, category)
 }
 
 // ── Main pipeline ─────────────────────────────────────────────
@@ -757,14 +830,16 @@ export async function processEmail(
   // classification with markClassificationFailed (the historical bug
   // where action emails regressed to uncertain "Classification failed"
   // when extractTask / scorePriority threw).
-  let classificationSaved = false
-  let savedCategory: string | null = null
-  let savedConfidence = 0
+  const savedClassification: SavedClassificationState = {
+    saved: false,
+    category: null,
+    confidence: 0,
+  }
   try {
   // ── 0. Pre-filter (rule-based, no AI) ─────────────────────
   const ruleResult = await processEmailRuleOnly(email)
   if (ruleResult) {
-    classificationSaved = true
+    savedClassification.saved = true
     return ruleResult
   }
 
@@ -801,32 +876,12 @@ export async function processEmail(
     : await stepClassify(email, memoryContext)
   await updateSenderMemory(userId, email.sender, classification.category)
 
-  // In manual review mode:
-  //   action emails → save classification and wait for user to trigger extraction
-  //   non-action emails → clear awaitingReview and fall through to normal pipeline
-  //                       (awareness/ignore/uncertain never create tasks anyway)
-  if (email.awaitingReview) {
-    if (classification.category === 'action') {
-      await emailRepo.saveClassificationFields(email.id, classification)
-      classificationSaved = true
-      savedCategory = classification.category
-      savedConfidence = classification.confidence
-      return {
-        emailId: email.id,
-        classification: classification.category,
-        confidence: classification.confidence,
-        taskCreated: false,
-        skippedByRule: false,
-      }
-    }
-    // Non-action: clear awaitingReview so thread memory and sender memory are updated
-    await emailRepo.clearAwaitingReview(email.id)
-  }
-
-  await emailRepo.updateClassification(email.id, classification)
-  classificationSaved = true
-  savedCategory = classification.category
-  savedConfidence = classification.confidence
+  const classificationStage = await persistClassificationStage({
+    email,
+    classification,
+    savedClassification,
+  })
+  if (classificationStage.shouldReturn) return classificationStage.result!
 
   let currentThreadMemory: ThreadMemory | null = existingThreadMemory
   let currentMatterMemory: MatterMemory | null = existingMatterMemory
@@ -834,30 +889,28 @@ export async function processEmail(
   let reviewCandidate: PipelineReviewCandidate | undefined
 
   // ── 4. Ignore: no thread memory, no matter matching ────────
-  if (classification.category === 'ignore') {
-    return {
-      emailId: email.id,
-      classification: classification.category,
-      confidence: classification.confidence,
-      taskCreated: false,
-      skippedByRule: false,
-    }
+  // ── 4. Ignore: no thread memory, no matter matching ────────
+  if (classificationStage.classification.category === 'ignore') {
+    return buildNoTaskResult(
+      email.id,
+      classificationStage.classification.category,
+      classificationStage.classification.confidence,
+    )
   }
 
   // ── 5. Update thread memory ────────────────────────────────
   //    awareness + action both update thread memory.
-  //    Uses bodyFull when available so the summary reflects the
-  //    full content (also satisfies the needsFullAnalysis signal).
+  //    Uses bodyFull when available so the summary reflects the full content.
   if (threadId) {
     currentThreadMemory = await stepUpdateThreadMemory(
       userId,
       email,
       threadId,
       existingThreadMemory,
-      classification.category
+      classificationStage.classification.category
     )
 
-    if (classification.category === 'action') {
+    if (classificationStage.classification.category === 'action') {
       // Rebuild memory context with the freshly updated thread state so that
       // extractTask and scorePriority operate on current information.
       currentMemoryContext = await buildMemoryContext(
@@ -876,14 +929,12 @@ export async function processEmail(
   }
 
   // ── 7. Non-action emails: done (awareness, uncertain) ──────
-  if (classification.category !== 'action') {
-    return {
-      emailId: email.id,
-      classification: classification.category,
-      confidence: classification.confidence,
-      taskCreated: false,
-      skippedByRule: false,
-    }
+  if (classificationStage.classification.category !== 'action') {
+    return buildNoTaskResult(
+      email.id,
+      classificationStage.classification.category,
+      classificationStage.classification.confidence,
+    )
   }
 
   // ── 8. Task dedup — matter level (broadest check) ─────────
@@ -895,18 +946,13 @@ export async function processEmail(
   if (candidates.length === 0) {
     // Return structurally so callers (e.g. manual Extract-to-Task) can
     // distinguish "AI found nothing" from a real failure and toast accordingly.
-    return {
-      emailId: email.id,
-      classification: classification.category,
-      confidence: classification.confidence,
-      taskCreated: false,
+    return buildNoTaskResult(email.id, classificationStage.classification.category, classificationStage.classification.confidence, {
       taskIds: [],
       createdTaskIds: [],
       dedupedTaskIds: [],
       noCandidates: true,
-      skippedByRule: false,
       reviewCandidate,
-    }
+    })
   }
 
   if (candidates.length === 1 && currentMatterMemory?.linkedPrimaryTaskId) {
@@ -914,18 +960,13 @@ export async function processEmail(
 
     await linkEmailToTask(existingTaskId, email.id)
 
-    return {
-      emailId: email.id,
-      classification: classification.category,
-      confidence: classification.confidence,
-      taskCreated: false,
-      taskId: existingTaskId,
-      taskIds: [existingTaskId],
-      createdTaskIds: [],
-      dedupedTaskIds: [existingTaskId],
-      skippedByRule: false,
+    return buildDedupedTaskResult(
+      email.id,
+      classificationStage.classification.category,
+      classificationStage.classification.confidence,
+      existingTaskId,
       reviewCandidate,
-    }
+    )
   }
 
   // ── 9. Task dedup — thread level (fallback for no-threadId emails) ──
@@ -934,18 +975,13 @@ export async function processEmail(
 
     await linkEmailToTask(existingTaskId, email.id)
 
-    return {
-      emailId: email.id,
-      classification: classification.category,
-      confidence: classification.confidence,
-      taskCreated: false,
-      taskId: existingTaskId,
-      taskIds: [existingTaskId],
-      createdTaskIds: [],
-      dedupedTaskIds: [existingTaskId],
-      skippedByRule: false,
+    return buildDedupedTaskResult(
+      email.id,
+      classificationStage.classification.category,
+      classificationStage.classification.confidence,
+      existingTaskId,
       reviewCandidate,
-    }
+    )
   }
 
   // ── 10. Extract task ───────────────────────────────────────
@@ -1008,8 +1044,8 @@ export async function processEmail(
 
   return {
     emailId: email.id,
-    classification: classification.category,
-    confidence: classification.confidence,
+    classification: classificationStage.classification.category,
+    confidence: classificationStage.classification.confidence,
     taskCreated: createdTaskIds.length > 0,
     taskId: primaryTaskId,
     taskIds,
@@ -1019,14 +1055,14 @@ export async function processEmail(
     reviewCandidate,
   }
   } catch (err) {
-    const stage = classificationSaved ? 'post-classify' : 'classify'
+    const stage = savedClassification.saved ? 'post-classify' : 'classify'
     console.error(`[processEmail] ${stage} error for ${email.id}:`, err)
     Sentry.captureException(err, {
       tags: { action: 'processEmail', stage },
       extra: { userId },
     })
 
-    if (!classificationSaved) {
+    if (!savedClassification.saved) {
       // Real classify failure — safe to mark the email as failed since no
       // classification has been persisted yet.
       try {
@@ -1034,26 +1070,18 @@ export async function processEmail(
       } catch (dbErr) {
         console.error('[processEmail] failed to mark email as failed', email.id, dbErr)
       }
-      return {
-        emailId: email.id,
-        classification: 'uncertain',
-        confidence: 0,
-        taskCreated: false,
-        skippedByRule: false,
-      }
+      return buildNoTaskResult(email.id, 'uncertain', 0)
     }
 
     // Classification already saved — a later step (thread memory / matter /
     // extract / score / task creation) threw. Leave the saved classification
     // alone so the email does not regress in the UI. The user can manually
     // trigger task extraction from the email detail page if needed.
-    return {
-      emailId: email.id,
-      classification: savedCategory ?? 'uncertain',
-      confidence: savedConfidence,
-      taskCreated: false,
-      skippedByRule: false,
-    }
+    return buildNoTaskResult(
+      email.id,
+      savedClassification.category ?? 'uncertain',
+      savedClassification.confidence,
+    )
   }
 }
 
@@ -1070,7 +1098,7 @@ export async function createTaskFromClassifiedEmail(
 
   if (count === 0) return null
 
-  const email = await prisma.email.findUnique({ where: { id: emailId } })
+  const email = await emailRepo.findEmailForPipelineById(userId, emailId)
   if (!email) return null
 
   return processEmail(userId, {

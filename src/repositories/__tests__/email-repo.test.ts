@@ -43,6 +43,7 @@ import {
   findEmailsPaginated,
   findBatchStatus,
   bulkMarkActioned,
+  findEmailForPipelineById,
 } from '../email-repo'
 
 // ---------------------------------------------------------------------------
@@ -590,6 +591,31 @@ describe('countAwaitingReview', () => {
           { classification: 'uncertain' },
           { classification: null },
         ],
+      },
+    })
+  })
+})
+
+describe('findEmailForPipelineById', () => {
+  it('finds a pipeline email scoped to the owning user', async () => {
+    mockPrismaEmail.findFirst.mockResolvedValue({ id: 'email-1', subject: 'Hello' } as any)
+
+    const result = await findEmailForPipelineById('user-1', 'email-1')
+
+    expect(result).toEqual({ id: 'email-1', subject: 'Hello' })
+    expect(mockPrismaEmail.findFirst).toHaveBeenCalledWith({
+      where: { id: 'email-1', userId: 'user-1' },
+      select: {
+        id: true,
+        subject: true,
+        sender: true,
+        receivedAt: true,
+        bodyPreview: true,
+        bodyFull: true,
+        labels: true,
+        threadId: true,
+        awaitingReview: true,
+        taskStatus: true,
       },
     })
   })

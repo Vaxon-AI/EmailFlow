@@ -19,6 +19,7 @@ vi.mock('@/repositories/email-repo', () => ({
   markActioned: vi.fn(),
   clearAwaitingReview: vi.fn(),
   claimAwaitingReviewEmail: vi.fn(),
+  findEmailForPipelineById: vi.fn(),
 }))
 
 vi.mock('@/repositories/task-repo', () => ({
@@ -53,13 +54,13 @@ vi.mock('@/repositories/project-context-repo', () => ({
   assignIdentity: vi.fn(),
 }))
 
+vi.mock('@/repositories/sender-memory-repo', () => ({
+  findByUserAndSender: vi.fn(),
+  incrementSenderMemory: vi.fn(),
+}))
+
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    senderMemory: {
-      findUnique: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-    },
     userPreference: {
       findUnique: vi.fn(),
     },
@@ -88,6 +89,7 @@ import * as threadMemoryRepo from '@/repositories/thread-memory-repo'
 import * as matterMemoryRepo from '@/repositories/matter-memory-repo'
 import * as identityRepo from '@/repositories/identity-repo'
 import * as projectContextRepo from '@/repositories/project-context-repo'
+import * as senderMemoryRepo from '@/repositories/sender-memory-repo'
 import { prisma } from '@/lib/prisma'
 import type { ThreadMemory } from '@/repositories/thread-memory-repo'
 import type { MatterMemory } from '@/repositories/matter-memory-repo'
@@ -187,6 +189,11 @@ beforeEach(() => {
   vi.mocked(emailRepo.markClassificationFailed).mockResolvedValue({} as any)
   vi.mocked(emailRepo.clearAwaitingReview).mockResolvedValue({} as any)
   vi.mocked(emailRepo.claimAwaitingReviewEmail).mockResolvedValue({ count: 1 } as any)
+  vi.mocked(emailRepo.findEmailForPipelineById).mockResolvedValue({
+    ...makeEmail(),
+    userId: 'user-1',
+    awaitingReview: true,
+  } as any)
 
   // Task repo
   vi.mocked(taskRepo.createTask).mockResolvedValue({ id: 'task-1', title: 'Review contract' } as any)
@@ -216,17 +223,11 @@ beforeEach(() => {
   vi.mocked(identityRepo.createSuggestion).mockResolvedValue(MOCK_IDENTITY)
 
   // Prisma direct calls
-  vi.mocked(prisma.senderMemory.findUnique).mockResolvedValue(null)
-  vi.mocked(prisma.senderMemory.create).mockResolvedValue({} as any)
-  vi.mocked(prisma.senderMemory.update).mockResolvedValue({} as any)
+  vi.mocked(senderMemoryRepo.findByUserAndSender).mockResolvedValue(null)
+  vi.mocked(senderMemoryRepo.incrementSenderMemory).mockResolvedValue({} as any)
   vi.mocked(prisma.userPreference.findUnique).mockResolvedValue(null)
   vi.mocked(prisma.taskEmail.create).mockResolvedValue({} as any)
   vi.mocked(prisma.task.findMany).mockResolvedValue([])
-  vi.mocked(prisma.email.findUnique).mockResolvedValue({
-    ...makeEmail(),
-    userId: 'user-1',
-    awaitingReview: true,
-  } as any)
   vi.mocked(prisma.email.update).mockResolvedValue({} as any)
   vi.mocked(prisma.email.updateMany).mockResolvedValue({ count: 1 } as any)
 
@@ -497,7 +498,7 @@ describe('processEmail — action classification (full pipeline)', () => {
     const result = await createTaskFromClassifiedEmail('user-1', 'email-1')
 
     expect(result).toBeNull()
-    expect(prisma.email.findUnique).not.toHaveBeenCalled()
+    expect(emailRepo.findEmailForPipelineById).not.toHaveBeenCalled()
   })
 
   it('links task to thread memory after creation', async () => {
