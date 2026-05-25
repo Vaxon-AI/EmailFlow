@@ -9,7 +9,7 @@ import { Loader2, LogOut, MonitorSmartphone } from 'lucide-react'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import { CACHE_TIME } from '@/lib/query-cache'
-import { getErrorMessage } from '@/lib/api-client'
+import { getErrorMessage, mutateJson } from '@/lib/api-client'
 
 export type DeviceSession = {
   id: string
@@ -49,11 +49,9 @@ export function DeviceSessionsCard({
 
   const revokeSessionMutation = useMutation({
     mutationFn: async (session: DeviceSession) => {
-      const res = await fetch(`/api/auth/sessions/${session.id}/revoke`, {
-        method: 'POST',
+      await mutateJson(`/api/auth/sessions/${session.id}/revoke`, {
+        fallbackMessage: 'Failed to sign out device',
       })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to sign out device'))
       return session
     },
     onSuccess: async (session) => {
@@ -72,14 +70,10 @@ export function DeviceSessionsCard({
   })
 
   const revokeOthersMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/auth/sessions/revoke-others', {
-        method: 'POST',
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to sign out other devices'))
-      return json
-    },
+    mutationFn: () =>
+      mutateJson<{ data?: { revokedCount?: number } }>('/api/auth/sessions/revoke-others', {
+        fallbackMessage: 'Failed to sign out other devices',
+      }),
     onSuccess: (json) => {
       const count = json?.data?.revokedCount ?? 0
       toast.success(count > 0 ? `Signed out ${count} other device${count === 1 ? '' : 's'}` : 'No other active devices')

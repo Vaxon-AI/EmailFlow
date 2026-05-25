@@ -20,6 +20,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { mutateJson } from '@/lib/api-client'
 import { showError } from '@/components/error-dialog'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
@@ -100,13 +101,12 @@ export default function CleanupPage() {
 
   const runMutation = useMutation({
     mutationFn: async (stepUpToken: string) => {
-      const res = await fetch('/api/cleanup/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stepUpToken }),
+      const json = await mutateJson<{
+        data: { emailsArchived: number; emailsMetaOnly: number; emailsPurged: number }
+      }>('/api/cleanup/run', {
+        body: { stepUpToken },
+        fallbackMessage: 'Cleanup failed',
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error?.message || json?.error || 'Cleanup failed')
       return json.data
     },
     onSuccess: (result) => {

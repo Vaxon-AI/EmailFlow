@@ -29,6 +29,7 @@ import { ReassignProjectModal } from '@/components/reassign-project-modal'
 import { BatchReassignModal } from '@/components/batch-reassign-modal'
 import { useAuth } from '@/lib/use-auth'
 import { toast } from 'sonner'
+import { mutateJson } from '@/lib/api-client'
 import {
   EMAIL_BUCKET_LABELS,
   type EmailBucket,
@@ -133,16 +134,10 @@ function EmailsContent() {
   }, [router])
 
   const reviewModeMutation = useMutation({
-    mutationFn: async (mode: boolean) => {
-      const res = await fetch('/api/settings/review-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manualReviewMode: mode }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error)
-      return json
-    },
+    mutationFn: (mode: boolean) =>
+      mutateJson<{ data?: { manualReviewMode?: boolean } }>('/api/settings/review-mode', {
+        body: { manualReviewMode: mode },
+      }),
     onSuccess: (json) => {
       const nextMode = json?.data?.manualReviewMode
       if (typeof nextMode === 'boolean') {
@@ -186,14 +181,11 @@ function EmailsContent() {
   // tabs and end up in All + classification=ignore.
   const bulkIgnoreMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      const res = await fetch('/api/emails/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, action: 'ignore' }),
+      const json = await mutateJson<{ data: { affected: number } }>('/api/emails/batch', {
+        body: { ids, action: 'ignore' },
+        fallbackMessage: 'Failed to ignore emails',
       })
-      const json = await res.json()
-      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to ignore emails')
-      return json.data as { affected: number }
+      return json.data
     },
     onSuccess: (data) => {
       toast.success(`Ignored ${data.affected} email${data.affected === 1 ? '' : 's'}`)
@@ -207,14 +199,14 @@ function EmailsContent() {
 
   const bulkClassifyMutation = useMutation({
     mutationFn: async ({ ids, bucket }: { ids: string[]; bucket: EmailBucket }) => {
-      const res = await fetch('/api/emails/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, action: 'classify', bucket }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to classify emails')
-      return json.data as { affected: number; bucket: EmailBucket }
+      const json = await mutateJson<{ data: { affected: number; bucket: EmailBucket } }>(
+        '/api/emails/batch',
+        {
+          body: { ids, action: 'classify', bucket },
+          fallbackMessage: 'Failed to classify emails',
+        },
+      )
+      return json.data
     },
     onSuccess: (data) => {
       toast.success(`Marked ${data.affected} email${data.affected === 1 ? '' : 's'} as ${EMAIL_BUCKET_LABELS[data.bucket]}`)
@@ -233,19 +225,18 @@ function EmailsContent() {
   // tells us how many got queued vs skipped.
   const bulkGenerateTasksMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      const res = await fetch('/api/emails/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, action: 'generate_tasks' }),
+      const json = await mutateJson<{
+        data: {
+          queued: number
+          skippedIneligible: number
+          skippedQuota: number
+          quotaExhausted: boolean
+        }
+      }>('/api/emails/batch', {
+        body: { ids, action: 'generate_tasks' },
+        fallbackMessage: 'Failed to queue tasks',
       })
-      const json = await res.json()
-      if (!res.ok || !json.success) throw new Error(json?.error?.message || 'Failed to queue tasks')
-      return json.data as {
-        queued: number
-        skippedIneligible: number
-        skippedQuota: number
-        quotaExhausted: boolean
-      }
+      return json.data
     },
     onSuccess: (data) => {
       const parts: string[] = []

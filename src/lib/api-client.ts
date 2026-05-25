@@ -38,6 +38,34 @@ export function getErrorMessage(payload: unknown, fallback = 'Request failed'): 
   return fallback
 }
 
+type MutateJsonOptions = {
+  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  body?: unknown
+  fallbackMessage?: string
+}
+
+// Wraps the standard mutation fetch pattern:
+//   - serialise body as JSON when present
+//   - parse response as JSON
+//   - throw a user-facing Error built from getErrorMessage on !res.ok
+// Returns the raw response JSON; callers can pick `.data` themselves if needed.
+export async function mutateJson<T = unknown>(
+  url: string,
+  options: MutateJsonOptions = {},
+): Promise<T> {
+  const hasBody = options.body !== undefined
+  const res = await fetch(url, {
+    method: options.method ?? 'POST',
+    headers: hasBody ? { 'Content-Type': 'application/json' } : undefined,
+    body: hasBody ? JSON.stringify(options.body) : undefined,
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(getErrorMessage(json, options.fallbackMessage ?? 'Request failed'))
+  }
+  return json as T
+}
+
 export async function readApiClientError(response: Response): Promise<ApiClientError> {
   let payload: unknown = null
 

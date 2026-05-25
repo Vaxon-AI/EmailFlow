@@ -12,7 +12,7 @@ import { InlineNotice } from '@/components/inline-notice'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { getErrorMessage } from '@/lib/api-client'
+import { getErrorMessage, mutateJson } from '@/lib/api-client'
 
 type DeviceLimitDevice = {
   id: string
@@ -124,13 +124,10 @@ export function SignInContent() {
     if (!deviceLimit) return
     setRevokingDeviceId(sessionId)
     try {
-      const res = await fetch('/api/auth/device-limit/revoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: deviceLimit.token, sessionId }),
+      await mutateJson('/api/auth/device-limit/revoke', {
+        body: { token: deviceLimit.token, sessionId },
+        fallbackMessage: 'Failed to sign out device',
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(getErrorMessage(data, 'Failed to sign out device'))
       toast.success('Device signed out')
       setDeviceLimit(null)
       await submitLogin()

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { CACHE_TIME } from '@/lib/query-cache'
+import { mutateJson } from '@/lib/api-client'
 import { PersonalisationChipGroup } from '@/components/personalisation-chips'
 import {
   ONBOARDING_FOCUS_LIMIT,
@@ -72,20 +73,15 @@ export function PreferencesCard() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: async (draftToSave: PreferencesDraft) => {
-      const res = await fetch('/api/settings/onboarding-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+    mutationFn: (draftToSave: PreferencesDraft) =>
+      mutateJson('/api/settings/onboarding-profile', {
+        body: {
           role: draftToSave.role,
           purpose: draftToSave.purpose,
           focusAreas: draftToSave.focusAreas,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error?.message ?? 'Failed to save preferences')
-      return json
-    },
+        },
+        fallbackMessage: 'Failed to save preferences',
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['onboarding-profile'] })
       toast.success('Preferences updated')

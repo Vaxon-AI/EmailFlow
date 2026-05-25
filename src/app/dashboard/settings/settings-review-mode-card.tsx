@@ -6,22 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
-import { getErrorMessage } from '@/lib/api-client'
+import { mutateJson } from '@/lib/api-client'
 
 export function ReviewModeCard({ manualReviewMode }: { manualReviewMode: boolean }) {
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
-    mutationFn: async (mode: boolean) => {
-      const res = await fetch('/api/settings/review-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manualReviewMode: mode }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to update'))
-      return json
-    },
+    mutationFn: (mode: boolean) =>
+      mutateJson('/api/settings/review-mode', {
+        body: { manualReviewMode: mode },
+        fallbackMessage: 'Failed to update',
+      }),
     onSuccess: () => {
       toast.success('Email review mode updated')
       queryClient.invalidateQueries({ queryKey: ['auth-me'] })

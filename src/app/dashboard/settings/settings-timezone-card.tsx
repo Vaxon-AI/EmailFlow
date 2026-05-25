@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Globe, Check, ChevronsUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
-import { getErrorMessage } from '@/lib/api-client'
+import { mutateJson } from '@/lib/api-client'
 
 const POPULAR_TIMEZONES = [
   'UTC',
@@ -145,16 +145,11 @@ export function SettingsTimezoneCard({ currentTimezone }: { currentTimezone?: st
   }, [supportedTimezones, timezoneSearch])
 
   const timezoneMutation = useMutation({
-    mutationFn: async (timezone: string) => {
-      const res = await fetch('/api/settings/timezone', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timezone }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to update timezone'))
-      return json
-    },
+    mutationFn: (timezone: string) =>
+      mutateJson('/api/settings/timezone', {
+        body: { timezone },
+        fallbackMessage: 'Failed to update timezone',
+      }),
     onSuccess: () => {
       toast.success('Timezone updated')
       setTimezoneSearch('')

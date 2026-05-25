@@ -11,7 +11,7 @@ import { InlineNotice } from '@/components/inline-notice'
 import { CalendarIcon, Clock3, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
-import { getErrorMessage } from '@/lib/api-client'
+import { mutateJson } from '@/lib/api-client'
 
 const SYNC_PRESETS = [7, 15, 30] as const
 
@@ -44,16 +44,11 @@ export function EmailSyncWindowCard({ syncStartDate }: { syncStartDate: string |
     : null
 
   const syncRangeMutation = useMutation({
-    mutationFn: async (days: number) => {
-      const res = await fetch('/api/settings/sync-range', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ days }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(getErrorMessage(json, 'Failed to update sync range'))
-      return json
-    },
+    mutationFn: (days: number) =>
+      mutateJson('/api/settings/sync-range', {
+        body: { days },
+        fallbackMessage: 'Failed to update sync range',
+      }),
     onSuccess: () => {
       toast.success('Sync window updated')
       queryClient.invalidateQueries({ queryKey: ['stats'] })

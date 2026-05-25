@@ -8,7 +8,7 @@ import { InlineNotice } from '@/components/inline-notice'
 import { KeyRound, Loader2, Mail, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
-import { getErrorMessage } from '@/lib/api-client'
+import { mutateJson } from '@/lib/api-client'
 import { getEmailProviderAccountLabel, getEmailProviderLabel } from '@/lib/email-provider-labels'
 
 export type EmailAccount = {
@@ -40,15 +40,11 @@ export function LinkAccountCard({
   const bound = accounts.length > 0
 
   const disconnect = useMutation({
-    mutationFn: async (accountId: string) => {
-      const res = await fetch('/api/auth/google/disconnect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountId }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(getErrorMessage(json, 'Disconnect failed'))
-    },
+    mutationFn: (accountId: string) =>
+      mutateJson('/api/auth/google/disconnect', {
+        body: { accountId },
+        fallbackMessage: 'Disconnect failed',
+      }),
     onSuccess: () => {
       toast.success('Google account disconnected')
       queryClient.invalidateQueries({ queryKey: ['stats'] })
