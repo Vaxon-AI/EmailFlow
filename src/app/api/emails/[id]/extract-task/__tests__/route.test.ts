@@ -23,6 +23,7 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
 vi.mock('@/repositories/email-repo', () => ({
   findEmailById: vi.fn(),
   setEmailBucket: vi.fn(),
+  restoreAwaitingReview: vi.fn(),
 }))
 
 vi.mock('@/workflows', () => ({
@@ -38,6 +39,7 @@ import { POST } from '../route'
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockFindEmailById = vi.mocked(emailRepo.findEmailById)
 const mockSetEmailBucket = vi.mocked(emailRepo.setEmailBucket)
+const mockRestoreAwaitingReview = vi.mocked(emailRepo.restoreAwaitingReview)
 const mockCreateTaskFromClassifiedEmail = vi.mocked(createTaskFromClassifiedEmail)
 const mockProcessEmail = vi.mocked(processEmail)
 
@@ -58,27 +60,47 @@ function makeEmail(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function makePipelineResult(overrides: Record<string, unknown> = {}) {
+  return {
+    emailId: 'email-1',
+    classification: 'action',
+    confidence: 0.9,
+    taskCreated: false,
+    taskIds: [],
+    createdTaskIds: [],
+    dedupedTaskIds: [],
+    skippedByRule: false,
+    ...overrides,
+  }
+}
+
 describe('POST /api/emails/[id]/extract-task', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthUser.mockResolvedValue({ id: 'user-1' } as never)
     mockSetEmailBucket.mockResolvedValue({} as never)
-    mockCreateTaskFromClassifiedEmail.mockResolvedValue({} as never)
-    mockProcessEmail.mockResolvedValue({} as never)
+    mockRestoreAwaitingReview.mockResolvedValue({} as never)
+    mockCreateTaskFromClassifiedEmail.mockResolvedValue(makePipelineResult() as never)
+    mockProcessEmail.mockResolvedValue(makePipelineResult() as never)
     afterMock.mockImplementation((callback: () => void | Promise<void>) => {
       void callback()
     })
   })
 
-  it('queues pending AI suggestion extraction for action emails', async () => {
+  it('queues pending AI suggestion extraction for action emails without prematurely bucketing them', async () => {
     mockFindEmailById.mockResolvedValue(makeEmail() as never)
+    mockProcessEmail.mockResolvedValue(
+      makePipelineResult({ taskIds: ['task-1'], createdTaskIds: ['task-1'], taskCreated: true }) as never
+    )
 
     const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
       params: Promise.resolve({ id: 'email-1' }),
     })
 
     expect(res.status).toBe(200)
-    expect(mockSetEmailBucket).toHaveBeenCalledWith('email-1', 'tracked')
+    // The route no longer flips the bucket up-front; the pipeline marks
+    // actioned only when a task is actually created/linked.
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
     expect(mockProcessEmail).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({
@@ -89,7 +111,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
     )
   })
 
-  it('allows uncertain emails, marks them tracked, and queues pending extraction', async () => {
+  it('allows uncertain emails and queues pending extraction without bucketing them', async () => {
     mockFindEmailById.mockResolvedValue(makeEmail({ classification: 'uncertain' }) as never)
 
     const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
@@ -97,7 +119,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
     })
 
     expect(res.status).toBe(200)
-    expect(mockSetEmailBucket).toHaveBeenCalledWith('email-1', 'tracked')
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
     expect(mockProcessEmail).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({
@@ -108,8 +130,28 @@ describe('POST /api/emails/[id]/extract-task', () => {
     )
   })
 
+  it('leaves the email untouched when the pipeline reports no candidates', async () => {
+    mockFindEmailById.mockResolvedValue(makeEmail() as never)
+    mockProcessEmail.mockResolvedValue(makePipelineResult({ noCandidates: true }) as never)
+
+    const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+      params: Promise.resolve({ id: 'email-1' }),
+    })
+
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as { data: { created: number; deduped: number; noCandidates: boolean } }
+    expect(json.data.created).toBe(0)
+    expect(json.data.deduped).toBe(0)
+    expect(json.data.noCandidates).toBe(true)
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
+    expect(mockRestoreAwaitingReview).not.toHaveBeenCalled()
+  })
+
   it('keeps awaiting review action emails on the pending AI suggestion path', async () => {
     mockFindEmailById.mockResolvedValue(makeEmail({ awaitingReview: true }) as never)
+    mockCreateTaskFromClassifiedEmail.mockResolvedValue(
+      makePipelineResult({ taskIds: ['task-1'], createdTaskIds: ['task-1'], taskCreated: true }) as never
+    )
 
     const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
       params: Promise.resolve({ id: 'email-1' }),
@@ -118,6 +160,51 @@ describe('POST /api/emails/[id]/extract-task', () => {
     expect(res.status).toBe(200)
     expect(mockCreateTaskFromClassifiedEmail).toHaveBeenCalledWith('user-1', 'email-1', 'ai_suggestion')
     expect(mockProcessEmail).not.toHaveBeenCalled()
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
+    expect(mockRestoreAwaitingReview).not.toHaveBeenCalled()
+  })
+
+  it('restores awaitingReview when the review-path extraction yields no candidates', async () => {
+    mockFindEmailById.mockResolvedValue(makeEmail({ awaitingReview: true }) as never)
+    mockCreateTaskFromClassifiedEmail.mockResolvedValue(
+      makePipelineResult({ noCandidates: true }) as never
+    )
+
+    const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+      params: Promise.resolve({ id: 'email-1' }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(mockRestoreAwaitingReview).toHaveBeenCalledWith('email-1')
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
+  })
+
+  it('does not restore awaitingReview when the review-path extraction produces a task', async () => {
+    mockFindEmailById.mockResolvedValue(makeEmail({ awaitingReview: true }) as never)
+    mockCreateTaskFromClassifiedEmail.mockResolvedValue(
+      makePipelineResult({ taskIds: ['task-1'], createdTaskIds: ['task-1'], taskCreated: true }) as never
+    )
+
+    const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+      params: Promise.resolve({ id: 'email-1' }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(mockRestoreAwaitingReview).not.toHaveBeenCalled()
+  })
+
+  it('handles the alreadyClaimed concurrent-click race without restoring awaitingReview', async () => {
+    mockFindEmailById.mockResolvedValue(makeEmail({ awaitingReview: true }) as never)
+    mockCreateTaskFromClassifiedEmail.mockResolvedValue(null as never)
+
+    const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
+      params: Promise.resolve({ id: 'email-1' }),
+    })
+
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as { data: { alreadyClaimed?: boolean } }
+    expect(json.data.alreadyClaimed).toBe(true)
+    expect(mockRestoreAwaitingReview).not.toHaveBeenCalled()
   })
 
   it('rejects FYI and ignored emails', async () => {
@@ -129,6 +216,7 @@ describe('POST /api/emails/[id]/extract-task', () => {
 
     expect(res.status).toBe(400)
     expect(mockProcessEmail).not.toHaveBeenCalled()
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
   })
 
   it('reprocesses when an active task is already linked so workflow can dedupe', async () => {
@@ -137,13 +225,16 @@ describe('POST /api/emails/[id]/extract-task', () => {
         taskLinks: [{ task: { id: 'task-1', status: 'ai_suggestion' } }],
       }) as never
     )
+    mockProcessEmail.mockResolvedValue(
+      makePipelineResult({ taskIds: ['task-1'], dedupedTaskIds: ['task-1'] }) as never
+    )
 
     const res = await POST(new Request('http://localhost/api/emails/email-1/extract-task', { method: 'POST' }), {
       params: Promise.resolve({ id: 'email-1' }),
     })
 
     expect(res.status).toBe(200)
-    expect(mockSetEmailBucket).toHaveBeenCalledWith('email-1', 'tracked')
+    expect(mockSetEmailBucket).not.toHaveBeenCalled()
     expect(mockProcessEmail).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({

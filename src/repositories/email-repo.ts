@@ -188,6 +188,17 @@ export async function markActioned(emailId: string) {
   })
 }
 
+// Restores awaitingReview=true after a failed extract attempt. The atomic
+// claim in createTaskFromClassifiedEmail flips it to false before extraction;
+// if extraction yields no candidates we put the email back in the review queue
+// so the user can try again or classify manually.
+export async function restoreAwaitingReview(emailId: string) {
+  return prisma.email.updateMany({
+    where: { id: emailId },
+    data: { awaitingReview: true },
+  })
+}
+
 export async function bulkMarkActioned(userId: string, emailIds: string[]) {
   if (emailIds.length === 0) return { count: 0 }
   return prisma.email.updateMany({

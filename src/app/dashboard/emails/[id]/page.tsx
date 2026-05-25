@@ -292,9 +292,9 @@ export default function EmailDetailPage() {
       } else if (deduped > 0) {
         toast.info('This email is already covered by existing tasks.')
       } else if (noCandidates) {
-        toast.info('No actionable items found in this email.')
+        toast.info("AI didn't find any actionable items. Email left unchanged.")
       } else {
-        toast.success('Email moved to Tracked.')
+        toast.info('Nothing to do.')
       }
 
       queryClient.invalidateQueries({ queryKey: ['email', emailId] })

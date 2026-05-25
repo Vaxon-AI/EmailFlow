@@ -15,11 +15,10 @@ export const POST = defineRoute(
       return error('INVALID_STATE', 'Only Needs Action or Unclassified emails can be extracted into tasks', 400)
     }
 
-    // The click itself is the user's intent to track this email; the bucket move
-    // happens up-front and is independent of whether the AI ends up creating a
-    // new task, deduping into an existing one, or finding nothing actionable.
-    await emailRepo.setEmailBucket(emailId, 'tracked')
-
+    // Extraction first: only mark the email as tracked if the pipeline
+    // actually creates or links a task (markActioned inside processEmail).
+    // If AI finds nothing actionable, the email is left in its original state
+    // so the user can retry or classify it manually.
     if (email.awaitingReview) {
       // Atomic-claim path used by the manual-review modal. Returns the same
       // result shape so the UI can render a single toast.
@@ -28,9 +27,16 @@ export const POST = defineRoute(
         // Another concurrent click already claimed it; nothing for us to do.
         return success({ created: 0, deduped: 0, noCandidates: false, alreadyClaimed: true })
       }
+      const created = result.createdTaskIds?.length ?? 0
+      const deduped = result.dedupedTaskIds?.length ?? 0
+      if (created === 0 && deduped === 0) {
+        // The atomic claim flipped awaitingReview to false; put it back so the
+        // email stays in the review queue exactly as before the click.
+        await emailRepo.restoreAwaitingReview(emailId)
+      }
       return success({
-        created: result.createdTaskIds?.length ?? 0,
-        deduped: result.dedupedTaskIds?.length ?? 0,
+        created,
+        deduped,
         noCandidates: result.noCandidates ?? false,
       })
     }
