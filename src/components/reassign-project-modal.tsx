@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
   DialogContent,
@@ -15,10 +15,8 @@ import { Label } from '@/components/ui/label'
 import { UserRound, FolderOpen, Plus, Check, ChevronDown, ChevronRight, Mail, CheckSquare, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
-import { CACHE_TIME } from '@/lib/query-cache'
+import { useProjectPicker, type Identity } from '@/components/use-project-picker'
 
-type Identity = { id: string; name: string }
-type Project = { id: string; name: string; identity: Identity | null }
 type RelatedTask = { id: string; title: string; project: { id: string; name: string; identity: Identity | null } | null }
 type RelatedItems = { threadId: string; emailCount: number; tasks: RelatedTask[] }
 
@@ -40,16 +38,30 @@ export function ReassignProjectModal({
   invalidateKeys = [],
 }: Props) {
   const queryClient = useQueryClient()
+  const picker = useProjectPicker(open)
+  const {
+    identities,
+    filteredGrouped,
+    search,
+    setSearch,
+    collapsedIdentities,
+    toggleIdentity,
+    selectedProjectId,
+    setSelectedProjectId,
+    showNewProject,
+    setShowNewProject,
+    newProjectName,
+    setNewProjectName,
+    newProjectIdentityId,
+    setNewProjectIdentityId,
+    showNewIdentity,
+    setShowNewIdentity,
+    newIdentityName,
+    setNewIdentityName,
+    resetPickerState,
+    resolveOrCreateProject,
+  } = picker
 
-  // Step 1 state
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [showNewProject, setShowNewProject] = useState(false)
-  const [newProjectName, setNewProjectName] = useState('')
-  const [newProjectIdentityId, setNewProjectIdentityId] = useState<string | ''>('')
-  const [showNewIdentity, setShowNewIdentity] = useState(false)
-  const [newIdentityName, setNewIdentityName] = useState('')
-  const [collapsedIdentities, setCollapsedIdentities] = useState<Set<string>>(new Set())
   const [nextLoading, setNextLoading] = useState(false)
 
   // Step 2 state
@@ -60,66 +72,8 @@ export function ReassignProjectModal({
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
 
-  const { data: projectsRes } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => fetch('/api/projects').then((r) => r.json()),
-    enabled: open,
-    staleTime: CACHE_TIME.taxonomy,
-  })
-  const { data: identitiesRes } = useQuery({
-    queryKey: ['identities'],
-    queryFn: () => fetch('/api/identities').then((r) => r.json()),
-    enabled: open,
-    staleTime: CACHE_TIME.taxonomy,
-  })
-
-  const projects = useMemo(() => (projectsRes?.data || []) as Project[], [projectsRes?.data])
-  const identities = useMemo(() => (identitiesRes?.data || []) as Identity[], [identitiesRes?.data])
-
-  const grouped = useMemo(() => {
-    const map = new Map<string, { identity: Identity | null; projects: Project[] }>()
-    for (const project of projects) {
-      const key = project.identity?.id || '__none__'
-      if (!map.has(key)) map.set(key, { identity: project.identity, projects: [] })
-      map.get(key)?.projects.push(project)
-    }
-    return Array.from(map.values()).sort((a, b) =>
-      (a.identity?.name || 'zzz').localeCompare(b.identity?.name || 'zzz')
-    )
-  }, [projects])
-
-  const filteredGrouped = useMemo(() => {
-    if (!search.trim()) return grouped
-    const query = search.toLowerCase()
-    return grouped
-      .map((group) => ({
-        ...group,
-        projects: group.projects.filter(
-          (p) => p.name.toLowerCase().includes(query) || group.identity?.name.toLowerCase().includes(query)
-        ),
-      }))
-      .filter((g) => g.projects.length > 0)
-  }, [grouped, search])
-
-  const toggleIdentity = (key: string) =>
-    setCollapsedIdentities((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      return next
-    })
-
   const reset = () => {
-    setSelectedProjectId(null)
-    setSearch('')
-    setShowNewProject(false)
-    setNewProjectName('')
-    setNewProjectIdentityId('')
-    setShowNewIdentity(false)
-    setNewIdentityName('')
+    resetPickerState()
     setNextLoading(false)
     setStep('pick')
     setPendingProjectId(null)
@@ -134,42 +88,10 @@ export function ReassignProjectModal({
     onOpenChange(nextOpen)
   }
 
-  // Resolve project (create identity/project if needed), returns projectId or null
-  async function resolveProject(): Promise<string | null> {
-    let projectId = selectedProjectId
-    let identityId = newProjectIdentityId || null
-
-    if (showNewProject && showNewIdentity && newIdentityName.trim()) {
-      const identityRes = await fetch('/api/identities', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newIdentityName.trim() }),
-      })
-      const identityData = await identityRes.json()
-      if (!identityData.data?.id) throw new Error('Failed to create identity')
-      identityId = identityData.data.id
-      queryClient.invalidateQueries({ queryKey: ['identities'] })
-    }
-
-    if (showNewProject && newProjectName.trim()) {
-      const projectRes = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newProjectName.trim(), identityId }),
-      })
-      const projectData = await projectRes.json()
-      if (!projectData.data?.id) throw new Error('Failed to create project')
-      projectId = projectData.data.id
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-    }
-
-    return projectId
-  }
-
   async function handleNext() {
     setNextLoading(true)
     try {
-      const projectId = await resolveProject()
+      const projectId = await resolveOrCreateProject()
       if (!projectId) { toast.error('Please select or create a project'); return }
 
       // Standalone task — skip review step
