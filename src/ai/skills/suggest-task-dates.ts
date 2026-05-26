@@ -1,5 +1,5 @@
 import { generateObject } from 'ai'
-import { getModel, getFallbackModel } from '../provider'
+import { withFallback } from '../utils/with-fallback'
 import { taskDateSuggestionSchema, type TaskDateSuggestionResult } from '../schemas'
 
 // ============================================================
@@ -49,22 +49,13 @@ ${recentTasksBlock}
 
 Suggest startDate and dueDate.`
 
-  try {
+  return withFallback('Task date suggestion', 'fast', async (model) => {
     const { object } = await generateObject({
-      model: getModel('fast'),
+      model,
       schema: taskDateSuggestionSchema,
       system: SYSTEM_PROMPT,
       prompt,
     })
     return object
-  } catch (err) {
-    console.warn('Task date suggestion primary model failed, trying fallback:', err)
-    const { object } = await generateObject({
-      model: getFallbackModel('fast'),
-      schema: taskDateSuggestionSchema,
-      system: SYSTEM_PROMPT,
-      prompt,
-    })
-    return object
-  }
+  })
 }

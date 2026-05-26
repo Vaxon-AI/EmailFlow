@@ -1,5 +1,5 @@
 import { generateObject } from 'ai'
-import { getModel, getFallbackModel } from '../provider'
+import { withFallback } from '../utils/with-fallback'
 import { threadMemoryUpdateSchema, type ThreadMemoryUpdateResult } from '../schemas'
 
 // ============================================================
@@ -68,23 +68,13 @@ Date: ${input.date}
 Classification: ${input.classification}
 Body preview: ${input.bodyPreview}`
 
-  try {
+  return withFallback('Thread memory update', 'fast', async (model) => {
     const { object } = await generateObject({
-      model: getModel('fast'),
+      model,
       schema: threadMemoryUpdateSchema,
       system: SYSTEM_PROMPT,
       prompt,
     })
     return object
-  } catch (error) {
-    console.warn('Thread memory update primary model failed, trying fallback:', error)
-
-    const { object } = await generateObject({
-      model: getFallbackModel('fast'),
-      schema: threadMemoryUpdateSchema,
-      system: SYSTEM_PROMPT,
-      prompt,
-    })
-    return object
-  }
+  })
 }

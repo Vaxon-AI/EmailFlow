@@ -1,5 +1,5 @@
 import { generateObject } from 'ai'
-import { getModel, getFallbackModel } from '../provider'
+import { withFallback } from '../utils/with-fallback'
 import { classificationSchema, type ClassificationResult } from '../schemas'
 
 // ============================================================
@@ -47,23 +47,13 @@ From: ${input.sender}
 Date: ${input.date}
 Body (preview): ${input.bodyPreview}`
 
-  try {
+  return withFallback('Classification', 'fast', async (model) => {
     const { object } = await generateObject({
-      model: getModel('fast'),
+      model,
       schema: classificationSchema,
       system: SYSTEM_PROMPT,
       prompt,
     })
     return object
-  } catch (error) {
-    console.warn('Classification primary model failed, trying fallback:', error)
-
-    const { object } = await generateObject({
-      model: getFallbackModel('fast'),
-      schema: classificationSchema,
-      system: SYSTEM_PROMPT,
-      prompt,
-    })
-    return object
-  }
+  })
 }

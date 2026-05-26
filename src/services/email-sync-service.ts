@@ -1,4 +1,4 @@
-import { AppError } from '@/lib/app-errors'
+import { AppError, errorMessage } from '@/lib/app-errors'
 import * as Sentry from '@sentry/nextjs'
 import { getEmailProvider } from '@/integrations/provider-registry'
 import type { EmailMessage } from '@/integrations'
@@ -127,7 +127,7 @@ async function storeFetchedEmails(
       }
     } catch (err) {
       failedCount++
-      const reason = err instanceof Error ? err.message : String(err)
+      const reason = errorMessage(err)
       console.error(`Failed to store email providerMessageId=${message.providerMessageId}: ${reason}`)
       try {
         await failedRepo.recordFailedEmail(userId, message, reason)
@@ -422,7 +422,7 @@ async function retryFailedEmails(userId: string): Promise<{ retriedSuccessCount:
       console.log(`Retry resolved providerMessageId=${providerMessageId} wasCreated=${wasCreated}`)
     } catch (err) {
       retriedFailedCount++
-      const reason = err instanceof Error ? err.message : String(err)
+      const reason = errorMessage(err)
       console.error(`Retry failed providerMessageId=${providerMessageId}: ${reason}`)
       try {
         await failedRepo.recordRetryFailure(userId, providerMessageId, reason)

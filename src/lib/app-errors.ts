@@ -40,3 +40,7 @@ export function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message
   return fallback
 }
+
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}

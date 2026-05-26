@@ -1,5 +1,5 @@
 import { generateObject } from 'ai'
-import { getModel, getFallbackModel } from '../provider'
+import { withFallback } from '../utils/with-fallback'
 import { taskExtractionSchema, type TaskExtractionResult } from '../schemas'
 
 // ============================================================
@@ -60,23 +60,13 @@ Body: ${input.body || input.bodyPreview}`
     }
   }
 
-  try {
+  return withFallback('Task extraction', 'balanced', async (model) => {
     const { object } = await generateObject({
-      model: getModel('balanced'),
+      model,
       schema: taskExtractionSchema,
       system: SYSTEM_PROMPT,
       prompt,
     })
     return object
-  } catch (error) {
-    console.warn('Task extraction primary model failed, trying fallback:', error)
-
-    const { object } = await generateObject({
-      model: getFallbackModel('balanced'),
-      schema: taskExtractionSchema,
-      system: SYSTEM_PROMPT,
-      prompt,
-    })
-    return object
-  }
+  })
 }

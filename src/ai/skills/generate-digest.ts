@@ -1,5 +1,5 @@
 import { generateText } from 'ai'
-import { getModel, getFallbackModel } from '../provider'
+import { withFallback } from '../utils/with-fallback'
 
 // ============================================================
 // AI-generated digest content
@@ -123,20 +123,12 @@ function buildPrompt(input: DigestAIInput): string {
 export async function generateAIDigest(input: DigestAIInput): Promise<string> {
   const prompt = buildPrompt(input)
 
-  try {
+  return withFallback('[digest-ai]', 'balanced', async (model) => {
     const { text } = await generateText({
-      model: getModel('balanced'),
+      model,
       system: SYSTEM_PROMPT,
       prompt,
     })
     return text.trim()
-  } catch (error) {
-    console.warn('[digest-ai] primary model failed, trying fallback:', error)
-    const { text } = await generateText({
-      model: getFallbackModel('balanced'),
-      system: SYSTEM_PROMPT,
-      prompt,
-    })
-    return text.trim()
-  }
+  })
 }

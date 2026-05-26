@@ -246,6 +246,35 @@ async function resolveUserContext(userId: string, timezoneOverride?: string): Pr
   }
 }
 
+function enumerateDays(start: Date, now: Date): Date[] {
+  const days: Date[] = []
+  for (let i = 0; i < 7; i++) {
+    const dayStart = new Date(start.getTime() + i * 24 * 60 * 60 * 1000)
+    if (dayStart.getTime() > now.getTime()) break
+    days.push(dayStart)
+  }
+  return days
+}
+
+async function fetchDailyEmailBuckets(userId: string, days: Date[]) {
+  return Promise.all(
+    days.map(async (dayStart) => {
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1)
+      const range = { start: dayStart, end: dayEnd }
+
+      const [action, tracked, awareness, uncertain, ignored] = await Promise.all([
+        emailRepo.findEmailsByClassification(userId, 'action', range, { actioned: false }),
+        emailRepo.findActionedEmails(userId, range),
+        emailRepo.findEmailsByClassification(userId, 'awareness', range, { actioned: false }),
+        emailRepo.findEmailsByClassification(userId, 'uncertain', range),
+        emailRepo.findEmailsByClassification(userId, 'ignore', range),
+      ])
+
+      return { date: dayStart, action, tracked, awareness, uncertain, ignored }
+    })
+  )
+}
+
 // ── Public API ───────────────────────────────────────────────
 
 async function buildDailyDigest(userId: string, timezone?: string, useAi = true): Promise<DigestBuildResult> {
@@ -314,29 +343,8 @@ async function buildWeeklyDigest(userId: string, timezone?: string, useAi = true
   const start = startOfWeekInTz(now, tz)
   const end = now
 
-  const days: Date[] = []
-  for (let i = 0; i < 7; i++) {
-    const dayStart = new Date(start.getTime() + i * 24 * 60 * 60 * 1000)
-    if (dayStart.getTime() > now.getTime()) break
-    days.push(dayStart)
-  }
-
-  const byDay = await Promise.all(
-    days.map(async (dayStart) => {
-      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1)
-      const range = { start: dayStart, end: dayEnd }
-
-      const [action, tracked, awareness, uncertain, ignored] = await Promise.all([
-        emailRepo.findEmailsByClassification(userId, 'action', range, { actioned: false }),
-        emailRepo.findActionedEmails(userId, range),
-        emailRepo.findEmailsByClassification(userId, 'awareness', range, { actioned: false }),
-        emailRepo.findEmailsByClassification(userId, 'uncertain', range),
-        emailRepo.findEmailsByClassification(userId, 'ignore', range),
-      ])
-
-      return { date: dayStart, action, tracked, awareness, uncertain, ignored }
-    })
-  )
+  const days = enumerateDays(start, now)
+  const byDay = await fetchDailyEmailBuckets(userId, days)
 
   const tasks = await taskRepo.findTasksByDateRange(userId, { start, end })
   const active = tasks.filter(t => t.status === 'active')
@@ -404,30 +412,8 @@ export async function createWeeklyDigest(userId: string, timezone?: string) {
   const start = startOfWeekInTz(now, tz)
   const end = now
 
-  // Fetch each day's emails separately — Mon through today only (user-local day boundaries)
-  const days: Date[] = []
-  for (let i = 0; i < 7; i++) {
-    const dayStart = new Date(start.getTime() + i * 24 * 60 * 60 * 1000)
-    if (dayStart.getTime() > now.getTime()) break
-    days.push(dayStart)
-  }
-
-  const byDay = await Promise.all(
-    days.map(async (dayStart) => {
-      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1)
-      const range = { start: dayStart, end: dayEnd }
-
-      const [action, tracked, awareness, uncertain, ignored] = await Promise.all([
-        emailRepo.findEmailsByClassification(userId, 'action', range, { actioned: false }),
-        emailRepo.findActionedEmails(userId, range),
-        emailRepo.findEmailsByClassification(userId, 'awareness', range, { actioned: false }),
-        emailRepo.findEmailsByClassification(userId, 'uncertain', range),
-        emailRepo.findEmailsByClassification(userId, 'ignore', range),
-      ])
-
-      return { date: dayStart, action, tracked, awareness, uncertain, ignored }
-    })
-  )
+  const days = enumerateDays(start, now)
+  const byDay = await fetchDailyEmailBuckets(userId, days)
 
   const tasks = await taskRepo.findTasksByDateRange(userId, { start, end })
   const active = tasks.filter(t => t.status === 'active')

@@ -1,5 +1,5 @@
 import { generateObject } from 'ai'
-import { getModel, getFallbackModel } from '../provider'
+import { withFallback } from '../utils/with-fallback'
 import { matchMatterSchema, type MatchMatterResult } from '../schemas'
 
 // ============================================================
@@ -66,23 +66,13 @@ ${candidateBlock}
 
 Does this thread belong to one of the candidates above, or is it a new matter?`
 
-  try {
+  return withFallback('Matter matching', 'fast', async (model) => {
     const { object } = await generateObject({
-      model: getModel('fast'),
+      model,
       schema: matchMatterSchema,
       system: SYSTEM_PROMPT,
       prompt,
     })
     return object
-  } catch (error) {
-    console.warn('Matter matching primary model failed, trying fallback:', error)
-
-    const { object } = await generateObject({
-      model: getFallbackModel('fast'),
-      schema: matchMatterSchema,
-      system: SYSTEM_PROMPT,
-      prompt,
-    })
-    return object
-  }
+  })
 }

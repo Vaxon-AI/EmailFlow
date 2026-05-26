@@ -8,6 +8,7 @@
 import { prisma } from '@/lib/prisma'
 import type { ProtectionRuleType, Prisma } from '@prisma/client'
 import type { EmailSnapshot, PolicySnapshot, ProtectionRuleSnapshot } from '@/lib/retention-engine'
+import { errorMessage } from '@/lib/app-errors'
 
 const RETENTION_TASK_LINK_SELECT = {
   select: {
@@ -252,7 +253,7 @@ export async function setMetadataOnly(
       succeeded++
     } else {
       const err = r.reason
-      failed.push({ id: emails[i].id, error: err instanceof Error ? err.message : String(err) })
+      failed.push({ id: emails[i].id, error: errorMessage(err) })
     }
   })
   return { succeeded, failed }

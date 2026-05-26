@@ -1,5 +1,5 @@
 import { generateObject } from 'ai'
-import { getModel, getFallbackModel } from '../provider'
+import { withFallback } from '../utils/with-fallback'
 import { replyDraftSchema, type ReplyDraftResult } from '../schemas'
 
 type ReplyTaskContext = {
@@ -76,23 +76,13 @@ ${input.body}
 Linked task context:
 ${taskContext}`
 
-  try {
+  return withFallback('Reply draft', 'balanced', async (model) => {
     const { object } = await generateObject({
-      model: getModel('balanced'),
+      model,
       schema: replyDraftSchema,
       system: SYSTEM_PROMPT,
       prompt,
     })
     return object
-  } catch (error) {
-    console.warn('Reply draft primary model failed, trying fallback:', error)
-
-    const { object } = await generateObject({
-      model: getFallbackModel('balanced'),
-      schema: replyDraftSchema,
-      system: SYSTEM_PROMPT,
-      prompt,
-    })
-    return object
-  }
+  })
 }

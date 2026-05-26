@@ -20,6 +20,7 @@ import * as digestRepo from '@/repositories/digest-repo'
 import { cleanupTasksForUser } from '@/services/task-cleanup-service'
 import { fetchGmailMessageBody } from '@/integrations/gmail/client'
 import { prisma } from '@/lib/prisma'
+import { errorMessage } from '@/lib/app-errors'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -437,6 +438,3 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return result
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}

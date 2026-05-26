@@ -1,5 +1,5 @@
 import { generateObject } from 'ai'
-import { getModel, getFallbackModel } from '../provider'
+import { withFallback } from '../utils/with-fallback'
 import { prioritySchema, type PriorityResult } from '../schemas'
 
 // ============================================================
@@ -48,23 +48,13 @@ Action items: ${input.actionItems.join('; ')}
 Sender: ${input.sender}
 Current date: ${input.currentDate}`
 
-  try {
+  return withFallback('Priority scoring', 'fast', async (model) => {
     const { object } = await generateObject({
-      model: getModel('fast'),
+      model,
       schema: prioritySchema,
       system: SYSTEM_PROMPT,
       prompt,
     })
     return object
-  } catch (error) {
-    console.warn('Priority scoring primary model failed, trying fallback:', error)
-
-    const { object } = await generateObject({
-      model: getFallbackModel('fast'),
-      schema: prioritySchema,
-      system: SYSTEM_PROMPT,
-      prompt,
-    })
-    return object
-  }
+  })
 }
