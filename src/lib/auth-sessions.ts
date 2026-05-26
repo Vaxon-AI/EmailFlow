@@ -4,7 +4,11 @@ import type { Prisma } from '@prisma/client'
 import { AppError } from '@/lib/app-errors'
 import { prisma } from '@/lib/prisma'
 import { sendNewDeviceLoginEmail, sendSuspiciousActivityEmail } from '@/lib/mailer'
-import { getSessionToken, SESSION_MAX_AGE_REMEMBER_SECONDS } from '@/lib/auth-token'
+import {
+  getSessionToken,
+  SESSION_MAX_AGE_DEFAULT_SECONDS,
+  SESSION_MAX_AGE_REMEMBER_SECONDS,
+} from '@/lib/auth-token'
 import { getDeviceInfo, type DeviceInfo } from '@/lib/session-device'
 
 const ACTIVE_STATUS = 'active'
@@ -12,7 +16,8 @@ const EXPIRED_STATUS = 'expired'
 const REVOKED_STATUS = 'revoked'
 const LAST_ACTIVE_UPDATE_INTERVAL_MS = 5 * 60 * 1000
 const MAX_ACTIVE_SESSIONS = 3
-const SESSION_INACTIVITY_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000
+const SESSION_INACTIVITY_TIMEOUT_DEFAULT_MS = 7 * 24 * 60 * 60 * 1000
+const SESSION_INACTIVITY_TIMEOUT_REMEMBER_MS = 30 * 24 * 60 * 60 * 1000
 // After rotation, the old token is accepted for this many ms (handles in-flight concurrent requests)
 const ROTATION_GRACE_PERIOD_MS = 30 * 1000
 
@@ -152,8 +157,12 @@ async function markSessionExpired(sessionId: string) {
   }).catch(() => null)
 }
 
-function isInactiveExpired(lastActiveAt: Date, now: Date) {
-  return now.getTime() - lastActiveAt.getTime() >= SESSION_INACTIVITY_TIMEOUT_MS
+function inactivityTimeoutMs(remember: boolean) {
+  return remember ? SESSION_INACTIVITY_TIMEOUT_REMEMBER_MS : SESSION_INACTIVITY_TIMEOUT_DEFAULT_MS
+}
+
+function isInactiveExpired(lastActiveAt: Date, now: Date, remember: boolean) {
+  return now.getTime() - lastActiveAt.getTime() >= inactivityTimeoutMs(remember)
 }
 
 function isRevokedSession(session: { status: string; revokedAt: Date | null }) {
@@ -218,7 +227,10 @@ export async function createUserSession(input: {
   const remember = Boolean(input.remember)
   const sendNewDeviceAlert = input.sendNewDeviceAlert !== false
   const now = new Date()
-  const expiresAt = new Date(now.getTime() + SESSION_MAX_AGE_REMEMBER_SECONDS * 1000)
+  const sessionTtlSeconds = remember
+    ? SESSION_MAX_AGE_REMEMBER_SECONDS
+    : SESSION_MAX_AGE_DEFAULT_SECONDS
+  const expiresAt = new Date(now.getTime() + sessionTtlSeconds * 1000)
   const rawToken = createRawSessionToken()
   const tokenHash = sessionTokenHash(rawToken)
   const device = getDeviceInfo(input.request)
@@ -442,7 +454,7 @@ export async function requireSessionToken(token: string | null): Promise<Session
     throw new AppError('SESSION_EXPIRED', 'Your session has expired. Please sign in again.', 401)
   }
 
-  if (isInactiveExpired(session.lastActiveAt, now)) {
+  if (isInactiveExpired(session.lastActiveAt, now, session.remember)) {
     await expireSessionIfActive(session)
     throw new AppError('SESSION_INACTIVE_EXPIRED', 'Your session expired after inactivity. Please sign in again.', 401)
   }
@@ -605,6 +617,11 @@ export async function revokeOtherSessions(userId: string, currentSessionId: stri
 export async function listActiveSessions(userId: string) {
   const now = new Date()
 
+  // Use the longest possible inactivity window so background cleanup never falsely
+  // culls a remember-me session. requireSessionToken enforces the per-session
+  // threshold (7d vs 30d) on actual auth requests.
+  const longestInactivityCutoff = new Date(now.getTime() - SESSION_INACTIVITY_TIMEOUT_REMEMBER_MS)
+
   await prisma.session.updateMany({
     where: {
       userId,
@@ -612,7 +629,7 @@ export async function listActiveSessions(userId: string) {
       revokedAt: null,
       OR: [
         { expiresAt: { lte: now } },
-        { lastActiveAt: { lte: new Date(now.getTime() - SESSION_INACTIVITY_TIMEOUT_MS) } },
+        { lastActiveAt: { lte: longestInactivityCutoff } },
       ],
     },
     data: { status: EXPIRED_STATUS },
@@ -622,7 +639,7 @@ export async function listActiveSessions(userId: string) {
     where: {
       userId,
       ...buildActiveSessionFilter(now),
-      lastActiveAt: { gt: new Date(now.getTime() - SESSION_INACTIVITY_TIMEOUT_MS) },
+      lastActiveAt: { gt: longestInactivityCutoff },
     },
     orderBy: [{ lastActiveAt: 'desc' }, { createdAt: 'desc' }],
     select: {

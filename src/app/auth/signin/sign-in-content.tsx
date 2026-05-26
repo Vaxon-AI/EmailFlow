@@ -184,17 +184,8 @@ export function SignInContent() {
         }
       >
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        
+
         <div className="mb-4 space-y-2.5">
-          <label className="flex cursor-pointer select-none items-center mb-4 gap-2.5">
-          <input
-            type="checkbox"
-            checked={rememberMe}
-            onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-blue-500"
-          />
-          <span className="text-sm text-gray-600">Remember me for 30 days</span>
-        </label>
           <div className="space-y-1.5">
             <button
               type="button"
@@ -269,6 +260,16 @@ export function SignInContent() {
             </button>
           </div>
         </div>
+
+        <label className="flex cursor-pointer select-none items-center gap-2.5">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-600">Remember me for 30 days</span>
+        </label>
 
         <Button type="submit" disabled={loading} className="h-10 w-full gap-2">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}

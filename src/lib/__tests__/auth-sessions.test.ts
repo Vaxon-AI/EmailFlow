@@ -154,6 +154,44 @@ describe('createUserSession', () => {
     expect(tx.session.create).toHaveBeenCalled()
   })
 
+  it('sets expiresAt ~30 days out when remember is true', async () => {
+    const tx = mockTransaction([])
+    const before = Date.now()
+
+    await createUserSession({
+      userId: 'user-1',
+      userEmail: 'test@example.com',
+      remember: true,
+      request: requestWithUa(),
+    })
+
+    const createArg = tx.session.create.mock.calls[0][0] as { data: { expiresAt: Date; remember: boolean } }
+    const ttlMs = createArg.data.expiresAt.getTime() - before
+    expect(createArg.data.remember).toBe(true)
+    // 30 days ± 5 second tolerance for test execution time
+    expect(ttlMs).toBeGreaterThanOrEqual(30 * 24 * 60 * 60 * 1000 - 5000)
+    expect(ttlMs).toBeLessThanOrEqual(30 * 24 * 60 * 60 * 1000 + 5000)
+  })
+
+  it('sets expiresAt ~24 hours out when remember is false', async () => {
+    const tx = mockTransaction([])
+    const before = Date.now()
+
+    await createUserSession({
+      userId: 'user-1',
+      userEmail: 'test@example.com',
+      remember: false,
+      request: requestWithUa(),
+    })
+
+    const createArg = tx.session.create.mock.calls[0][0] as { data: { expiresAt: Date; remember: boolean } }
+    const ttlMs = createArg.data.expiresAt.getTime() - before
+    expect(createArg.data.remember).toBe(false)
+    // 24 hours ± 5 second tolerance
+    expect(ttlMs).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 5000)
+    expect(ttlMs).toBeLessThanOrEqual(24 * 60 * 60 * 1000 + 5000)
+  })
+
   it('blocks a fourth distinct browser/device without creating a session', async () => {
     const devices = ['a', 'b', 'c'].map((suffix) => makeFullSession({
       id: `session-${suffix}`,
@@ -235,6 +273,26 @@ describe('requireSessionToken', () => {
 
   it('throws SESSION_INACTIVE_EXPIRED when lastActiveAt is beyond the inactivity timeout', async () => {
     mockSession.findFirst.mockResolvedValue(makeFullSession({ lastActiveAt: staleActiveAt }))
+    mockSession.update.mockResolvedValue({} as never)
+    await expect(requireSessionToken(RAW_TOKEN)).rejects.toMatchObject({ code: 'SESSION_INACTIVE_EXPIRED' })
+  })
+
+  it('tolerates 20-day inactivity for a remember=true session (within 30-day window)', async () => {
+    const twentyDaysAgo = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000)
+    mockSession.findFirst.mockResolvedValue(
+      makeFullSession({ remember: true, lastActiveAt: twentyDaysAgo })
+    )
+    const updatedAt = new Date()
+    mockSession.update.mockResolvedValue({ lastActiveAt: updatedAt, updatedAt } as never)
+    const ctx = await requireSessionToken(RAW_TOKEN)
+    expect(ctx.session.remember).toBe(true)
+  })
+
+  it('throws SESSION_INACTIVE_EXPIRED for a remember=true session past 30-day inactivity', async () => {
+    const thirtyOneDaysAgo = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000)
+    mockSession.findFirst.mockResolvedValue(
+      makeFullSession({ remember: true, lastActiveAt: thirtyOneDaysAgo })
+    )
     mockSession.update.mockResolvedValue({} as never)
     await expect(requireSessionToken(RAW_TOKEN)).rejects.toMatchObject({ code: 'SESSION_INACTIVE_EXPIRED' })
   })
