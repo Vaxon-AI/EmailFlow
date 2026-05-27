@@ -9,11 +9,14 @@ import { useDemoStore } from '@/lib/demo/store'
  * Persistent strip that makes it unmistakable this is a no-stakes demo:
  * sample data, nothing is saved, and resetting / leaving is one click away.
  */
-export function DemoBanner() {
+export function DemoBanner({ ref }: { ref?: React.Ref<HTMLDivElement> }) {
   const { reset } = useDemoStore()
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 bg-brand-600 px-4 py-2 text-white">
+    <div
+      ref={ref}
+      className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 bg-brand-600 px-4 py-2 text-white"
+    >
       <span className="flex items-center gap-1.5 text-xs font-medium">
         <FlaskConical className="h-3.5 w-3.5 shrink-0" />
         You&apos;re exploring the EmailFlow demo — sample data, nothing here is saved.

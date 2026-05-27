@@ -18,7 +18,10 @@ export function DemoTopbar({ onOpenMobileNav }: { onOpenMobileNav: () => void })
   const sectionLabel = SECTION_LABELS[sectionKey] ?? 'Dashboard'
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-gray-200/80 bg-white/85 px-4 backdrop-blur lg:px-6">
+    <header
+      style={{ top: 'var(--demo-banner-h, 0px)' }}
+      className="sticky z-20 flex h-14 items-center justify-between border-b border-gray-200/80 bg-white/85 px-4 backdrop-blur lg:px-6"
+    >
       <div className="flex min-w-0 items-center gap-2 text-sm text-gray-500">
         <button
           type="button"

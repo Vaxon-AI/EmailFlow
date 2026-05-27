@@ -105,9 +105,9 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
             <PasswordCard />
+            <SettingsPlanUsageCard plan={user?.plan} quota={quota} />
             <PreferencesCard />
 
-            <SettingsPlanUsageCard plan={user?.plan} quota={quota} />
             <SettingsTimezoneCard currentTimezone={currentUser?.timezone ?? null} />
             <RetentionPolicyCard />
           </>

@@ -291,7 +291,7 @@ function DashboardContent() {
               <Skeleton className="h-9 w-28 rounded-lg" />
             ) : providerReauthRequired ? (
               <Link href="/dashboard/settings">
-                <Button size="sm" variant="outline" className="border-critical-100 bg-critical-50 text-critical-700 hover:bg-critical-100">
+                <Button size="sm" variant="outline" className="border-critical-100 bg-critical-50 text-critical-700 hover:border-critical-200 hover:bg-critical-100 hover:text-critical-700 hover:shadow-md">
                   Reconnect Email
                 </Button>
               </Link>

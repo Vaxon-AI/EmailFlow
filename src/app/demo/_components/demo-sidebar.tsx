@@ -31,9 +31,13 @@ export function DemoSidebar({
         />
       )}
       <aside
+        style={{
+          top: 'var(--demo-banner-h, 0px)',
+          height: 'calc(100svh - var(--demo-banner-h, 0px))',
+        }}
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-gray-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,250,252,0.98)_100%)] backdrop-blur transition-transform duration-200',
-          'lg:sticky lg:top-0 lg:z-auto lg:translate-x-0',
+          'fixed left-0 z-40 flex w-64 shrink-0 flex-col overflow-y-auto border-r border-gray-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,250,252,0.98)_100%)] backdrop-blur transition-transform duration-200',
+          'lg:sticky lg:z-auto lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >

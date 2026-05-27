@@ -93,7 +93,7 @@ export function FeedbackModal({
               <SelectTrigger size="sm" className="w-full bg-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent alignItemWithTrigger={false}>
                 {(['Bug', 'Idea', 'Other'] as const).map((value) => (
                   <SelectItem
                     key={value}

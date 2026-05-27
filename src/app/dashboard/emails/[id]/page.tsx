@@ -392,7 +392,7 @@ export default function EmailDetailPage() {
             it stops showing up in Needs Action / All. DB row stays so email
             sync dedup is unaffected. Hidden once already actioned to avoid a
             confusing no-op click. */}
-        {!email.actioned && email.classification !== 'ignore' && (
+        {/* {!email.actioned && email.classification !== 'ignore' && (
           <Button
             variant="outline"
             size="sm"
@@ -403,7 +403,7 @@ export default function EmailDetailPage() {
             {ignoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <EyeOff className="h-3.5 w-3.5" />}
             Ignore
           </Button>
-        )}
+        )} */}
       </div>
       <div className="mx-auto max-w-6xl space-y-5">
         <PageHeader
