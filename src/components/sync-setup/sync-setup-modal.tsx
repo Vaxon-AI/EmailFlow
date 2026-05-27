@@ -403,7 +403,7 @@ export function SyncSetupModal({ open, reason, onOpenChange, onSyncRangeSaved }:
               <DialogDescription>
                 {isStale
                   ? `It's been ${daysSinceLastSync} days since your last sync. Pick a window to catch up.`
-                  : 'EmailFlow will scan this range and use your preferences to identify important emails and tasks.'}
+                  : 'Start with 7 days if you’re trying EmailFlow for the first time. You can sync more emails later from Settings.'}
               </DialogDescription>
             </DialogHeader>
 
@@ -720,7 +720,7 @@ function SyncWindowOption({
         <div className="min-w-0 flex-1">
           <p className={titleClass}>
             {title}
-            {recommended && !exceeds && !selected ? (
+            {recommended && !exceeds ? (
               <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                 Recommended
               </span>
