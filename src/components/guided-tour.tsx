@@ -26,12 +26,6 @@ export function GuidedTour({ steps, open, onClose, onComplete }: GuidedTourProps
   const [mounted, setMounted] = useState(false)
   const resizeRef = useRef<number | null>(null)
 
-  useEffect(() => {
-    if (open) {
-      setCurrentStep(0)
-    }
-  }, [open])
-
   const updateRect = useCallback(() => {
     const step = steps[currentStep]
     if (!step) return
@@ -55,13 +49,13 @@ export function GuidedTour({ steps, open, onClose, onComplete }: GuidedTourProps
   }, [currentStep, steps])
 
   useEffect(() => {
-    setMounted(true)
+    setTimeout(() => setMounted(true), 0)
     return () => setMounted(false)
   }, [])
 
   useEffect(() => {
     if (open) {
-      updateRect()
+      setTimeout(() => updateRect(), 0)
       
       // Delay second update to catch any layout shifts after scroll
       const timer = setTimeout(updateRect, 500)

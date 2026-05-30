@@ -93,9 +93,9 @@ function DashboardContent() {
 
   useEffect(() => {
     if (tourSeenRes?.data?.seen === false && !searchParams.get('gmail_connected')) {
-      setTourOpen(true)
+      setTimeout(() => setTourOpen(true), 0)
     } else if (searchParams.get('replay_tour') === '1') {
-      setTourOpen(true)
+      setTimeout(() => setTourOpen(true), 0)
       // Clean up the URL
       const params = new URLSearchParams(searchParams.toString())
       params.delete('replay_tour')
@@ -687,6 +687,7 @@ function DashboardContent() {
       </Card>
 
       <GuidedTour 
+        key={tourOpen ? 'open' : 'closed'}
         steps={tourSteps}
         open={tourOpen}
         onClose={() => setTourOpen(false)}
