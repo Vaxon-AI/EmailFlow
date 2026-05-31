@@ -516,7 +516,7 @@ function DashboardContent() {
                 href={childLink('/demo/emails', { tab: 'unclassified' })}
                 className="mt-2.5 inline-flex rounded-lg border border-warning-200 bg-yellow-50/80 px-2.5 py-1.5 text-[11px] font-semibold text-warning-700 shadow-sm transition-all hover:-translate-y-px hover:bg-warning-100/70 hover:shadow-md"
               >
-                +{stats.email.uncertain} unclassified (uncertain or quota-skipped)
+                +{stats.email.uncertain} needs review (uncertain or quota-skipped)
               </Link>
             )}
           </CardContent>

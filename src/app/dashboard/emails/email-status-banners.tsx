@@ -43,10 +43,10 @@ export function EmailStatusBanners({
         <div className="animate-soft-enter flex items-start justify-between gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-4 py-3 text-sm shadow-sm">
           <div className="min-w-0">
             <p className="font-medium text-warning-700">
-              {unclassifiedCount} unclassified email{unclassifiedCount === 1 ? '' : 's'}
+              {unclassifiedCount} email{unclassifiedCount === 1 ? '' : 's'} need{unclassifiedCount === 1 ? 's' : ''} your review
             </p>
             <p className="mt-0.5 text-xs text-warning">
-              Uncertain emails need your judgment. Unclassified emails are not classified yet or were skipped by quota.
+              These emails need your judgment to turn into tasks. Includes AI-uncertain and quota-skipped emails.
             </p>
           </div>
           <Button
@@ -69,7 +69,7 @@ export function EmailStatusBanners({
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
           <span>
             <span className="font-medium">AI is classifying {pendingCount} email{pendingCount === 1 ? '' : 's'}...</span>
-            {' '}Classified emails will move out of Unclassified automatically.
+            {' '}Classified emails will move out of Needs Review automatically.
           </span>
         </div>
       )}
@@ -129,7 +129,7 @@ export function EmailStatusBanners({
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
           <span>
             <span className="font-medium">{pendingCount} email{pendingCount === 1 ? '' : 's'}</span>
-            {' '}being classified in Unclassified.
+            {' '}being classified in Needs Review.
           </span>
         </div>
       )}

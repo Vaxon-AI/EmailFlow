@@ -72,7 +72,7 @@ function buildDailyContent({
   }
 
   if (uncertain.length) {
-    lines.push(`### Unclassified (${uncertain.length})`)
+    lines.push(`### Needs Review (${uncertain.length})`)
     uncertain.forEach(e => lines.push(`- ${e.subject} · ${e.sender}`))
     lines.push('')
   }

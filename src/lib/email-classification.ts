@@ -113,7 +113,7 @@ export const EMAIL_DISPLAY_CONFIG: Record<EmailDisplayState, EmailClassConfig> =
   ...EMAIL_BUCKET_CONFIG,
   uncertain: EMAIL_CLASS_CONFIG.uncertain,
   unclassified: {
-    label: 'Unclassified',
+    label: 'Needs Review',
     // Solid amber bg + white text — pairs visually with Needs Action's
     // solid red + white text (both attention chips share the "saturated bg
     // + white" pattern, distinct in hue).

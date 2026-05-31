@@ -265,7 +265,7 @@ function EmailsContent() {
       ? [
           {
             value: 'unclassified',
-            label: 'Unclassified',
+            label: 'Needs Review',
             badge: badge(newCounts.unclassified, 'unclassified'),
           },
         ]

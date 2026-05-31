@@ -102,14 +102,14 @@ describe('createDailyDigest', () => {
     expect(content).toContain('### FYI (1)')
   })
 
-  it('includes unclassified section header when uncertain emails exist', async () => {
+  it('includes needs review section header when uncertain emails exist', async () => {
     mockEmailRepo.findEmailsByClassification.mockImplementation(async (_, category) => {
       if (category === 'uncertain') return [makeEmail('Ambiguous subject')]
       return []
     })
     await createDailyDigest(USER_ID)
     const content = mockDigestRepo.createDigest.mock.calls[0][0].content
-    expect(content).toContain('### Unclassified (1)')
+    expect(content).toContain('### Needs Review (1)')
   })
 
   it('shows active and pending task counts in the header line', async () => {

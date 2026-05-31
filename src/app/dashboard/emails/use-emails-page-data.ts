@@ -184,7 +184,7 @@ export function useEmailsPageData(input: {
   // leaving SegmentedControl with no matching option and no highlight.
   const showUnclassified = unclassifiedCount > 0 || tab === 'unclassified'
   const tabs: { key: Tab; label: string; count: number }[] = [
-    ...(showUnclassified ? [{ key: 'unclassified' as const, label: 'Unclassified', count: unclassifiedCount }] : []),
+    ...(showUnclassified ? [{ key: 'unclassified' as const, label: 'Needs Review', count: unclassifiedCount }] : []),
     { key: 'needs_action', label: 'Needs Action', count: needsActionCount },
     { key: 'tracked', label: 'Tracked', count: trackedCount },
     { key: 'fyi', label: 'FYI', count: infoCount },

@@ -525,7 +525,7 @@ function EmailsContent() {
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-xl border border-warning-200 bg-warning-100/60 px-3 py-2 text-sm text-warning-700">
-            This may create tasks from Unclassified emails in the background.
+            This may create tasks from Needs Review emails in the background.
           </div>
           <div className="flex justify-end gap-2">
             <Button

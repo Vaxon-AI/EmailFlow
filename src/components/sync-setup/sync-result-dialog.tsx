@@ -143,7 +143,7 @@ export function SyncResultDialog({
               <SyncLine
                 label={
                   quotaExhausted
-                    ? `Synced ${syncedCount} email${syncedCount === 1 ? '' : 's'} to Unclassified`
+                    ? `Synced ${syncedCount} email${syncedCount === 1 ? '' : 's'} to Needs Review`
                     : `Synced ${syncedCount} email${syncedCount === 1 ? '' : 's'}`
                 }
               />
@@ -177,7 +177,7 @@ export function SyncResultDialog({
                 </div>
                 {(batchStatus.quotaSkippedEmails ?? 0) > 0 && (
                   <p className="mt-1 text-warning-700">
-                    Unclassified: {batchStatus.quotaSkippedEmails} not classified due to quota.
+                    Needs Review: {batchStatus.quotaSkippedEmails} not classified due to quota.
                   </p>
                 )}
               </li>
@@ -190,7 +190,7 @@ export function SyncResultDialog({
                     : 'Free plan limit almost reached.'}
                 </span>{' '}
                 {quotaRemaining === 0
-                  ? 'Your free plan classification limit is reached. New email is visible in Unclassified, or '
+                  ? 'Your free plan classification limit is reached. New email is visible in Needs Review, or '
                   : `Only ${quotaRemaining} email${quotaRemaining === 1 ? '' : 's'} left to classify this month. `}
                 <a
                   href="mailto:support@emailflow.ai?subject=Pro plan early access"

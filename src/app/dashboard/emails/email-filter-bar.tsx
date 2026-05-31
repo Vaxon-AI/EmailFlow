@@ -190,7 +190,7 @@ export function EmailFilterBar({
               disabled={reviewModePending}
               title={
                 manualReviewMode
-                  ? 'Manual Review is on. Switching to Auto will process Unclassified emails.'
+                  ? 'Manual Review is on. Switching to Auto will process Needs Review emails.'
                   : 'Auto is on. Click to switch new action emails into Manual Review.'
               }
               className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs transition-all disabled:cursor-not-allowed disabled:opacity-60 ${

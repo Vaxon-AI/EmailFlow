@@ -108,7 +108,7 @@ export function Header({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
               title="Emails AI couldn't categorize on its own — open to classify manually"
             >
               <AlertTriangle className="h-3.5 w-3.5" />
-              <span>{unclassifiedCount} unclassified</span>
+              <span>{unclassifiedCount} needs review</span>
             </button>
           )}
           <button

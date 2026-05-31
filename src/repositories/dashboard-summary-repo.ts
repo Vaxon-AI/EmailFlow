@@ -594,10 +594,7 @@ function buildStats(
   // Authoritative unclassified count from countAwaitingReview — matches the
   // Header chip and Inbox's Unclassified tab exactly.
   const unclassifiedTotal = awaitingReviewCount
-  // Classified emails (action / awareness / ignore) are visible in the inbox
-  // tabs; unclassified + uncertain sit in the Unclassified tab. Keep them
-  // out of the headline "total" so it matches what's visible in the bars.
-  const emailTotal = emailGroups.reduce((sum, group) => sum + group._count.id, 0) - unclassifiedTotal
+  const emailTotal = emailGroups.reduce((sum, group) => sum + group._count.id, 0)
   const taskTotal = taskGroups.reduce((sum, group) => sum + group._count.id, 0)
   const pending = taskCount('ai_suggestion')
   const completed = taskCount('completed')
