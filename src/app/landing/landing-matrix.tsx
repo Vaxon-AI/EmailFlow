@@ -223,7 +223,7 @@ export function CineMatrix() {
                       opacity: isOpen ? 1 : 0,
                     }}
                   >
-                    <div style={{ padding: '0 12px 48px', spaceY: '32px' }}>
+                    <div style={{ padding: '0 12px 48px' }}>
                       {cat.questions.map((q, i) => (
                         <div key={i} style={{ marginBottom: i === cat.questions.length - 1 ? 0 : 32 }}>
                           <h4
