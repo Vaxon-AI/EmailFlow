@@ -181,9 +181,9 @@ export function GuidedTour({ steps, open, onClose, onComplete }: GuidedTourProps
       >
         <button 
           onClick={handleSkip}
-          className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors"
+          className="absolute top-3 right-4 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors"
         >
-          <X className="h-4 w-4" />
+          Skip
         </button>
 
         <div className="space-y-3">

@@ -16,6 +16,8 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { useRouter } from 'next/navigation'
+import { RotateCcw } from 'lucide-react'
 import { useAuth } from '@/lib/use-auth'
 import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
@@ -32,6 +34,7 @@ export function FeedbackModal({
   onOpenChange: (open: boolean) => void
 }) {
   const { user } = useAuth()
+  const router = useRouter()
   const [category, setCategory] = useState<Category>('Idea')
   const [message, setMessage] = useState('')
   const [email, setEmail] = useState('')
@@ -140,13 +143,28 @@ export function FeedbackModal({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
+        <DialogFooter className="flex-row items-center sm:justify-between gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              onOpenChange(false)
+              router.push('/dashboard?replay_tour=1')
+            }}
+            className="h-8 gap-1.5 px-2 text-xs text-slate-500 hover:text-slate-900"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Replay dashboard tour
           </Button>
-          <Button onClick={handleSubmit} disabled={submitting || !message.trim()}>
-            {submitting ? 'Sending...' : 'Send feedback'}
-          </Button>
+
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSubmit} disabled={submitting || !message.trim()}>
+              {submitting ? 'Sending...' : 'Send feedback'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

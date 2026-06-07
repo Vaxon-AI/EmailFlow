@@ -109,51 +109,6 @@ function DashboardContent() {
     await fetch('/api/dashboard/tour-seen', { method: 'POST' })
   }
 
-  const tourSteps: TourStep[] = [
-    {
-      target: '[data-tour="dashboard-overview"]',
-      title: 'Start from your dashboard',
-      content: 'This is your workspace overview. EmailFlow summarises your synced emails, generated tasks, deadlines, and priority items in one place.',
-      placement: 'inside-top',
-    },
-    {
-      target: '[data-tour="dashboard-filters"]',
-      title: 'Choose your time view',
-      content: 'Switch between Today, This Week, and All Time to understand your current workload and progress from different time ranges.',
-      placement: 'bottom',
-    },
-    {
-      target: '[data-tour="dashboard-attention"]',
-      title: 'Review what needs your attention',
-      content: 'EmailFlow highlights emails and tasks that may need your review first, so you can decide what to handle next.',
-      placement: 'bottom',
-    },
-    {
-      target: '[data-tour="dashboard-charts"]',
-      title: 'Track your progress',
-      content: 'Use task overview and priority distribution to see what is completed, what is still active, and which tasks are most urgent.',
-      placement: 'top',
-    },
-    {
-      target: '[data-tour="dashboard-momentum"]',
-      title: 'View work by context',
-      content: 'Track how many tasks you have completed over time and compare it with your created tasks and action emails.',
-      placement: 'top',
-    },
-    {
-      target: '[data-tour="dashboard-tasks"]',
-      title: 'Top Priority Tasks',
-      content: 'Review your highest-priority tasks first. You can open each task to check details, deadlines, source emails, and next actions.',
-      placement: 'top',
-    },
-    {
-      target: '[data-tour="sidebar"]',
-      title: 'Move to the next workspace',
-      content: 'Use the sidebar to open Tasks, Emails, Digest, and Settings when you want to review details or manage your account.',
-      placement: 'right',
-    },
-  ]
-
   useEffect(() => {
     const gmailError = searchParams.get('gmail_error')
     if (!gmailError) return
@@ -325,6 +280,63 @@ function DashboardContent() {
     updateDashboardFilter({ momentumEnd: formatDateKey(nextEnd) })
   }, [selectedMomentumEnd, updateDashboardFilter])
 
+  const hasAttention = attentionEmailCount > 0 || pendingTaskCount > 0
+
+  const tourSteps: TourStep[] = useMemo(() => {
+    const steps: TourStep[] = [
+      {
+        target: '[data-tour="dashboard-overview"]',
+        title: 'Start from your dashboard',
+        content: 'This is your workspace overview. EmailFlow summarises your synced emails, generated tasks, deadlines, and priority items in one place.',
+        placement: 'inside-top',
+      },
+      {
+        target: '[data-tour="dashboard-filters"]',
+        title: 'Choose your time view',
+        content: 'Switch between Today, This Week, and All Time to understand your current workload and progress from different time ranges.',
+        placement: 'bottom',
+      },
+    ]
+
+    if (hasAttention) {
+      steps.push({
+        target: '[data-tour="dashboard-attention"]',
+        title: 'Review what needs your attention',
+        content: 'EmailFlow highlights emails and tasks that may need your review first, so you can decide what to handle next.',
+        placement: 'bottom',
+      })
+    }
+
+    steps.push(
+      {
+        target: '[data-tour="dashboard-charts"]',
+        title: 'Track your progress',
+        content: 'Use task overview and priority distribution to see what is completed, what is still active, and which tasks are most urgent.',
+        placement: 'top',
+      },
+      {
+        target: '[data-tour="dashboard-momentum"]',
+        title: 'View work by context',
+        content: 'Track how many tasks you have completed over time and compare it with your created tasks and action emails.',
+        placement: 'top',
+      },
+      {
+        target: '[data-tour="dashboard-tasks"]',
+        title: 'Top Priority Tasks',
+        content: 'Review your highest-priority tasks first. You can open each task to check details, deadlines, source emails, and next actions.',
+        placement: 'top',
+      },
+      {
+        target: '[data-tour="sidebar"]',
+        title: 'Move to the next workspace',
+        content: 'Use the sidebar to open Tasks, Emails, Digest, and Settings when you want to review details or manage your account.',
+        placement: 'right',
+      },
+    )
+
+    return steps
+  }, [hasAttention])
+
   return (
     <div className="space-y-6">
       <div data-tour="dashboard-overview" className="space-y-6 flex flex-col">
@@ -415,72 +427,73 @@ function DashboardContent() {
           </div>
         </div>
 
-        <div data-tour="dashboard-attention" className="space-y-3">
-          {attentionEmailCount > 0 && (
-            <Link href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} className="group animate-fade-in-up stagger-2 block">
-              <div className="flex items-center gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-3.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-warning-200 hover:shadow-md">
-                <div className="relative shrink-0">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning-100/85 text-warning-700 ring-1 ring-warning-200">
-                    <AlertTriangle className="h-4.5 w-4.5" />
+        {hasAttention && (
+          <div data-tour="dashboard-attention" className="space-y-3">
+            {attentionEmailCount > 0 && (
+              <Link href={dashboardLink('/dashboard/emails', { tab: 'needs_action' })} className="group animate-fade-in-up stagger-2 block">
+                <div className="flex items-center gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-3.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-warning-200 hover:shadow-md">
+                  <div className="relative shrink-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning-100/85 text-warning-700 ring-1 ring-warning-200">
+                      <AlertTriangle className="h-4.5 w-4.5" />
+                    </div>
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-warning text-[9px] font-bold text-white shadow-sm">
+                      {attentionEmailCount}
+                    </span>
                   </div>
-                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-warning text-[9px] font-bold text-white shadow-sm">
-                    {attentionEmailCount}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-warning-700">
+                      {attentionEmailCount} email{attentionEmailCount > 1 ? 's' : ''} need your review
+                    </p>
+                    <p className="truncate text-xs text-warning">
+                      {attentionEmails[0]?.subject}
+                      {attentionEmailCount > 1 ? ` and ${attentionEmailCount - 1} more...` : ''}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-lg border border-warning-200 bg-yellow-50/80 px-3 py-1.5 text-xs font-semibold text-warning-700 shadow-sm transition-all group-hover:-translate-y-px group-hover:bg-warning-100/70 group-hover:shadow-md">
+                    View
                   </span>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-warning-700">
-                    {attentionEmailCount} email{attentionEmailCount > 1 ? 's' : ''} need your review
-                  </p>
-                  <p className="truncate text-xs text-warning">
-                    {attentionEmails[0]?.subject}
-                    {attentionEmailCount > 1 ? ` and ${attentionEmailCount - 1} more...` : ''}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-lg border border-warning-200 bg-yellow-50/80 px-3 py-1.5 text-xs font-semibold text-warning-700 shadow-sm transition-all group-hover:-translate-y-px group-hover:bg-warning-100/70 group-hover:shadow-md">
-                  View
-                </span>
-              </div>
-            </Link>
-          )}
+              </Link>
+            )}
 
-          {pendingTaskCount > 0 && (
-            <Link href={dashboardLink('/dashboard/tasks', { status: 'ai_suggestion' })} className="group animate-fade-in-up stagger-2 block">
-              {/* Banner colour pairs with "X emails need your review" above —
-                  both are alert banners, both warning-amber. AI Suggestions's
-                  AI identity lives in compact spots (donut legend, status
-                  tag), not a full-width attention banner. */}
-              <div className="flex items-center gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-3.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-warning-200 hover:shadow-md">
-                <div className="relative shrink-0">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning-100/85 text-warning-700 ring-1 ring-warning-200">
-                    <CheckSquare className="h-4.5 w-4.5" />
+            {pendingTaskCount > 0 && (
+              <Link href={dashboardLink('/dashboard/tasks', { status: 'ai_suggestion' })} className="group animate-fade-in-up stagger-2 block">
+                {/* Banner colour pairs with "X emails need your review" above —
+                    both are alert banners, both warning-amber. AI Suggestions's
+                    AI identity lives in compact spots (donut legend, status
+                    tag), not a full-width attention banner. */}
+                <div className="flex items-center gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-3.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-warning-200 hover:shadow-md">
+                  <div className="relative shrink-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warning-100/85 text-warning-700 ring-1 ring-warning-200">
+                      <CheckSquare className="h-4.5 w-4.5" />
+                    </div>
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-warning text-[9px] font-bold text-white shadow-sm">
+                      {pendingTaskCount}
+                    </span>
                   </div>
-                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-warning text-[9px] font-bold text-white shadow-sm">
-                    {pendingTaskCount}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-warning-700">
+                      {pendingTaskCount} AI-suggested task{pendingTaskCount > 1 ? 's' : ''} pending
+                    </p>
+                    <p className="truncate text-xs text-warning">
+                      {pendingTasks[0]?.title}
+                      {pendingTaskCount > 1 ? ` and ${pendingTaskCount - 1} more...` : ''}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-lg border border-warning-200 bg-yellow-50/80 px-3 py-1.5 text-xs font-semibold text-warning-700 shadow-sm transition-all group-hover:-translate-y-px group-hover:bg-warning-100/70 group-hover:shadow-md">
+                    View
                   </span>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-warning-700">
-                    {pendingTaskCount} AI-suggested task{pendingTaskCount > 1 ? 's' : ''} pending
-                  </p>
-                  <p className="truncate text-xs text-warning">
-                    {pendingTasks[0]?.title}
-                    {pendingTaskCount > 1 ? ` and ${pendingTaskCount - 1} more...` : ''}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-lg border border-warning-200 bg-yellow-50/80 px-3 py-1.5 text-xs font-semibold text-warning-700 shadow-sm transition-all group-hover:-translate-y-px group-hover:bg-warning-100/70 group-hover:shadow-md">
-                  View
-                </span>
-              </div>
-            </Link>
-          )}
-        </div>
+              </Link>
+            )}
+          </div>
+        )}
 
-        {providerReauthRequired ? (
+        {providerReauthRequired && (
           <div className="rounded-2xl border border-critical-100 bg-critical-50 px-4 py-3 text-sm text-critical-700">
             Your email connection has expired. Reconnect it in Settings before the next sync.
           </div>
-        ) : null}
-
+        )}
         <div className="animate-fade-in-up stagger-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {summaryLoading ? (
             <>
@@ -690,7 +703,7 @@ function DashboardContent() {
         key={tourOpen ? 'open' : 'closed'}
         steps={tourSteps}
         open={tourOpen}
-        onClose={() => setTourOpen(false)}
+        onClose={completeTour}
         onComplete={completeTour}
       />
     </div>
