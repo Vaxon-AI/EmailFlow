@@ -1,5 +1,6 @@
 import { generateText } from 'ai'
 import { withFallback } from '../utils/with-fallback'
+import { getPriorityBand } from '@/types'
 
 // ============================================================
 // AI-generated digest content
@@ -60,7 +61,7 @@ Output rules:
 - For Needs Action items use "- **subject** · sender". For other categories use "- subject · sender".
 - If a category has more than 8 items, list the most important 5–8 (judge by sender weight and obvious urgency cues like "EOD", "today", "ASAP", named stakeholders) and end with "- …and N more."
 - After the email block put "---" on its own line, then "### Tasks - {N} active · {M} AI suggestions".
-- Under "**Active**" list active tasks: "- {title}{ priorityScore? · Priority X : ''}{ deadline? · Due {short date} : ''}".
+- Under "**Active**" list active tasks: "- {title} · Priority {label} · Due {date}". The {label} MUST be one of: critical, high, medium, low. Omit priority or due date if not provided in the input.
 - Under "**AI Suggestions**" list pending tasks by title only.
 - If there are no tasks: "No tasks in the pipeline."
 - Never invent emails, tasks, deadlines, or senders. If a field is missing, omit it.
@@ -73,7 +74,9 @@ function rowDeadline(t: TaskRow): string | null {
 
 function fmtTaskRow(t: TaskRow): string {
   const parts = [t.title]
-  if (t.priorityScore != null) parts.push(`priority ${t.priorityScore}`)
+  if (t.priorityScore != null) {
+    parts.push(`priority ${getPriorityBand(t.priorityScore)}`)
+  }
   const due = rowDeadline(t)
   if (due) parts.push(`due ${due}`)
   return parts.join(' · ')

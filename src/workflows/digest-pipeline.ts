@@ -3,6 +3,7 @@ import * as emailRepo from '@/repositories/email-repo'
 import * as digestRepo from '@/repositories/digest-repo'
 import { prisma } from '@/lib/prisma'
 import { generateAIDigest } from '@/ai/skills/generate-digest'
+import { getPriorityBand } from '@/types'
 
 // ============================================================
 // Digest Pipeline — template-based, no AI required
@@ -94,7 +95,8 @@ function buildDailyContent({
     lines.push('**active**')
     active.forEach(t => {
       const due = deadline(t)
-      lines.push(`- ${t.title}${t.priorityScore ? ` · Priority ${t.priorityScore}` : ''}${due ? ` · Due ${due}` : ''}`)
+      const priorityLabel = t.priorityScore != null ? getPriorityBand(t.priorityScore) : null
+      lines.push(`- ${t.title}${priorityLabel ? ` · Priority ${priorityLabel}` : ''}${due ? ` · Due ${due}` : ''}`)
     })
     lines.push('')
   }
@@ -159,7 +161,8 @@ function buildWeeklyContent({
     lines.push('**active**')
     active.forEach(t => {
       const due = deadline(t)
-      lines.push(`- ${t.title}${due ? ` · Due ${due}` : ''}`)
+      const priorityLabel = t.priorityScore != null ? getPriorityBand(t.priorityScore) : null
+      lines.push(`- ${t.title}${priorityLabel ? ` · Priority ${priorityLabel}` : ''}${due ? ` · Due ${due}` : ''}`)
     })
     lines.push('')
   }
