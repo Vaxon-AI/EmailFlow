@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { TaskCandidate, PriorityResult } from '@/ai'
 import * as Sentry from '@sentry/nextjs'
+import { logError } from '@/lib/error-log'
 import type { TaskStatus } from '@/lib/task-status'
 
 // ============================================================
@@ -140,6 +141,7 @@ export async function createTask(data: CreateTaskData) {
   } catch (err) {
     console.error('[createTask]', err)
     Sentry.captureException(err, { tags: { action: 'createTask' }, extra: { userId: data.userId } })
+    await logError('createTask', err, data.userId)
     throw err
   }
 }

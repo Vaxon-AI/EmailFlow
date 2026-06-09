@@ -43,6 +43,7 @@ const STORED_USER = {
   id: 'user-1',
   email: 'alice@example.com',
   name: 'Alice',
+  isAdmin: false,
   totpEnabled: true,
   totpSecret: 'SECRET',
 }
@@ -87,6 +88,7 @@ describe('POST /api/auth/verify-totp', () => {
     expect(body.success).toBe(true)
     expect(body.isNewDevice).toBe(false)
     expect(body.data.email).toBe('alice@example.com')
+    expect(body.data.isAdmin).toBe(false)
   })
 
   it('returns 409 with device choices when the browser/device limit is reached', async () => {

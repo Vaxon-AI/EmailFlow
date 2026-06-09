@@ -156,6 +156,7 @@ export async function findForTotpVerify(userId: string) {
       id: true,
       email: true,
       name: true,
+      isAdmin: true,
       totpEnabled: true,
       totpSecret: true,
     },

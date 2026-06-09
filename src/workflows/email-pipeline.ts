@@ -1,5 +1,6 @@
 import { classifyEmail, extractTask, scorePriority, updateThreadMemory, matchMatter } from '@/ai'
 import * as Sentry from '@sentry/nextjs'
+import { logError } from '@/lib/error-log'
 import { preFilterEmail, prepareForClassification, prepareForExtraction } from '@/ai/utils'
 import * as emailRepo from '@/repositories/email-repo'
 import * as taskRepo from '@/repositories/task-repo'
@@ -1050,6 +1051,7 @@ export async function processEmail(
       tags: { action: 'processEmail', stage },
       extra: { userId },
     })
+    await logError('processEmail', err, userId)
 
     if (!savedClassification.saved) {
       // Real classify failure — safe to mark the email as failed since no

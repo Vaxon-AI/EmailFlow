@@ -1,5 +1,6 @@
 import { AppError, errorMessage } from '@/lib/app-errors'
 import * as Sentry from '@sentry/nextjs'
+import { logError } from '@/lib/error-log'
 import { getEmailProvider } from '@/integrations/provider-registry'
 import type { EmailMessage } from '@/integrations'
 import { processEmail, processEmailRuleOnly } from '@/workflows'
@@ -299,6 +300,7 @@ export async function syncEmailsPhase1(userId: string): Promise<Phase1Result> {
   } catch (err) {
     console.error('[syncEmailsPhase1]', err)
     Sentry.captureException(err, { tags: { action: 'syncEmailsPhase1' }, extra: { userId } })
+    await logError('syncEmailsPhase1', err, userId)
     throw err
   }
 }
@@ -382,6 +384,7 @@ export async function syncEmailsPhase2(userId: string, storedEmails: StoredEmail
   } catch (err) {
     console.error('[syncEmailsPhase2]', err)
     Sentry.captureException(err, { tags: { action: 'syncEmailsPhase2' }, extra: { userId } })
+    await logError('syncEmailsPhase2', err, userId)
     throw err
   }
 }

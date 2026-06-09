@@ -383,6 +383,18 @@ model FailedEmailSync {
   @@unique([userId, providerMessageId])
 }
 
+model ErrorLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  error     String
+  stack     String?
+  createdAt DateTime @default(now())
+
+  @@index([action, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
 model ThreadMemory {
   id                 String        @id @default(cuid())
   userId             String
