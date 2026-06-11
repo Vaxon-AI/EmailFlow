@@ -24,6 +24,7 @@ import { LinkAccountCard, type EmailAccount } from './settings-link-account-card
 
 type CurrentUser = {
   email?: string | null
+  hasPassword?: boolean | null
   providerEmail?: string | null
   emailConnected?: boolean | null
   name?: string | null
@@ -104,7 +105,7 @@ export default function SettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-            <PasswordCard />
+            <PasswordCard hasPassword={currentUser ? Boolean(currentUser.hasPassword) : null} />
             <SettingsPlanUsageCard plan={user?.plan} quota={quota} />
             <PreferencesCard />
 

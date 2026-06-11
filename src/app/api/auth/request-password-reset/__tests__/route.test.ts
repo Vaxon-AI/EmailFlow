@@ -23,6 +23,7 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
 
 vi.mock('@/lib/mailer', () => ({
   sendPasswordResetEmail: vi.fn(),
+  sendPasswordSetupEmail: vi.fn(),
 }))
 
 vi.mock('@/lib/password-reset', () => ({
@@ -33,7 +34,7 @@ vi.mock('@/lib/password-reset', () => ({
 
 import { prisma } from '@/lib/prisma'
 import { getAuthUser } from '@/lib/api-helpers'
-import { sendPasswordResetEmail } from '@/lib/mailer'
+import { sendPasswordResetEmail, sendPasswordSetupEmail } from '@/lib/mailer'
 import { hashResetToken, getTokenTtlMs } from '@/lib/password-reset'
 import { POST } from '../route'
 
@@ -41,6 +42,7 @@ const mockUser = vi.mocked(prisma.user)
 const mockPasswordResetToken = vi.mocked(prisma.passwordResetToken)
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockSendPasswordResetEmail = vi.mocked(sendPasswordResetEmail)
+const mockSendPasswordSetupEmail = vi.mocked(sendPasswordSetupEmail)
 const mockHashResetToken = vi.mocked(hashResetToken)
 const mockGetTokenTtlMs = vi.mocked(getTokenTtlMs)
 
@@ -60,6 +62,7 @@ describe('POST /api/auth/request-password-reset', () => {
     mockPasswordResetToken.updateMany.mockResolvedValue({ count: 0 } as never)
     mockPasswordResetToken.create.mockResolvedValue({} as never)
     mockSendPasswordResetEmail.mockResolvedValue(undefined as never)
+    mockSendPasswordSetupEmail.mockResolvedValue(undefined as never)
     mockHashResetToken.mockReturnValue('hashed-tok')
     mockGetTokenTtlMs.mockReturnValue(3600000)
   })
@@ -86,6 +89,7 @@ describe('POST /api/auth/request-password-reset', () => {
 
     expect(res.status).toBe(200)
     expect(mockSendPasswordResetEmail).not.toHaveBeenCalled()
+    expect(mockSendPasswordSetupEmail).not.toHaveBeenCalled()
   })
 
   it('returns 429 when rate limit has not elapsed', async () => {
@@ -118,5 +122,22 @@ describe('POST /api/auth/request-password-reset', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.data.message).toContain('sent')
+  })
+
+  it('sends setup email for authenticated user without a password', async () => {
+    mockGetAuthUser.mockResolvedValue({ id: 'user-1' } as never)
+    mockUser.findUnique.mockResolvedValue({ id: 'user-1', email: 'alice@example.com', passwordHash: null } as never)
+
+    const res = await POST(postRequest())
+
+    expect(res.status).toBe(200)
+    expect(mockSendPasswordSetupEmail).toHaveBeenCalledWith(
+      'alice@example.com',
+      expect.stringContaining('/reset-password?token='),
+    )
+    expect(mockSendPasswordResetEmail).not.toHaveBeenCalled()
+    expect(mockPasswordResetToken.create).toHaveBeenCalled()
+    const body = await res.json()
+    expect(body.data.message).toContain('setup')
   })
 })

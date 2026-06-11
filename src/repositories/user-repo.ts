@@ -172,6 +172,7 @@ export async function findFullProfile(userId: string) {
         email: true,
         name: true,
         isAdmin: true,
+        passwordHash: true,
         syncStartDate: true,
         timezone: true,
         totpEnabled: true,

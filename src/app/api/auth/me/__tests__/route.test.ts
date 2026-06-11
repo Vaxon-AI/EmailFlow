@@ -67,6 +67,7 @@ describe('GET /api/auth/me', () => {
       email: 'alice@example.com',
       name: 'Alice',
       isAdmin: false,
+      passwordHash: '$2b$10$hash',
       syncStartDate,
       timezone: 'Australia/Sydney',
       totpEnabled: true,
@@ -114,8 +115,36 @@ describe('GET /api/auth/me', () => {
       reauthRequired: true,
     })
     expect(body.user.currentSessionId).toBe('session-1')
+    expect(body.user.hasPassword).toBe(true)
+    expect(body.user.passwordHash).toBeUndefined()
     expect(mockUser.findUnique).toHaveBeenCalled()
     expect(mockAccount.findMany).toHaveBeenCalled()
+  })
+
+  it('reports hasPassword false for OAuth-only accounts', async () => {
+    mockUser.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'alice@example.com',
+      name: 'Alice',
+      isAdmin: false,
+      passwordHash: null,
+      syncStartDate: null,
+      timezone: null,
+      totpEnabled: false,
+      manualReviewMode: true,
+      emailProviderReauthRequired: false,
+      emailProviderReauthReason: null,
+      emailProviderReauthAt: null,
+      emailProviderReauthProvider: null,
+    } as never)
+    mockAccount.findMany.mockResolvedValue([] as never)
+
+    const res = await GET(new NextRequest('http://localhost/api/auth/me?details=full'))
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.user.hasPassword).toBe(false)
+    expect(body.user.passwordHash).toBeUndefined()
   })
 
   it('returns 404 when the stored user record is missing', async () => {

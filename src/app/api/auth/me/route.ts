@@ -41,6 +41,8 @@ export const GET = defineRoute(
         email: user.email,
         name: user.name,
         isAdmin: user.isAdmin,
+        // Expose only the boolean; passwordHash itself must never leave the API.
+        hasPassword: Boolean(user.passwordHash),
         providerEmail: googleAccounts[0]?.email ?? null,
         emailConnected: googleAccounts.some((account) => account.syncEnabled),
         syncStartDate: user.syncStartDate,

@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
-import { sendPasswordResetEmail } from '@/lib/mailer'
+import { sendPasswordResetEmail, sendPasswordSetupEmail } from '@/lib/mailer'
 import { hashResetToken, getTokenTtlMs, RATE_LIMIT_SECONDS } from '@/lib/password-reset'
 import { findByEmail, findById } from '@/repositories/user-repo'
 import {
@@ -45,10 +45,10 @@ export const POST = defineRoute(
       return error('NOT_FOUND', 'User not found', 404)
     }
 
-    if (!user.passwordHash) {
-      if (!sessionUser) return genericOk()
-      return error('VALIDATION_ERROR', 'This account uses OAuth sign-in and has no local password', 400)
-    }
+    // OAuth-only accounts: never reveal this to unauthenticated requesters;
+    // authenticated users get a first-password setup link instead of a reset link.
+    if (!user.passwordHash && !sessionUser) return genericOk()
+    const isSetup = !user.passwordHash
 
     // Rate limit: reject if a token was issued within the last RATE_LIMIT_SECONDS
     const latest = await findLatestForUser(user.id)
@@ -72,10 +72,18 @@ export const POST = defineRoute(
     const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
     const resetLink = `${appUrl}/reset-password?token=${plainToken}`
 
-    await sendPasswordResetEmail(user.email, resetLink)
+    if (isSetup) {
+      await sendPasswordSetupEmail(user.email, resetLink)
+    } else {
+      await sendPasswordResetEmail(user.email, resetLink)
+    }
 
     return sessionUser
-      ? success({ message: 'Password reset email sent. Check your inbox.' })
+      ? success({
+          message: isSetup
+            ? 'Password setup email sent. Check your inbox.'
+            : 'Password reset email sent. Check your inbox.',
+        })
       : genericOk()
   },
 )

@@ -25,6 +25,21 @@ export async function sendPasswordResetEmail(to: string, resetLink: string) {
   })
 }
 
+export async function sendPasswordSetupEmail(to: string, setupLink: string) {
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
+    to,
+    subject: 'Set up your EmailFlow password',
+    text: `You requested to set up a password for your EmailFlow account. Click the link below to create your password (expires in 1 hour):\n\n${setupLink}\n\nIf you did not request this, you can ignore this email.`,
+    html: `
+      <p>You requested to set up a password for your EmailFlow account.</p>
+      <p>Click the link below to create your password. This link expires in <strong>1 hour</strong>.</p>
+      <p><a href="${setupLink}">${setupLink}</a></p>
+      <p>If you did not request this, you can safely ignore this email.</p>
+    `,
+  })
+}
+
 export async function sendSuspiciousActivityEmail(input: {
   to: string
   reason: 'rotated_token_replay'

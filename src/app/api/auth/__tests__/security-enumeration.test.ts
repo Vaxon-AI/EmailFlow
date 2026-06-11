@@ -31,6 +31,7 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
 
 vi.mock('@/lib/mailer', () => ({
   sendPasswordResetEmail: vi.fn(),
+  sendPasswordSetupEmail: vi.fn(),
 }))
 
 vi.mock('@/lib/password-reset', () => ({
@@ -42,7 +43,7 @@ vi.mock('@/lib/password-reset', () => ({
 import { prisma } from '@/lib/prisma'
 import { verifyPassword } from '@/lib/auth-password'
 import { getAuthUser } from '@/lib/api-helpers'
-import { sendPasswordResetEmail } from '@/lib/mailer'
+import { sendPasswordResetEmail, sendPasswordSetupEmail } from '@/lib/mailer'
 import { POST as loginPost } from '../login/route'
 import { POST as resetPost } from '../request-password-reset/route'
 
@@ -82,6 +83,7 @@ beforeEach(() => {
   mockPasswordResetToken.updateMany.mockResolvedValue({ count: 0 } as never)
   mockPasswordResetToken.create.mockResolvedValue({} as never)
   vi.mocked(sendPasswordResetEmail).mockResolvedValue(undefined as never)
+  vi.mocked(sendPasswordSetupEmail).mockResolvedValue(undefined as never)
 })
 
 // ─── Anti-enumeration: login ───────────────────────────────────────────────────
@@ -158,5 +160,16 @@ describe('Anti-enumeration: password reset', () => {
     mockUser.findUnique.mockResolvedValue(null)
     await resetPost(resetRequest({ email: 'nobody@example.com' }))
     expect(sendPasswordResetEmail).not.toHaveBeenCalled()
+    expect(sendPasswordSetupEmail).not.toHaveBeenCalled()
+  })
+
+  it('does not send any email for an unauthenticated request against an OAuth-only account', async () => {
+    mockUser.findUnique.mockResolvedValue({ ...VALID_USER, passwordHash: null } as never)
+    const res = await resetPost(resetRequest({ email: 'alice@example.com' }))
+
+    expect(res.status).toBe(200)
+    expect((await res.json()).success).toBe(true)
+    expect(sendPasswordResetEmail).not.toHaveBeenCalled()
+    expect(sendPasswordSetupEmail).not.toHaveBeenCalled()
   })
 })
