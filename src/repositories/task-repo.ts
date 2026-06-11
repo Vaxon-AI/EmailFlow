@@ -351,7 +351,7 @@ export async function findTaskById(userId: string, taskId: string) {
     return { ...task, project: ctx?.project ?? null, matter: ctx?.matter ?? null }
   } catch (err) {
     console.error('[task-repo] detail enrichment failed:', err)
-    return task
+    return { ...task, project: null, matter: null }
   }
 }
 
