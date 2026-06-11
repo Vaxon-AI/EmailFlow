@@ -135,6 +135,16 @@ describe('createDailyDigest', () => {
     expect(highIdx).toBeLessThan(lowIdx)
   })
 
+  it('renders priority as a capitalized band label instead of the numeric score', async () => {
+    mockTaskRepo.findTasksByDateRange.mockResolvedValue([
+      makeTask('Band task', 'active', 18) as never,
+    ])
+    await createDailyDigest(USER_ID)
+    const content = mockDigestRepo.createDigest.mock.calls[0][0].content
+    expect(content).toContain('Band task · Priority High')
+    expect(content).not.toContain('Priority 18')
+  })
+
   it('shows "No tasks in the pipeline." when there are no tasks', async () => {
     await createDailyDigest(USER_ID)
     const content = mockDigestRepo.createDigest.mock.calls[0][0].content
