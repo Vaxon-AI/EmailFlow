@@ -39,6 +39,7 @@ const CLASSIFICATION_RESULT = {
   confidence: 0.95,
   reasoning: 'Email contains explicit request with a deadline.',
   isWorkRelated: true,
+  isOngoingMatter: true,
 }
 
 beforeEach(() => {

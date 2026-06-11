@@ -168,7 +168,7 @@ beforeEach(() => {
 
   vi.mocked(ai.classifyEmail).mockResolvedValue({
     category: 'action', confidence: 0.9,
-    reasoning: 'Clear action required', isWorkRelated: true,
+    reasoning: 'Clear action required', isWorkRelated: true, isOngoingMatter: true,
   })
   vi.mocked(ai.updateThreadMemory).mockResolvedValue({
     title: 'Contract Review', topic: 'other', summary: 'Review needed',
@@ -298,7 +298,7 @@ describe('processEmail — AI returns unknown category', () => {
   it('returns taskCreated:false for an unknown category string', async () => {
     vi.mocked(ai.classifyEmail).mockResolvedValue({
       category: 'newsletter' as any, confidence: 0.8,
-      reasoning: 'Unexpected value', isWorkRelated: false,
+      reasoning: 'Unexpected value', isWorkRelated: false, isOngoingMatter: false,
     })
 
     const result = await processEmail('user-1', makeEmail())
@@ -310,7 +310,7 @@ describe('processEmail — AI returns unknown category', () => {
   it('does not throw for an unknown category string', async () => {
     vi.mocked(ai.classifyEmail).mockResolvedValue({
       category: 'urgent' as any, confidence: 0.9,
-      reasoning: 'Unknown value', isWorkRelated: true,
+      reasoning: 'Unknown value', isWorkRelated: true, isOngoingMatter: true,
     })
 
     await expect(processEmail('user-1', makeEmail())).resolves.toBeDefined()
@@ -366,7 +366,7 @@ describe('processEmail — empty or missing sender', () => {
 describe('processEmail — ignore invariant', () => {
   it('never creates a task for an ignore-classified email regardless of content', async () => {
     vi.mocked(ai.classifyEmail).mockResolvedValue({
-      category: 'ignore', confidence: 0.99, reasoning: 'Junk', isWorkRelated: false,
+      category: 'ignore', confidence: 0.99, reasoning: 'Junk', isWorkRelated: false, isOngoingMatter: false,
     })
 
     const emailWithActionKeywords = makeEmail({
@@ -388,7 +388,7 @@ describe('processEmail — ignore invariant', () => {
 describe('processEmail — awareness invariant', () => {
   it('never creates a task for an awareness-classified email regardless of content', async () => {
     vi.mocked(ai.classifyEmail).mockResolvedValue({
-      category: 'awareness', confidence: 0.95, reasoning: 'Info only', isWorkRelated: true,
+      category: 'awareness', confidence: 0.95, reasoning: 'Info only', isWorkRelated: true, isOngoingMatter: true,
     })
 
     const result = await processEmail('user-1', makeEmail())

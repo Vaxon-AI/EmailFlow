@@ -166,7 +166,7 @@ beforeEach(() => {
   // AI layer
   vi.mocked(ai.classifyEmail).mockResolvedValue({
     category: 'action', confidence: 0.9,
-    reasoning: 'Clear action required', isWorkRelated: true,
+    reasoning: 'Clear action required', isWorkRelated: true, isOngoingMatter: true,
   })
   vi.mocked(ai.updateThreadMemory).mockResolvedValue({
     title: 'Contract Review', topic: 'other', summary: 'Review needed',
@@ -322,7 +322,7 @@ describe('processEmail — ignore classification', () => {
   it('returns taskCreated:false and skippedByRule:false', async () => {
     vi.mocked(ai.classifyEmail).mockResolvedValue({
       category: 'ignore', confidence: 0.92,
-      reasoning: 'Newsletter', isWorkRelated: false,
+      reasoning: 'Newsletter', isWorkRelated: false, isOngoingMatter: false,
     })
 
     const result = await processEmail('user-1', makeEmail())
@@ -335,7 +335,7 @@ describe('processEmail — ignore classification', () => {
 
   it('does NOT update thread memory for ignored emails', async () => {
     vi.mocked(ai.classifyEmail).mockResolvedValue({
-      category: 'ignore', confidence: 0.9, reasoning: 'Ignore', isWorkRelated: false,
+      category: 'ignore', confidence: 0.9, reasoning: 'Ignore', isWorkRelated: false, isOngoingMatter: false,
     })
 
     await processEmail('user-1', makeEmail())
@@ -345,7 +345,7 @@ describe('processEmail — ignore classification', () => {
 
   it('does NOT create a task for ignored emails', async () => {
     vi.mocked(ai.classifyEmail).mockResolvedValue({
-      category: 'ignore', confidence: 0.9, reasoning: 'Ignore', isWorkRelated: false,
+      category: 'ignore', confidence: 0.9, reasoning: 'Ignore', isWorkRelated: false, isOngoingMatter: false,
     })
 
     await processEmail('user-1', makeEmail())
@@ -358,7 +358,7 @@ describe('processEmail — awareness classification', () => {
   beforeEach(() => {
     vi.mocked(ai.classifyEmail).mockResolvedValue({
       category: 'awareness', confidence: 0.85,
-      reasoning: 'Informational update', isWorkRelated: true,
+      reasoning: 'Informational update', isWorkRelated: true, isOngoingMatter: true,
     })
   })
 
@@ -475,6 +475,7 @@ describe('processEmail — action classification (full pipeline)', () => {
       confidence: 0.85,
       reasoning: 'Informational update',
       isWorkRelated: true,
+      isOngoingMatter: true,
     })
 
     await processEmail('user-1', makeEmail({ awaitingReview: true }))
@@ -590,5 +591,84 @@ describe('processEmail — error handling', () => {
     // markClassificationFailed must not be called when classification has
     // already been persisted.
     expect(emailRepo.markClassificationFailed).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: one-off vs ongoing matter gating
+// ---------------------------------------------------------------------------
+
+describe('processEmail — one-off vs ongoing matter gating', () => {
+  const ONE_OFF_CLASSIFICATION = {
+    category: 'action' as const, confidence: 0.9,
+    reasoning: 'Reply needed, but one-off', isWorkRelated: false, isOngoingMatter: false,
+  }
+
+  it('one-off action email: creates the task but no matter/project/identity', async () => {
+    vi.mocked(ai.classifyEmail).mockResolvedValue(ONE_OFF_CLASSIFICATION)
+
+    const result = await processEmail('user-1', makeEmail())
+
+    expect(result.taskCreated).toBe(true)
+    expect(result.taskId).toBe('task-1')
+    expect(matterMemoryRepo.createFromThread).not.toHaveBeenCalled()
+    expect(threadMemoryRepo.setMatter).not.toHaveBeenCalled()
+    expect(projectContextRepo.createSuggestion).not.toHaveBeenCalled()
+    expect(identityRepo.createSuggestion).not.toHaveBeenCalled()
+    expect(matterMemoryRepo.linkPrimaryTask).not.toHaveBeenCalled()
+    expect(result.reviewCandidate).toBeUndefined()
+  })
+
+  it('one-off email on a thread already linked to a matter: keeps the link', async () => {
+    vi.mocked(ai.classifyEmail).mockResolvedValue(ONE_OFF_CLASSIFICATION)
+    vi.mocked(threadMemoryRepo.upsert).mockResolvedValue({
+      ...MOCK_THREAD_MEMORY, matterId: 'matter-1',
+    })
+    vi.mocked(matterMemoryRepo.findById).mockResolvedValue(MOCK_MATTER)
+
+    const result = await processEmail('user-1', makeEmail())
+
+    expect(result.taskCreated).toBe(true)
+    expect(matterMemoryRepo.updateFromThread).toHaveBeenCalledWith('matter-1', expect.anything())
+    expect(matterMemoryRepo.createFromThread).not.toHaveBeenCalled()
+  })
+
+  it('one-off email with a confident AI match: merges into the existing matter', async () => {
+    vi.mocked(ai.classifyEmail).mockResolvedValue(ONE_OFF_CLASSIFICATION)
+    vi.mocked(matterMemoryRepo.findCandidates).mockResolvedValue([MOCK_MATTER])
+    vi.mocked(ai.matchMatter).mockResolvedValue({
+      matterId: 'matter-1', confidence: 0.9, reasoning: 'Same matter',
+    })
+
+    const result = await processEmail('user-1', makeEmail())
+
+    expect(result.taskCreated).toBe(true)
+    expect(matterMemoryRepo.mergeThread).toHaveBeenCalledWith('matter-1', expect.anything())
+    expect(threadMemoryRepo.setMatter).toHaveBeenCalledWith('user-1', 'thread-1', 'matter-1')
+    expect(matterMemoryRepo.createFromThread).not.toHaveBeenCalled()
+  })
+
+  it('one-off email with only a low-confidence match: no merge, no new matter, task still created', async () => {
+    vi.mocked(ai.classifyEmail).mockResolvedValue(ONE_OFF_CLASSIFICATION)
+    vi.mocked(matterMemoryRepo.findCandidates).mockResolvedValue([MOCK_MATTER])
+    vi.mocked(ai.matchMatter).mockResolvedValue({
+      matterId: 'matter-1', confidence: 0.5, reasoning: 'Weak similarity',
+    })
+
+    const result = await processEmail('user-1', makeEmail())
+
+    expect(result.taskCreated).toBe(true)
+    expect(matterMemoryRepo.mergeThread).not.toHaveBeenCalled()
+    expect(matterMemoryRepo.createFromThread).not.toHaveBeenCalled()
+    expect(threadMemoryRepo.setMatter).not.toHaveBeenCalled()
+  })
+
+  it('ongoing email with no match: still creates a new matter', async () => {
+    // Default beforeEach mock already has isOngoingMatter: true and no candidates
+    const result = await processEmail('user-1', makeEmail())
+
+    expect(result.taskCreated).toBe(true)
+    expect(matterMemoryRepo.createFromThread).toHaveBeenCalledOnce()
+    expect(threadMemoryRepo.setMatter).toHaveBeenCalledWith('user-1', 'thread-1', 'matter-1')
   })
 })

@@ -32,7 +32,8 @@ import { prisma } from '@/lib/prisma'
 // ============================================================
 
 // Confidence threshold for accepting an AI matter match.
-// Below this value we always create a new matter.
+// Below this value we create a new matter only for ongoing
+// (multi-step) emails; one-off emails stay matter-less.
 const MATTER_MATCH_THRESHOLD = 0.85
 const PROJECT_REVIEW_THRESHOLD = 0.9
 const IDENTITY_REVIEW_THRESHOLD = 0.9
@@ -596,15 +597,18 @@ async function stepUpdateThreadMemory(
  *   1. Rule-based candidate filter (topic + participants, recent window)
  *   2. AI judgment only if candidates exist (fast model)
  *   3. Accept only if AI confidence >= MATTER_MATCH_THRESHOLD
- *   4. Otherwise create new matter
+ *   4. Otherwise create new matter — but only when allowCreate is true
+ *      (ongoing, multi-step emails). One-off emails never seed a new
+ *      matter; they may still match an existing one.
  *
- * Always returns a MatterMemory — either existing or newly created.
+ * Returns null when no matter matched and creation is not allowed.
  */
 async function stepMatchOrCreateMatter(
   userId: string,
   threadMemory: ThreadMemory,
-  threadId: string
-): Promise<MatterMemory> {
+  threadId: string,
+  allowCreate: boolean
+): Promise<MatterMemory | null> {
   // Thread is already linked to a matter — just update matter stats
   if (threadMemory.matterId) {
     const matter = await matterMemoryRepo.findById(threadMemory.matterId)
@@ -651,7 +655,11 @@ async function stepMatchOrCreateMatter(
     return matter
   }
 
-  // No confident match — create a new matter seeded from this thread
+  // No confident match — one-off emails stay matter-less so their tasks
+  // land in the Uncategorized bucket instead of spawning a folder
+  if (!allowCreate) return null
+
+  // Create a new matter seeded from this thread
   const newMatter = await matterMemoryRepo.createFromThread(userId, threadMemory)
   await threadMemoryRepo.setMatter(userId, threadId, newMatter.id)
   return newMatter
@@ -862,6 +870,9 @@ export async function processEmail(
         confidence: 1,
         reasoning: 'User confirmed this email should be extracted into a task',
         isWorkRelated: true,
+        // User explicitly asked for a task — keep the existing
+        // matter-creation behavior for this manual path
+        isOngoingMatter: true,
       }
     : await stepClassify(email, memoryContext)
   await updateSenderMemory(userId, email.sender, classification.category)
@@ -911,10 +922,17 @@ export async function processEmail(
       )
 
       // ── 6. Match or create matter (action only) ──────────
-      currentMatterMemory = await stepMatchOrCreateMatter(userId, currentThreadMemory, threadId)
-      const assignment = await stepAssignProjectAndIdentity(userId, email, currentMatterMemory)
-      currentMatterMemory = assignment.matter
-      reviewCandidate = buildReviewCandidate(email.id, currentMatterMemory, assignment)
+      currentMatterMemory = await stepMatchOrCreateMatter(
+        userId,
+        currentThreadMemory,
+        threadId,
+        classificationStage.classification.isOngoingMatter
+      )
+      if (currentMatterMemory) {
+        const assignment = await stepAssignProjectAndIdentity(userId, email, currentMatterMemory)
+        currentMatterMemory = assignment.matter
+        reviewCandidate = buildReviewCandidate(email.id, currentMatterMemory, assignment)
+      }
     }
   }
 

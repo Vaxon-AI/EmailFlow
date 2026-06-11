@@ -26,12 +26,17 @@ Rules:
 - Treat user preferences and learned handling rules as soft guidance, not absolute rules.
 - If the actual email clearly contains a required action, choose "action" even if some preference says similar emails are often low value.
 - Be careful not to classify everything as "ignore" just because the sender is automated.
+- isOngoingMatter: judge whether this email belongs to an ongoing, multi-step situation.
+  - false (one-off): simple requests fully resolved by a single reply or quick action — a dinner or social invitation, "please send me that file", a quick RSVP, a one-time question, a single confirmation.
+  - true (ongoing): situations that will span multiple emails or steps over time — work projects, apartment hunting, job applications and interview loops, vendor or contract negotiations, course enrollment, an insurance claim.
+  - When unsure, prefer true for work/process emails and false for casual personal one-liners.
 
 Return:
 - category
 - confidence
 - reasoning
-- isWorkRelated`
+- isWorkRelated
+- isOngoingMatter`
 
 export interface ClassifyEmailInput {
   subject: string

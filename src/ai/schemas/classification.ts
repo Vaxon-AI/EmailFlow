@@ -7,6 +7,11 @@ export const classificationSchema = z.object({
   confidence: z.number().min(0).max(1),
   reasoning: z.string(),
   isWorkRelated: z.boolean(),
+  isOngoingMatter: z
+    .boolean()
+    .describe(
+      'true if this email is part of a multi-step, multi-email situation (project, negotiation, application process); false for one-off requests that are done after a single reply or action'
+    ),
 })
 
 export type ClassificationResult = z.infer<typeof classificationSchema>
