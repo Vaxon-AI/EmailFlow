@@ -743,6 +743,7 @@ export async function findBatchStatus(userId: string, batchId: string) {
       receivedAt: true,
       processingStatus: true,
       classification: true,
+      actioned: true,
       taskLinks: {
         select: {
           task: { select: { id: true, title: true } },
@@ -768,6 +769,7 @@ export async function findBatchStatus(userId: string, batchId: string) {
     uncertainCount: summary.uncertainCount,
     uncertainEmails: summary.uncertainCount,
     actionEmailCount: summary.actionEmails.length,
+    unhandledActionCount: summary.unhandledActionCount,
     // Only include email details when complete so the modal has stable data.
     actionEmails: isComplete ? summary.actionEmails : [],
   }
@@ -776,10 +778,19 @@ export async function findBatchStatus(userId: string, batchId: string) {
 function summarizeBatchEmails(emails: Array<{
   processingStatus: string | null
   classification: string | null
+  actioned: boolean
+  taskLinks: Array<{ task: { id: string; title: string } | null }>
 }>) {
   const actionEmails = emails.filter((e) => e.classification === 'action')
+  // Action emails still waiting on the user — no linked task and not marked
+  // actioned. Matches the needs_action bucket semantics so the sync banner
+  // disappears once every action email has been handled.
+  const unhandledActionCount = actionEmails.filter(
+    (e) => !e.actioned && !e.taskLinks.some((link) => link.task)
+  ).length
 
   return {
+    unhandledActionCount,
     totalEmails: emails.length,
     pendingEmails: emails.filter((e) => e.processingStatus === 'pending').length,
     quotaSkippedEmails: emails.filter((e) => e.processingStatus === 'quota_skipped').length,

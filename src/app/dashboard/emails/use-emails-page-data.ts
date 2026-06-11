@@ -6,6 +6,7 @@ import type { DateRange } from 'react-day-picker'
 import { CACHE_TIME } from '@/lib/query-cache'
 import {
   filterEmails,
+  getUnhandledActionCount,
   isFyiEmail,
   isIgnoredEmail,
   isNeedsActionPageEmail,
@@ -69,7 +70,7 @@ export function useEmailsPageData(input: {
   })
 
   useEffect(() => {
-    if (batchStatus?.isComplete && batchStatus.actionEmailCount === 0) {
+    if (batchStatus?.isComplete && getUnhandledActionCount(batchStatus) === 0) {
       sessionStorage.removeItem('emailflow:syncBatchId')
     }
   }, [batchStatus])
@@ -194,7 +195,7 @@ export function useEmailsPageData(input: {
   const batchBannerActive =
     !!syncBatchId &&
     !batchDismissed &&
-    !(batchStatus?.isComplete && batchStatus.actionEmailCount === 0)
+    !(batchStatus?.isComplete && getUnhandledActionCount(batchStatus) === 0)
 
   return {
     pendingReviewCount,

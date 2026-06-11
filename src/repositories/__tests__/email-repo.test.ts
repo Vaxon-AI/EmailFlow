@@ -489,12 +489,12 @@ describe('findEmailsPaginated', () => {
 describe('findBatchStatus', () => {
   it('returns enhanced batch counters and treats only pending rows as incomplete', async () => {
     mockPrismaEmail.findMany.mockResolvedValue([
-      { id: 'e1', processingStatus: 'pending', classification: null, taskLinks: [] },
-      { id: 'e2', processingStatus: 'done', classification: 'action', taskLinks: [] },
-      { id: 'e3', processingStatus: 'quota_skipped', classification: null, taskLinks: [] },
-      { id: 'e4', processingStatus: 'failed', classification: 'uncertain', taskLinks: [] },
-      { id: 'e5', processingStatus: 'done', classification: 'awareness', taskLinks: [] },
-      { id: 'e6', processingStatus: 'done', classification: 'ignore', taskLinks: [] },
+      { id: 'e1', processingStatus: 'pending', classification: null, actioned: false, taskLinks: [] },
+      { id: 'e2', processingStatus: 'done', classification: 'action', actioned: false, taskLinks: [] },
+      { id: 'e3', processingStatus: 'quota_skipped', classification: null, actioned: false, taskLinks: [] },
+      { id: 'e4', processingStatus: 'failed', classification: 'uncertain', actioned: false, taskLinks: [] },
+      { id: 'e5', processingStatus: 'done', classification: 'awareness', actioned: false, taskLinks: [] },
+      { id: 'e6', processingStatus: 'done', classification: 'ignore', actioned: false, taskLinks: [] },
     ] as never)
 
     const result = await findBatchStatus('user-1', 'sync-1')
@@ -510,6 +510,7 @@ describe('findBatchStatus', () => {
     expect(result.uncertainCount).toBe(1)
     expect(result.uncertainEmails).toBe(1)
     expect(result.actionEmailCount).toBe(1)
+    expect(result.unhandledActionCount).toBe(1)
     expect(result.actionEmails).toEqual([])
   })
 
@@ -522,6 +523,7 @@ describe('findBatchStatus', () => {
         receivedAt: new Date('2026-05-01T00:00:00Z'),
         processingStatus: 'done',
         classification: 'action',
+        actioned: false,
         taskLinks: [],
       },
     ] as never)
@@ -530,6 +532,60 @@ describe('findBatchStatus', () => {
 
     expect(result.isComplete).toBe(true)
     expect(result.actionEmails).toHaveLength(1)
+  })
+
+  it('excludes action emails with a linked task from unhandledActionCount but keeps them in actionEmailCount', async () => {
+    mockPrismaEmail.findMany.mockResolvedValue([
+      {
+        id: 'e1',
+        processingStatus: 'done',
+        classification: 'action',
+        actioned: true,
+        taskLinks: [{ task: { id: 'task-1', title: 'Reply to dinner invite' } }],
+      },
+      { id: 'e2', processingStatus: 'done', classification: 'action', actioned: false, taskLinks: [] },
+    ] as never)
+
+    const result = await findBatchStatus('user-1', 'sync-1')
+
+    expect(result.actionEmailCount).toBe(2)
+    expect(result.unhandledActionCount).toBe(1)
+    expect(result.actionEmails).toHaveLength(2)
+  })
+
+  it('excludes actioned (tracked) action emails without tasks from unhandledActionCount', async () => {
+    mockPrismaEmail.findMany.mockResolvedValue([
+      { id: 'e1', processingStatus: 'done', classification: 'action', actioned: true, taskLinks: [] },
+    ] as never)
+
+    const result = await findBatchStatus('user-1', 'sync-1')
+
+    expect(result.actionEmailCount).toBe(1)
+    expect(result.unhandledActionCount).toBe(0)
+  })
+
+  it('reports unhandledActionCount 0 when every action email has a task', async () => {
+    mockPrismaEmail.findMany.mockResolvedValue([
+      {
+        id: 'e1',
+        processingStatus: 'done',
+        classification: 'action',
+        actioned: true,
+        taskLinks: [{ task: { id: 'task-1', title: 'T1' } }],
+      },
+      {
+        id: 'e2',
+        processingStatus: 'done',
+        classification: 'action',
+        actioned: true,
+        taskLinks: [{ task: { id: 'task-2', title: 'T2' } }],
+      },
+    ] as never)
+
+    const result = await findBatchStatus('user-1', 'sync-1')
+
+    expect(result.actionEmailCount).toBe(2)
+    expect(result.unhandledActionCount).toBe(0)
   })
 })
 

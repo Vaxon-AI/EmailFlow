@@ -210,6 +210,7 @@ export default function EmailDetailPage() {
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ['email', emailId] })
         queryClient.invalidateQueries({ queryKey: ['emails'] })
+        queryClient.invalidateQueries({ queryKey: ['syncBatch'] })
         toast.success(`Marked as ${EMAIL_BUCKET_CONFIG[newBucket].label}`)
       } else {
         showError(await readErrorMessage(res, 'Failed to update classification'))
@@ -259,6 +260,7 @@ export default function EmailDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['email', emailId] })
       queryClient.invalidateQueries({ queryKey: ['emails'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['syncBatch'] })
       router.push('/dashboard/emails')
     } catch {
       showError('Failed to ignore email')
@@ -302,6 +304,7 @@ export default function EmailDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
+      queryClient.invalidateQueries({ queryKey: ['syncBatch'] })
     } catch {
       showError('Failed to extract task')
     } finally {

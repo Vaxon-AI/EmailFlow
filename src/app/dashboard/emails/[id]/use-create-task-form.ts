@@ -103,6 +103,7 @@ export function useCreateTaskForm({
         await res.json()
         queryClient.invalidateQueries({ queryKey: ['email', emailId] })
         queryClient.invalidateQueries({ queryKey: ['tasks'] })
+        queryClient.invalidateQueries({ queryKey: ['syncBatch'] })
         toast.success('Task created')
         setShowCreateModal(false)
         resetCreateForm()

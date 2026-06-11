@@ -202,6 +202,7 @@ function EmailsContent() {
       queryClient.invalidateQueries({ queryKey: ['emails'] })
       queryClient.invalidateQueries({ queryKey: ['emails', 'tab-states'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['syncBatch'] })
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -225,6 +226,7 @@ function EmailsContent() {
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
       queryClient.invalidateQueries({ queryKey: ['pending-review-count'] })
       queryClient.invalidateQueries({ queryKey: ['emails', 'unclassified-count'] })
+      queryClient.invalidateQueries({ queryKey: ['syncBatch'] })
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -268,6 +270,7 @@ function EmailsContent() {
         queryClient.invalidateQueries({ queryKey: ['emails'] })
         queryClient.invalidateQueries({ queryKey: ['emails', 'tab-states'] })
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+        queryClient.invalidateQueries({ queryKey: ['syncBatch'] })
       }, 1500)
     },
     onError: (err: Error) => toast.error(err.message),

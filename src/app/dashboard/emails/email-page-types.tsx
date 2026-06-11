@@ -20,7 +20,14 @@ export type BatchStatus = {
   uncertainCount?: number
   uncertainEmails?: number
   actionEmailCount: number
+  // Action emails with no linked task and not actioned — drives the banner.
+  // Optional fallback to actionEmailCount guards stale cached responses.
+  unhandledActionCount?: number
   actionEmails: BatchActionEmail[]
+}
+
+export function getUnhandledActionCount(batchStatus: BatchStatus) {
+  return batchStatus.unhandledActionCount ?? batchStatus.actionEmailCount
 }
 
 export type Tab = 'needs_action' | 'tracked' | 'fyi' | 'ignored' | 'unclassified'

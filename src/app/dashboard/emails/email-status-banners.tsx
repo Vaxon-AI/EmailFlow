@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Loader2, Eye, X, Zap } from 'lucide-react'
-import type { BatchStatus, Tab } from './email-page-types'
+import { getUnhandledActionCount, type BatchStatus, type Tab } from './email-page-types'
 
 export function EmailStatusBanners({
   ackCurrentReviewBatch,
@@ -88,7 +88,8 @@ export function EmailStatusBanners({
             </div>
           )
         }
-        if (batchStatus.actionEmailCount > 0) {
+        const unhandledCount = getUnhandledActionCount(batchStatus)
+        if (unhandledCount > 0) {
           return (
             <div className="animate-soft-enter flex items-center justify-between gap-3 rounded-xl border border-warning-100 bg-yellow-50/55 px-4 py-3 shadow-sm">
               <button
@@ -100,7 +101,7 @@ export function EmailStatusBanners({
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-warning-700">
-                    {batchStatus.actionEmailCount} action email{batchStatus.actionEmailCount === 1 ? '' : 's'} found in this sync
+                    {unhandledCount} action email{unhandledCount === 1 ? '' : 's'} found in this sync
                   </p>
                   <p className="text-xs text-warning-700">Tap to review — see what needs your attention.</p>
                 </div>
