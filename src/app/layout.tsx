@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import { QueryProviders } from '@/components/providers'
 import { Toaster } from '@/components/ui/sonner'
@@ -20,6 +21,9 @@ export default function RootLayout({
           <Toaster />
         </QueryProviders>
       </body>
+      {process.env.NODE_ENV === 'production' && (
+        <GoogleAnalytics gaId="G-KJ5KQP6DCQ" />
+      )}
     </html>
   )
 }
