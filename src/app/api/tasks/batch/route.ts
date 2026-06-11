@@ -3,6 +3,7 @@ import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/a
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
+import { syncThreadMattersForTasks } from '@/services/task-matter-sync-service'
 import { z } from 'zod'
 
 const batchTaskSchema = z.object({
@@ -37,6 +38,12 @@ export const POST = defineRoute(
         const matter = await ensureMatterForProject(user.id, projectId)
         if (!matter) return error('NOT_FOUND', 'Project not found', 404)
         await taskRepo.bulkSetMatter(user.id, ids, matter.id)
+        await syncThreadMattersForTasks({
+          userId: user.id,
+          taskIds: ids,
+          matterId: matter.id,
+          projectName: matter.projectName,
+        })
         break
       }
 

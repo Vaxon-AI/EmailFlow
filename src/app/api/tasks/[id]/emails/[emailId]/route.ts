@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import { defineRoute, error, getAuthUser, success } from '@/lib/api-helpers'
 import * as taskRepo from '@/repositories/task-repo'
 import * as emailRepo from '@/repositories/email-repo'
+import { syncThreadMattersForTasks } from '@/services/task-matter-sync-service'
 
 type RouteParams = { params: Promise<{ id: string; emailId: string }> }
 
@@ -34,6 +35,18 @@ export const POST = defineRoute(
 
     await taskRepo.linkEmailToTask(taskId, emailId)
     await emailRepo.bulkMarkActioned(user.id, [emailId])
+
+    // Gate on the raw matterId field — the enriched project/matter can come
+    // from the ThreadMemory fallback when the task has no explicit matter.
+    if (taskState.task.matterId) {
+      await syncThreadMattersForTasks({
+        userId: user.id,
+        taskIds: [taskId],
+        matterId: taskState.task.matterId,
+        projectName:
+          taskState.task.project?.name ?? taskState.task.matter?.title ?? 'Assigned project',
+      })
+    }
 
     return success({ message: 'Email linked to task' })
   },

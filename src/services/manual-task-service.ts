@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import * as emailRepo from '@/repositories/email-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
+import { syncThreadMattersForTasks } from '@/services/task-matter-sync-service'
 
 type ManualTaskSource = 'manual' | 'copy_text'
 
@@ -114,6 +115,15 @@ export async function createManualTask(input: CreateManualTaskInput) {
     emailIds: normalizeEmailIds(input.emailIds),
     markLinkedEmailsActioned: input.markLinkedEmailsActioned,
   })
+
+  if (matter && normalizeEmailIds(input.emailIds).length > 0) {
+    await syncThreadMattersForTasks({
+      userId: input.userId,
+      taskIds: [task.id],
+      matterId: matter.id,
+      projectName: matter.projectName,
+    })
+  }
 
   return task
 }

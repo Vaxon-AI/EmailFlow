@@ -17,15 +17,21 @@ vi.mock('@/services/project-matter-service', () => ({
   ensureMatterForProject: vi.fn(),
 }))
 
+vi.mock('@/services/task-matter-sync-service', () => ({
+  syncThreadMattersForTasks: vi.fn(),
+}))
+
 import { getAuthUser } from '@/lib/api-helpers'
 import { findTaskOwnedBy, setMatter } from '@/repositories/task-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
+import { syncThreadMattersForTasks } from '@/services/task-matter-sync-service'
 import { POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
 const mockFindTaskOwnedBy = vi.mocked(findTaskOwnedBy)
 const mockSetMatter = vi.mocked(setMatter)
 const mockEnsureMatterForProject = vi.mocked(ensureMatterForProject)
+const mockSyncThreadMatters = vi.mocked(syncThreadMattersForTasks)
 
 function postRequest(body: object): Request {
   return new Request('http://localhost/api/tasks/task-1/reassign', {
@@ -39,6 +45,7 @@ describe('POST /api/tasks/[id]/reassign', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthUser.mockResolvedValue({ id: 'user-1' } as never)
+    mockSyncThreadMatters.mockResolvedValue({ affectedThreads: 1 })
   })
 
   it('returns 400 when projectId is missing', async () => {
@@ -61,6 +68,7 @@ describe('POST /api/tasks/[id]/reassign', () => {
     const res = await POST(postRequest({ projectId: 'proj-404' }), { params: Promise.resolve({ id: 'task-1' }) })
 
     expect(res.status).toBe(404)
+    expect(mockSyncThreadMatters).not.toHaveBeenCalled()
   })
 
   it('reassigns task to existing matter', async () => {
@@ -71,10 +79,17 @@ describe('POST /api/tasks/[id]/reassign', () => {
     const res = await POST(postRequest({ projectId: 'proj-1' }), { params: Promise.resolve({ id: 'task-1' }) })
 
     expect(mockSetMatter).toHaveBeenCalledWith('user-1', 'task-1', 'matter-1')
+    expect(mockSyncThreadMatters).toHaveBeenCalledWith({
+      userId: 'user-1',
+      taskIds: ['task-1'],
+      matterId: 'matter-1',
+      projectName: 'Alpha',
+    })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.data.taskId).toBe('task-1')
     expect(body.data.matterId).toBe('matter-1')
+    expect(body.data.affectedThreads).toBe(1)
   })
 
   it('uses ensured matter id from the shared service', async () => {

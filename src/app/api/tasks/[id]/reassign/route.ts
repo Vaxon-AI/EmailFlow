@@ -1,6 +1,7 @@
 import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/api-helpers'
 import { findTaskOwnedBy, setMatter } from '@/repositories/task-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
+import { syncThreadMattersForTasks } from '@/services/task-matter-sync-service'
 import { z } from 'zod'
 
 const reassignTaskSchema = z.object({
@@ -21,6 +22,13 @@ export const POST = defineRoute(
 
     await setMatter(user.id, taskId, matter.id)
 
-    return success({ taskId, matterId: matter.id })
+    const { affectedThreads } = await syncThreadMattersForTasks({
+      userId: user.id,
+      taskIds: [taskId],
+      matterId: matter.id,
+      projectName: matter.projectName,
+    })
+
+    return success({ taskId, matterId: matter.id, affectedThreads })
   },
 )

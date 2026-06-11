@@ -22,9 +22,14 @@ vi.mock('@/services/project-matter-service', () => ({
   ensureMatterForProject: vi.fn(),
 }))
 
+vi.mock('@/services/task-matter-sync-service', () => ({
+  syncThreadMattersForTasks: vi.fn(),
+}))
+
 import { prisma } from '@/lib/prisma'
 import { bulkMarkActioned } from '@/repositories/email-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
+import { syncThreadMattersForTasks } from '@/services/task-matter-sync-service'
 import { createManualTask } from '@/services/manual-task-service'
 
 const mockTask = vi.mocked(prisma.task)
@@ -32,6 +37,7 @@ const mockEmail = vi.mocked(prisma.email)
 const mockTaskEmail = vi.mocked(prisma.taskEmail)
 const mockBulkMarkActioned = vi.mocked(bulkMarkActioned)
 const mockEnsureMatterForProject = vi.mocked(ensureMatterForProject)
+const mockSyncThreadMatters = vi.mocked(syncThreadMattersForTasks)
 
 describe('createManualTask', () => {
   beforeEach(() => {
@@ -47,6 +53,7 @@ describe('createManualTask', () => {
       emptyActionItemsValue: '[]',
     })
 
+    expect(mockSyncThreadMatters).not.toHaveBeenCalled()
     expect(mockTask.create).toHaveBeenCalledWith({
       data: {
         userId: 'user-1',
@@ -97,5 +104,37 @@ describe('createManualTask', () => {
       skipDuplicates: true,
     })
     expect(mockBulkMarkActioned).toHaveBeenCalledWith('user-1', ['email-1', 'email-2'])
+    expect(mockSyncThreadMatters).toHaveBeenCalledWith({
+      userId: 'user-1',
+      taskIds: ['task-1'],
+      matterId: 'matter-1',
+      projectName: 'Alpha',
+    })
+  })
+
+  it('does not sync thread matters when projectId is given without emails', async () => {
+    mockEnsureMatterForProject.mockResolvedValue({ id: 'matter-1', projectName: 'Alpha' } as never)
+
+    await createManualTask({
+      userId: 'user-1',
+      title: 'Task',
+      projectId: 'project-1',
+    })
+
+    expect(mockSyncThreadMatters).not.toHaveBeenCalled()
+  })
+
+  it('does not sync thread matters when emails are linked without a project', async () => {
+    mockEmail.findMany.mockResolvedValue([{ id: 'email-1' }] as never)
+    mockTaskEmail.createMany.mockResolvedValue({ count: 1 } as never)
+
+    await createManualTask({
+      userId: 'user-1',
+      title: 'Task',
+      emailIds: ['email-1'],
+    })
+
+    expect(mockEnsureMatterForProject).not.toHaveBeenCalled()
+    expect(mockSyncThreadMatters).not.toHaveBeenCalled()
   })
 })

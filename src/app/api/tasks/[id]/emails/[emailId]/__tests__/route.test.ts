@@ -20,9 +20,14 @@ vi.mock('@/lib/api-helpers', async (importOriginal) => {
   }
 })
 
+vi.mock('@/services/task-matter-sync-service', () => ({
+  syncThreadMattersForTasks: vi.fn(),
+}))
+
 import * as taskRepo from '@/repositories/task-repo'
 import * as emailRepo from '@/repositories/email-repo'
 import { getAuthUser } from '@/lib/api-helpers'
+import { syncThreadMattersForTasks } from '@/services/task-matter-sync-service'
 import { DELETE, POST } from '../route'
 
 const mockGetAuthUser = vi.mocked(getAuthUser)
@@ -31,6 +36,7 @@ const mockBulkMarkActioned = vi.mocked(emailRepo.bulkMarkActioned)
 const mockExistsForUser = vi.mocked(emailRepo.existsForUser)
 const mockLinkEmailToTask = vi.mocked(taskRepo.linkEmailToTask)
 const mockUnlinkTaskFromEmail = vi.mocked(taskRepo.unlinkTaskFromEmail)
+const mockSyncThreadMatters = vi.mocked(syncThreadMattersForTasks)
 
 describe('DELETE /api/tasks/[id]/emails/[emailId]', () => {
   beforeEach(() => {
@@ -107,5 +113,47 @@ describe('POST /api/tasks/[id]/emails/[emailId]', () => {
     expect(mockBulkMarkActioned).toHaveBeenCalledWith('user-1', ['email-1'])
     expect(res.status).toBe(200)
     expect((await res.json()).data.message).toContain('linked')
+  })
+
+  it('syncs the linked email thread when the task has an explicit matter', async () => {
+    mockFindTaskById.mockResolvedValue({
+      id: 'task-1',
+      matterId: 'matter-1',
+      project: { id: 'proj-1', name: 'Alpha' },
+      matter: { id: 'matter-1', title: 'Alpha matter' },
+    } as never)
+    mockExistsForUser.mockResolvedValue(true)
+    mockLinkEmailToTask.mockResolvedValue({ count: 1 } as never)
+    mockSyncThreadMatters.mockResolvedValue({ affectedThreads: 1 })
+
+    const res = await POST(new NextRequest('http://localhost'), {
+      params: Promise.resolve({ id: 'task-1', emailId: 'email-1' }),
+    })
+
+    expect(mockSyncThreadMatters).toHaveBeenCalledWith({
+      userId: 'user-1',
+      taskIds: ['task-1'],
+      matterId: 'matter-1',
+      projectName: 'Alpha',
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('does not sync when the task has no explicit matterId, even with an enriched project', async () => {
+    mockFindTaskById.mockResolvedValue({
+      id: 'task-1',
+      matterId: null,
+      project: { id: 'proj-1', name: 'Alpha' },
+      matter: { id: 'matter-1', title: 'Alpha matter' },
+    } as never)
+    mockExistsForUser.mockResolvedValue(true)
+    mockLinkEmailToTask.mockResolvedValue({ count: 1 } as never)
+
+    const res = await POST(new NextRequest('http://localhost'), {
+      params: Promise.resolve({ id: 'task-1', emailId: 'email-1' }),
+    })
+
+    expect(mockSyncThreadMatters).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
   })
 })
