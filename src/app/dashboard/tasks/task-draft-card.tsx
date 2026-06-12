@@ -2,6 +2,7 @@
 
 import { Plus, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { ACTION_ITEM_MAX_LENGTH } from '@/lib/action-items'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -66,6 +67,7 @@ export function TaskDraftCard({
             <div key={index} className="flex items-center gap-1.5">
               <Input
                 value={item}
+                maxLength={ACTION_ITEM_MAX_LENGTH}
                 onChange={(e) => {
                   const next = [...card.actionItems]
                   next[index] = e.target.value

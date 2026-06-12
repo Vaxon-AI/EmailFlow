@@ -31,6 +31,7 @@ import { toast } from 'sonner'
 import { showError } from '@/components/error-dialog'
 import Link from 'next/link'
 import { CACHE_TIME } from '@/lib/query-cache'
+import { ACTION_ITEM_MAX_LENGTH } from '@/lib/action-items'
 
 import {
   areAllChildrenCompleted,
@@ -128,6 +129,10 @@ export default function TaskDetailPage() {
   const [actionCooldown, setActionCooldown] = useState(false)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [editingDraftText, setEditingDraftText] = useState('')
+  const editingOriginalTextRef = useRef('')
+  const editingOriginalLevelRef = useRef(0)
+  const editingLevelDirtyRef = useRef(false)
   const [unlinkingEmailId, setUnlinkingEmailId] = useState<string | null>(null)
   const [linkingEmailId, setLinkingEmailId] = useState<string | null>(null)
   const [emailPickerOpen, setEmailPickerOpen] = useState(false)
@@ -298,7 +303,9 @@ export default function TaskDetailPage() {
     }
   }
 
-  const autoSaveChecklist = (items: ChecklistItem[]) => {
+  const autoSaveChecklist = (allItems: ChecklistItem[]) => {
+    // Never persist items with empty text (e.g. an uncommitted new item)
+    const items = allItems.filter(item => item.text.trim() !== '')
     const checkedIds = items.filter(item => item.completed).map(item => item.id)
     const actionItems = JSON.stringify(stripChecklistCompletion(items))
     const checkedActionItems = JSON.stringify(checkedIds)
@@ -346,12 +353,58 @@ export default function TaskDetailPage() {
     }
   }
 
-  const updateItemText = (id: string, text: string) => {
-    const next = checklistItems.map(item =>
-      item.id === id ? { ...item, text } : item
-    )
-    setChecklistItems(next)
-    autoSaveChecklist(next)
+  const startEditing = (item: ChecklistItem) => {
+    setEditingItemId(item.id)
+    setEditingDraftText(item.text)
+    editingOriginalTextRef.current = item.text
+    editingOriginalLevelRef.current = item.level
+    editingLevelDirtyRef.current = false
+  }
+
+  const clearEditingState = () => {
+    setEditingItemId(null)
+    setEditingDraftText('')
+    editingOriginalTextRef.current = ''
+    editingLevelDirtyRef.current = false
+  }
+
+  const commitEditing = () => {
+    if (!editingItemId) return
+    const itemId = editingItemId
+    const trimmed = editingDraftText.trim().slice(0, ACTION_ITEM_MAX_LENGTH)
+    const original = editingOriginalTextRef.current
+
+    if (trimmed === '') {
+      toast.error('Checklist item cannot be empty')
+      if (original.trim() === '') {
+        // New item that never got text: drop it, nothing was persisted
+        setChecklistItems(items => items.filter(i => i.id !== itemId))
+      }
+      // Existing item cleared: keep original text (state was never overwritten)
+    } else if (trimmed !== original || editingLevelDirtyRef.current) {
+      const next = checklistItems.map(i =>
+        i.id === itemId ? { ...i, text: trimmed } : i
+      )
+      setChecklistItems(next)
+      autoSaveChecklist(next)
+    }
+    clearEditingState()
+  }
+
+  const cancelEditing = () => {
+    if (!editingItemId) return
+    const itemId = editingItemId
+    const original = editingOriginalTextRef.current
+
+    if (original.trim() === '') {
+      setChecklistItems(items => items.filter(i => i.id !== itemId))
+    } else if (editingLevelDirtyRef.current) {
+      const originalLevel = editingOriginalLevelRef.current
+      setChecklistItems(items => items.map(i =>
+        i.id === itemId ? { ...i, level: originalLevel } : i
+      ))
+    }
+    clearEditingState()
   }
 
   const deleteItem = (id: string) => {
@@ -400,20 +453,20 @@ export default function TaskDetailPage() {
     } else {
       next = [...checklistItems, newItem]
     }
+    // Not persisted yet — the item is only saved once it gets non-empty text
     setChecklistItems(next)
-    autoSaveChecklist(next)
-    setEditingItemId(newItem.id)
+    startEditing(newItem)
   }
 
-  const outdentItem = (id: string) => {
+  const outdentItem = (id: string, opts?: { save?: boolean }) => {
     const next = checklistItems.map(item =>
       item.id === id && item.level > 0 ? { ...item, level: item.level - 1 } : item
     )
     setChecklistItems(next)
-    autoSaveChecklist(next)
+    if (opts?.save !== false) autoSaveChecklist(next)
   }
 
-  const indentItem = (id: string) => {
+  const indentItem = (id: string, opts?: { save?: boolean }) => {
     const itemIndex = checklistItems.findIndex(i => i.id === id)
     if (itemIndex <= 0) return
 
@@ -427,7 +480,7 @@ export default function TaskDetailPage() {
       idx === itemIndex ? { ...i, level: newLevel } : i
     )
     setChecklistItems(next)
-    autoSaveChecklist(next)
+    if (opts?.save !== false) autoSaveChecklist(next)
   }
 
   const unlinkEmail = async (emailId: string) => {
@@ -1043,29 +1096,34 @@ export default function TaskDetailPage() {
                             <input
                               autoFocus
                               type="text"
-                              value={item.text}
-                              onChange={(e) => updateItemText(item.id, e.target.value)}
-                              onBlur={() => setEditingItemId(null)}
+                              value={editingDraftText}
+                              maxLength={ACTION_ITEM_MAX_LENGTH}
+                              onChange={(e) => setEditingDraftText(e.target.value)}
+                              onBlur={commitEditing}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault()
-                                  setEditingItemId(null)
+                                  commitEditing()
                                 }
-                                if (e.key === 'Escape') setEditingItemId(null)
+                                if (e.key === 'Escape') {
+                                  e.preventDefault()
+                                  cancelEditing()
+                                }
                                 if (e.key === 'Tab') {
                                   e.preventDefault()
                                   if (e.shiftKey) {
-                                    outdentItem(item.id)
+                                    outdentItem(item.id, { save: false })
                                   } else {
-                                    indentItem(item.id)
+                                    indentItem(item.id, { save: false })
                                   }
+                                  editingLevelDirtyRef.current = true
                                 }
                               }}
                               className="w-full text-sm bg-brand-50 border border-brand-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-200"
                             />
                           ) : (
                             <span
-                              onClick={() => setEditingItemId(item.id)}
+                              onClick={() => startEditing(item)}
                               className={`block text-sm cursor-text py-1.5 px-1 -mx-1 rounded transition-all ${
                                 item.completed
                                   ? 'text-gray-400 line-through'

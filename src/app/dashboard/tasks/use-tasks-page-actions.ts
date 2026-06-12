@@ -11,6 +11,7 @@ import type {
   TaskUpdateVars,
 } from './task-page-types'
 import { matchesPriorityFilter } from './task-page-types'
+import { filterEmptyActionItems } from '@/lib/action-items'
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>
 type SetSelectedIds = (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => void
@@ -109,13 +110,14 @@ export function useTasksPageActions(input: {
   }
 
   const createOneTask = async (payload: CreateTaskPayload): Promise<CreateTaskResponse> => {
+    const actionItems = filterEmptyActionItems(payload.actionItems)
     const res = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: payload.title,
         summary: payload.summary,
-        actionItems: payload.actionItems.length > 0 ? JSON.stringify(payload.actionItems) : undefined,
+        actionItems: actionItems.length > 0 ? JSON.stringify(actionItems) : undefined,
         userSetDeadline: payload.userSetDeadline || undefined,
         startDate: payload.startDate || undefined,
         urgency: payload.urgency,

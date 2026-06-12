@@ -37,6 +37,7 @@ import { BatchReassignModal } from '@/components/batch-reassign-modal'
 import { UpgradeModal } from '@/components/upgrade-modal'
 import { useAuth } from '@/lib/use-auth'
 import { ScorePicker } from '@/components/score-picker'
+import { ACTION_ITEM_MAX_LENGTH } from '@/lib/action-items'
 import {
   type PriorityFilter,
   PRIORITY_LABELS,
@@ -727,6 +728,7 @@ function TasksContent() {
                     <div key={i} className="flex items-center gap-2">
                       <Input
                         value={item}
+                        maxLength={ACTION_ITEM_MAX_LENGTH}
                         onChange={(e) => {
                           const next = [...draftActionItems]
                           next[i] = e.target.value

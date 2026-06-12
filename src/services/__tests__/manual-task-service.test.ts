@@ -73,6 +73,43 @@ describe('createManualTask', () => {
     })
   })
 
+  it('filters empty action items from array input', async () => {
+    await createManualTask({
+      userId: 'user-1',
+      title: 'Task',
+      actionItems: ['a', '', '  '],
+    })
+
+    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ actionItems: '["a"]' }),
+    }))
+  })
+
+  it('falls back to emptyActionItemsValue when all action items are empty', async () => {
+    await createManualTask({
+      userId: 'user-1',
+      title: 'Task',
+      actionItems: ['', '   '],
+      emptyActionItemsValue: '[]',
+    })
+
+    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ actionItems: '[]' }),
+    }))
+  })
+
+  it('sanitizes empty entries from serialized string input', async () => {
+    await createManualTask({
+      userId: 'user-1',
+      title: 'Task',
+      actionItems: '["a","","b"]',
+    })
+
+    expect(mockTask.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ actionItems: '["a","b"]' }),
+    }))
+  })
+
   it('uses ensured matter id and links owned emails', async () => {
     mockEnsureMatterForProject.mockResolvedValue({ id: 'matter-1', projectName: 'Alpha' } as never)
     mockEmail.findMany.mockResolvedValue([{ id: 'email-1' }, { id: 'email-2' }] as never)

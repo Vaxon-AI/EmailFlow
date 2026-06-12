@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { filterEmptyActionItems, sanitizeActionItemsJson } from '@/lib/action-items'
 import * as emailRepo from '@/repositories/email-repo'
 import { ensureMatterForProject } from '@/services/project-matter-service'
 import { syncThreadMattersForTasks } from '@/services/task-matter-sync-service'
@@ -30,7 +31,11 @@ function normalizeDate(value: string | Date | null | undefined) {
 }
 
 function normalizeActionItems(value: string | string[] | null | undefined) {
-  if (Array.isArray(value)) return JSON.stringify(value)
+  if (Array.isArray(value)) {
+    const filtered = filterEmptyActionItems(value)
+    return filtered.length > 0 ? JSON.stringify(filtered) : undefined
+  }
+  if (typeof value === 'string') return sanitizeActionItemsJson(value)
   return value ?? undefined
 }
 

@@ -263,6 +263,61 @@ describe('PATCH /api/tasks/[id]', () => {
     )
   })
 
+  it('drops checklist items with empty text from actionItems', async () => {
+    const actionItems = JSON.stringify([
+      { id: 'item-1', text: 'Reply to Siqi', level: 0 },
+      { id: 'item-2', text: '  ', level: 0 },
+    ])
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: JSON.stringify({ actionItems, checkedActionItems: '["item-2"]' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    await PATCH(req, { params: Promise.resolve({ id: 'task-1' }) })
+
+    expect(mockUpdateTask).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({
+        actionItems: JSON.stringify([{ id: 'item-1', text: 'Reply to Siqi', level: 0 }]),
+        checkedActionItems: '["item-2"]',
+      })
+    )
+  })
+
+  it('drops empty strings from legacy string-array actionItems', async () => {
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: JSON.stringify({ actionItems: '["a","","b"]' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    await PATCH(req, { params: Promise.resolve({ id: 'task-1' }) })
+
+    expect(mockUpdateTask).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({ actionItems: '["a","b"]' })
+    )
+  })
+
+  it('does not reject or truncate checklist items longer than 100 characters (legacy/AI data)', async () => {
+    const longText = 'x'.repeat(300)
+    const actionItems = JSON.stringify([{ id: 'item-1', text: longText, level: 0 }])
+    const req = new NextRequest('http://localhost', {
+      method: 'PATCH',
+      body: JSON.stringify({ actionItems }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'task-1' }) })
+
+    expect(res.status).toBe(200)
+    expect(mockUpdateTask).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({ actionItems })
+    )
+  })
+
   it('does not invalidate stats cache when status is not updated', async () => {
     const req = new NextRequest('http://localhost', {
       method: 'PATCH',

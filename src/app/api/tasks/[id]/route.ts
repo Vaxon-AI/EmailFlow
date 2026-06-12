@@ -6,6 +6,7 @@ import { defineRoute, error, getAuthUser, parseJsonBody, success } from '@/lib/a
 import * as taskRepo from '@/repositories/task-repo'
 import { invalidateStatsCache } from '@/repositories/stats-repo'
 import { isTaskStatus } from '@/lib/task-status'
+import { sanitizeActionItemsJson } from '@/lib/action-items'
 
 type AllowedTaskField =
   | 'title'
@@ -69,7 +70,7 @@ function buildTaskUpdateData(
         data.checkedActionItems = value as string
         break
       case 'actionItems':
-        data.actionItems = value as string
+        data.actionItems = sanitizeActionItemsJson(value as string)
         break
     }
   }
