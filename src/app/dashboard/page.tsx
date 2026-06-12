@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { Suspense, useCallback, useEffect, useMemo, useState, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -85,6 +85,9 @@ function DashboardContent() {
   const { openSyncSetup, openUpgrade } = useSyncSetup()
 
   const [tourOpen, setTourOpen] = useState(false)
+  const queryClient = useQueryClient()
+  const hasTriggered = useRef(false)
+
   const { data: tourSeenRes } = useQuery({
     queryKey: ['dashboard-tour-seen'],
     queryFn: () => fetch('/api/dashboard/tour-seen').then((r) => r.json()),
@@ -92,7 +95,8 @@ function DashboardContent() {
   })
 
   useEffect(() => {
-    if (tourSeenRes?.data?.seen === false && !searchParams.get('gmail_connected')) {
+    if (tourSeenRes?.data?.seen === false && !searchParams.get('gmail_connected') && !hasTriggered.current) {
+      hasTriggered.current = true
       setTimeout(() => setTourOpen(true), 0)
     } else if (searchParams.get('replay_tour') === '1') {
       setTimeout(() => setTourOpen(true), 0)
@@ -107,6 +111,7 @@ function DashboardContent() {
   const completeTour = async () => {
     setTourOpen(false)
     await fetch('/api/dashboard/tour-seen', { method: 'POST' })
+    queryClient.invalidateQueries({ queryKey: ['dashboard-tour-seen'] })
   }
 
   useEffect(() => {
