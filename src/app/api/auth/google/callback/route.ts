@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     const code = searchParams.get('code')
     const error = searchParams.get('error')
 
-    const errorBase = user ? '/dashboard' : '/auth/signup'
+    const errorBase = user ? '/dashboard/settings' : '/auth/signup'
 
     if (error) {
       return NextResponse.redirect(
@@ -153,7 +153,20 @@ export async function GET(req: NextRequest) {
     // ----------------------------------------------------------------
     if (user) {
       if (!providerAccountId) {
-        return NextResponse.redirect(new URL('/dashboard?gmail_error=no_provider_id', APP_URL))
+        return NextResponse.redirect(new URL('/dashboard/settings?gmail_error=no_provider_id', APP_URL))
+      }
+
+      // Reject if this email is already registered to a *different* EmailFlow user
+      if (googleEmail) {
+        const emailOwner = await prisma.user.findFirst({
+          where: { email: googleEmail },
+          select: { id: true },
+        })
+        if (emailOwner && emailOwner.id !== user.id) {
+          return NextResponse.redirect(
+            new URL('/dashboard/settings?gmail_error=email_already_registered', APP_URL)
+          )
+        }
       }
 
       // Reject if this Google account is already bound to a *different* user
@@ -164,7 +177,7 @@ export async function GET(req: NextRequest) {
 
       if (existingBinding && existingBinding.userId !== user.id) {
         return NextResponse.redirect(
-          new URL('/dashboard?gmail_error=google_account_already_bound', APP_URL)
+          new URL('/dashboard/settings?gmail_error=google_account_already_bound', APP_URL)
         )
       }
 

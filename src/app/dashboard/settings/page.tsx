@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
 import { useAuth } from '@/lib/use-auth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
@@ -44,7 +46,29 @@ type CurrentUser = {
 export default function SettingsPage() {
   const { user, logout } = useAuth()
   const queryClient = useQueryClient()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [activeSection, setActiveSection] = useState<SettingsSection>('account')
+
+  // Surface OAuth errors from the "Add email account" flow, which redirects back here.
+  useEffect(() => {
+    const gmailError = searchParams.get('gmail_error')
+    if (!gmailError) return
+    const messages: Record<string, string> = {
+      email_already_registered: "This email is already registered to another account and can't be added.",
+      google_account_already_bound: 'This Google account is already linked to another user.',
+      no_provider_id: 'Could not add this account: missing account identifier.',
+      token_exchange_failed: 'Google authorization failed. Please try again.',
+      userinfo_failed: 'Could not retrieve your Google account info. Please try again.',
+      missing_access_token: 'Google authorization failed. Please try again.',
+      missing_code: 'Google authorization was cancelled or incomplete.',
+      missing_google_env: 'Google sign-in is not configured on this server.',
+      server_error: 'An unexpected error occurred. Please try again.',
+    }
+    toast.error(messages[gmailError] ?? 'Could not add this email account. Please try again.')
+    setTimeout(() => setActiveSection('email'), 0)
+    router.replace('/dashboard/settings', { scroll: false })
+  }, [searchParams, router])
 
   const { data: stats } = useQuery({
     queryKey: ['stats'],
