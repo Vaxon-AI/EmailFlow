@@ -1,4 +1,6 @@
-export function getGoogleOAuthUrl() {
+import { createOAuthStateToken } from '@/lib/auth-token'
+
+export function getGoogleOAuthUrl(remember = false) {
   const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
   const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI
 
@@ -16,6 +18,7 @@ export function getGoogleOAuthUrl() {
     response_type: 'code',
     access_type: 'offline',
     prompt: 'consent',
+    state: createOAuthStateToken(remember),
     scope: [
       'openid',
       'email',

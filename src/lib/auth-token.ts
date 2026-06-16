@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import { cookies } from 'next/headers'
 
@@ -42,6 +43,33 @@ export function createToken(payload: TokenPayload, expiresInSeconds = 10 * 60): 
 export function verifyToken(token: string): TokenPayload | null {
   try {
     return jwt.verify(token, JWT_SECRET) as TokenPayload
+  } catch {
+    return null
+  }
+}
+
+interface OAuthStatePayload {
+  remember: boolean
+  nonce: string
+}
+
+// Carries the "remember me" choice through the Google OAuth redirect via the
+// standard `state` parameter (echoed back verbatim by Google), instead of a
+// fragile cross-site cookie. The signature prevents forgery and the short
+// expiry limits replay; the nonce adds entropy / CSRF resistance.
+export function createOAuthStateToken(remember: boolean): string {
+  return jwt.sign(
+    { remember, nonce: crypto.randomBytes(16).toString('hex') } satisfies OAuthStatePayload,
+    JWT_SECRET,
+    { expiresIn: 10 * 60 },
+  )
+}
+
+export function verifyOAuthStateToken(state: string | null): { remember: boolean } | null {
+  if (!state) return null
+  try {
+    const payload = jwt.verify(state, JWT_SECRET) as OAuthStatePayload
+    return { remember: Boolean(payload.remember) }
   } catch {
     return null
   }

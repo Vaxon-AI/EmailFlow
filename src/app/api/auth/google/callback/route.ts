@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-sessions'
 import { createUserSession } from '@/lib/auth-sessions'
-import { setSessionCookie } from '@/lib/auth-token'
+import { setSessionCookie, verifyOAuthStateToken } from '@/lib/auth-token'
 import { isAppError } from '@/lib/app-errors'
 import {
   getInheritedQuotaForEmail,
@@ -33,10 +32,10 @@ async function dashboardRedirectFor(userId: string): Promise<URL> {
 
 export async function GET(req: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const rememberCookie = cookieStore.get('google_oauth_remember')
-    const remember = rememberCookie?.value !== '0'
-    cookieStore.set('google_oauth_remember', '', { maxAge: 0, path: '/api/auth/google/callback' })
+    // remember is carried through the OAuth round-trip via the signed `state`
+    // param (echoed back by Google), not a cross-site cookie. Missing/invalid
+    // state → treat as not-remembered (legitimate flows always have valid state).
+    const remember = verifyOAuthStateToken(req.nextUrl.searchParams.get('state'))?.remember ?? false
 
     const [user, searchParams] = [await getCurrentUser(), req.nextUrl.searchParams]
     const code = searchParams.get('code')

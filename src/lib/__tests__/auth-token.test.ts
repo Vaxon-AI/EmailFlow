@@ -15,9 +15,11 @@ import {
   COOKIE_NAME,
   SESSION_MAX_AGE_REMEMBER_SECONDS,
   clearSessionCookie,
+  createOAuthStateToken,
   createToken,
   getSessionToken,
   setSessionCookie,
+  verifyOAuthStateToken,
   verifyToken,
 } from '../auth-token'
 
@@ -52,6 +54,32 @@ describe('createToken / verifyToken', () => {
     // expiresIn: 0 means exp === iat, which is immediately expired
     const token = createToken({ userId: 'u1' }, 0)
     expect(verifyToken(token)).toBeNull()
+  })
+})
+
+describe('createOAuthStateToken / verifyOAuthStateToken', () => {
+  it('round-trips remember=true', () => {
+    const state = createOAuthStateToken(true)
+    expect(verifyOAuthStateToken(state)).toEqual({ remember: true })
+  })
+
+  it('round-trips remember=false', () => {
+    const state = createOAuthStateToken(false)
+    expect(verifyOAuthStateToken(state)).toEqual({ remember: false })
+  })
+
+  it('produces a distinct token each call (random nonce)', () => {
+    expect(createOAuthStateToken(true)).not.toBe(createOAuthStateToken(true))
+  })
+
+  it('returns null for a missing state', () => {
+    expect(verifyOAuthStateToken(null)).toBeNull()
+  })
+
+  it('returns null for a tampered / forged state', () => {
+    const forged = jwt.sign({ remember: true, nonce: 'x' }, 'wrong-secret')
+    expect(verifyOAuthStateToken(forged)).toBeNull()
+    expect(verifyOAuthStateToken('garbage')).toBeNull()
   })
 })
 
