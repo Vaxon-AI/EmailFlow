@@ -71,7 +71,7 @@ export function UpgradeModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md gap-0 overflow-hidden rounded-2xl border border-gray-200 p-0 shadow-xl">
+      <DialogContent className="sm:max-w-md gap-0 overflow-hidden rounded-2xl border border-gray-200 p-0 shadow-xl">
         <div className="bg-gradient-to-br from-brand-600 to-brand-700 px-6 py-8 text-white">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
             <Zap className="h-5 w-5" />

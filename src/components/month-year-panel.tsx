@@ -55,7 +55,7 @@ export function MonthYearPanel({
   }
 
   return (
-    <div className="w-[288px] rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+    <div className="w-[288px] max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         {view === 'months' ? (
           <>

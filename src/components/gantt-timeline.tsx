@@ -508,7 +508,7 @@ export function GanttTimeline({ tasks, updateTask }: Props) {
             <PopoverTrigger className="justify-self-center rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-900 transition-colors hover:bg-brand-50 hover:text-brand-700">
               {rangeLabel}
             </PopoverTrigger>
-            <PopoverContent align="center" className="w-[320px] rounded-2xl border border-gray-200 bg-white p-3 shadow-lg">
+            <PopoverContent align="center" className="w-[320px] max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200 bg-white p-3 shadow-lg">
               <div className="space-y-3">
                 <MonthYearPanel
                   value={pickerMonth}

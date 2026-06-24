@@ -176,7 +176,7 @@ export function GuidedTour({ steps, open, onClose, onComplete }: GuidedTourProps
 
       {/* Tooltip */}
       <div 
-        className="fixed bg-white rounded-xl shadow-2xl border border-slate-200 p-5 w-[320px] pointer-events-auto animate-in fade-in zoom-in duration-200 z-[102]"
+        className="fixed bg-white rounded-xl shadow-2xl border border-slate-200 p-5 w-[320px] max-w-[calc(100vw-2rem)] pointer-events-auto animate-in fade-in zoom-in duration-200 z-[102]"
         style={tooltipPosition}
       >
         <button 

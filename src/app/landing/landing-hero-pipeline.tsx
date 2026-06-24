@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, type CSSProperties } from 'react'
+import { useIsMobile } from './landing-hooks'
 import { Label } from './landing-shared'
 
 type PipelinePair = {
@@ -59,6 +60,7 @@ const PIPELINE_LEVEL: Record<'High' | 'Med' | 'Low', { bg: string; fg: string }>
 
 export function HeroPipeline() {
   const [step, setStep] = useState(0)
+  const isMobile = useIsMobile()
   useEffect(() => {
     const id = setInterval(() => setStep((s) => (s + 1) % PIPELINE_PAIRS.length), 2800)
     return () => clearInterval(id)
@@ -69,7 +71,7 @@ export function HeroPipeline() {
         border: '1px solid var(--ef-line)',
         borderRadius: 20,
         background: 'var(--ef-surface)',
-        padding: 28,
+        padding: isMobile ? 20 : 28,
         boxShadow: '0 40px 100px rgba(10,16,36,0.08)',
       }}
     >
@@ -97,7 +99,7 @@ export function HeroPipeline() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', minHeight: 172 }}>
+      <div style={{ position: 'relative', minHeight: isMobile ? 380 : 172 }}>
         {PIPELINE_PAIRS.map((pair, i) => (
           <div
             key={i}
@@ -105,9 +107,9 @@ export function HeroPipeline() {
               position: 'absolute',
               inset: 0,
               display: 'grid',
-              gridTemplateColumns: '1fr 96px 1fr',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 96px 1fr',
               alignItems: 'center',
-              gap: 8,
+              gap: isMobile ? 12 : 8,
               opacity: step === i ? 1 : 0,
               transform: step === i ? 'translateY(0)' : 'translateY(10px)',
               transition: 'opacity 600ms cubic-bezier(.2,.8,.2,1), transform 600ms cubic-bezier(.2,.8,.2,1)',
@@ -115,7 +117,7 @@ export function HeroPipeline() {
             }}
           >
             <PipelineEmailCard pair={pair} />
-            <PipelineConnector />
+            <PipelineConnector vertical={isMobile} />
             <PipelineTaskCard pair={pair} />
           </div>
         ))}
@@ -185,7 +187,7 @@ function PipelineEmailCard({ pair }: { pair: PipelinePair }) {
   )
 }
 
-function PipelineConnector() {
+function PipelineConnector({ vertical = false }: { vertical?: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
       <div
@@ -196,7 +198,7 @@ function PipelineConnector() {
         <br />
         reads it
       </div>
-      <svg width="40" height="12" viewBox="0 0 40 12" fill="none">
+      <svg width="40" height="12" viewBox="0 0 40 12" fill="none" style={vertical ? { transform: 'rotate(90deg)' } : undefined}>
         <path d="M0 6 H32" stroke="var(--ef-signal)" strokeWidth="1.5" />
         <path
           d="M30 1.5 L36 6 L30 10.5"

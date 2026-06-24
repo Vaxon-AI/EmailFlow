@@ -44,6 +44,19 @@ export function useProgress(ref: RefObject<HTMLElement | null>) {
   return p
 }
 
+export function useIsMobile(breakpoint = 768) {
+  // SSR / first paint defaults to false (desktop-first) to avoid hydration flicker.
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${breakpoint - 1}px)`)
+    const on = () => setIsMobile(mql.matches)
+    on()
+    mql.addEventListener('change', on)
+    return () => mql.removeEventListener('change', on)
+  }, [breakpoint])
+  return isMobile
+}
+
 export function clamp(v: number, a = 0, b = 1) {
   return Math.max(a, Math.min(b, v))
 }

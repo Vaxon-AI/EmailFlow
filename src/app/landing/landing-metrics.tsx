@@ -1,12 +1,13 @@
 'use client'
 
 import { useRef } from 'react'
-import { clamp, useProgress } from './landing-hooks'
+import { clamp, useIsMobile, useProgress } from './landing-hooks'
 import { Label } from './landing-shared'
 
 export function CineMetrics() {
   const ref = useRef<HTMLElement>(null)
   const p = useProgress(ref)
+  const isMobile = useIsMobile()
   const rows: Array<[string, string]> = [
     [
       'Open your inbox and scan dozens of threads to work out what matters.',
@@ -25,7 +26,7 @@ export function CineMetrics() {
     <section
       ref={ref}
       style={{
-        padding: '96px 36px',
+        padding: isMobile ? '64px 20px' : '96px 36px',
         background: 'var(--ef-surface)',
         borderTop: '1px solid var(--ef-line-soft)',
         borderBottom: '1px solid var(--ef-line-soft)',
@@ -55,8 +56,8 @@ export function CineMetrics() {
                 key={i}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 40px 1fr',
-                  gap: 20,
+                  gridTemplateColumns: isMobile ? '1fr' : '1fr 40px 1fr',
+                  gap: isMobile ? 16 : 20,
                   alignItems: 'center',
                   padding: '32px 0',
                   borderBottom: '1px solid var(--ef-line)',

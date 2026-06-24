@@ -1,10 +1,67 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { clamp } from './landing-hooks'
+import { clamp, useIsMobile } from './landing-hooks'
 import { Label } from './landing-shared'
 
+const STORY_TITLES = ['Read.', 'Understand.', 'List.', 'Rank.']
+const STORY_DESCS = [
+  'EmailFlow connects to your inbox and reads it — that is all it can do. New email gets picked up automatically.',
+  'It reads each email the way you would: who is asking, what they need, and by when. The real requests get separated from the noise.',
+  'Every real request becomes a task — with its deadline, who it is for, and the original email attached so you never lose the context.',
+  'Each task is ranked by how urgent it is, so you get one clear list. Start at the top and work your way down.',
+]
+
+function MobilePinnedStory() {
+  // No scroll-jacking on mobile: stack the four acts as normal sections,
+  // each card fully revealed (subP = 1).
+  const acts = [
+    <Act1Read key={0} subP={1} />,
+    <Act2Understand key={1} subP={1} />,
+    <Act3Extract key={2} subP={1} />,
+    <Act4Rank key={3} subP={1} />,
+  ]
+  return (
+    <section style={{ position: 'relative', padding: '64px 20px', background: 'var(--ef-base)' }}>
+      <div style={{ maxWidth: 480, margin: '0 auto' }}>
+        <Label>HOW IT WORKS</Label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 56, marginTop: 28 }}>
+          {STORY_TITLES.map((title, i) => (
+            <div key={title} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <div className="mono" style={{ fontSize: 11, color: 'var(--ef-signal)', letterSpacing: '0.14em', fontWeight: 600, marginBottom: 10 }}>
+                  STEP {i + 1} OF 4
+                </div>
+                <div className="serif" style={{ fontSize: 'clamp(40px, 12vw, 56px)', lineHeight: 1, letterSpacing: '-0.03em', fontWeight: 400 }}>
+                  {title}
+                </div>
+                <p className="sans" style={{ fontSize: 16, lineHeight: 1.6, color: 'var(--ef-ink-dim)', margin: '14px 0 0' }}>
+                  {STORY_DESCS[i]}
+                </p>
+              </div>
+              <div
+                style={{
+                  height: 'min(540px, 80vh)',
+                  border: '1px solid var(--ef-line)',
+                  borderRadius: 20,
+                  background: 'var(--ef-surface)',
+                  overflow: 'hidden',
+                  boxShadow: '0 24px 60px rgba(10,16,36,0.07)',
+                  padding: 20,
+                }}
+              >
+                {acts[i]}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function CinePinnedStory() {
+  const isMobile = useIsMobile()
   // Section is 500vh tall in the document flow. The inner div uses
   // `position: sticky; top: 0` so it pins to the viewport while we scroll
   // through the remaining 400vh — that 400vh window drives the act/subP
@@ -15,6 +72,7 @@ export function CinePinnedStory() {
   const [subP, setSubP] = useState(0)
 
   useEffect(() => {
+    if (isMobile) return
     let raf = 0
     const tick = () => {
       cancelAnimationFrame(raf)
@@ -42,15 +100,12 @@ export function CinePinnedStory() {
       window.removeEventListener('scroll', tick)
       window.removeEventListener('resize', tick)
     }
-  }, [])
+  }, [isMobile])
 
-  const titles = ['Read.', 'Understand.', 'List.', 'Rank.']
-  const descs = [
-    'EmailFlow connects to your inbox and reads it — that is all it can do. New email gets picked up automatically.',
-    'It reads each email the way you would: who is asking, what they need, and by when. The real requests get separated from the noise.',
-    'Every real request becomes a task — with its deadline, who it is for, and the original email attached so you never lose the context.',
-    'Each task is ranked by how urgent it is, so you get one clear list. Start at the top and work your way down.',
-  ]
+  if (isMobile) return <MobilePinnedStory />
+
+  const titles = STORY_TITLES
+  const descs = STORY_DESCS
 
   return (
     <section ref={sectionRef} style={{ position: 'relative', height: '500vh' }}>

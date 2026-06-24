@@ -1,11 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import { useIsMobile } from './landing-hooks'
 import { Label, LogoMark } from './landing-shared'
 
 export function CineCTA() {
+  const isMobile = useIsMobile()
   return (
-    <section style={{ padding: '100px 36px', position: 'relative' }}>
+    <section style={{ padding: isMobile ? '72px 20px' : '100px 36px', position: 'relative' }}>
       <div
         style={{
           position: 'absolute',
@@ -29,7 +31,7 @@ export function CineCTA() {
           <br />
           <em style={{ fontStyle: 'italic', color: 'var(--ef-signal)' }}>Then your inbox works for you.</em>
         </h2>
-        <div style={{ display: 'flex', gap: 14, justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Link
             href="/auth/signup"
             className="sans"
@@ -67,8 +69,9 @@ export function CineCTA() {
 }
 
 export function CineFooter() {
+  const isMobile = useIsMobile()
   return (
-    <footer style={{ borderTop: '1px solid var(--ef-line-soft)', padding: '56px 36px 32px' }}>
+    <footer style={{ borderTop: '1px solid var(--ef-line-soft)', padding: isMobile ? '48px 20px 32px' : '56px 36px 32px' }}>
       <div style={{ maxWidth: 1360, margin: '0 auto' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 32 }}>
           <div>
@@ -110,7 +113,7 @@ export function CineFooter() {
           </div>
         </div>
         <div style={{ height: 1, background: 'var(--ef-line-soft)', margin: '40px 0 20px' }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <span className="mono" style={{ fontSize: 11, color: 'var(--ef-ink-mute)' }}>
             © {new Date().getFullYear()} EmailFlow AI
           </span>

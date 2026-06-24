@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { clamp, useProgress } from './landing-hooks'
+import { clamp, useIsMobile, useProgress } from './landing-hooks'
 import { HeroPipeline } from './landing-hero-pipeline'
 
 export function CineHero() {
   const ref = useRef<HTMLElement>(null)
   const p = useProgress(ref)
+  const isMobile = useIsMobile()
 
   return (
     <section ref={ref} style={{ position: 'relative', minHeight: '100vh', paddingTop: 100 }}>
@@ -16,7 +17,7 @@ export function CineHero() {
         style={{
           maxWidth: 1360,
           margin: '0 auto',
-          padding: '60px 36px 48px',
+          padding: isMobile ? '40px 20px 32px' : '60px 36px 48px',
           position: 'relative',
           zIndex: 2,
         }}
@@ -40,10 +41,10 @@ export function CineHero() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 60,
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: isMobile ? 32 : 60,
             alignItems: 'end',
-            marginTop: 60,
+            marginTop: isMobile ? 36 : 60,
           }}
         >
           <p
@@ -53,8 +54,8 @@ export function CineHero() {
             Long threads. Buried asks. Deadlines you notice only once they&apos;re late. EmailFlow AI reads every
             thread, pulls out the real tasks, and ranks what needs you first.
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: isMobile ? 'flex-start' : 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
               <Link
                 href="/demo"
                 className="sans"

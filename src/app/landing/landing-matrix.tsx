@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { clamp, useProgress } from './landing-hooks'
+import { clamp, useIsMobile, useProgress } from './landing-hooks'
 import { Label } from './landing-shared'
 import { Plus } from 'lucide-react'
 
@@ -83,6 +83,7 @@ const FAQ_DATA = [
 export function CineMatrix() {
   const ref = useRef<HTMLElement>(null)
   const p = useProgress(ref)
+  const isMobile = useIsMobile()
   const [openCategory, setOpenCategory] = useState<string | null>(null)
 
   const feats = [
@@ -95,7 +96,7 @@ export function CineMatrix() {
   ]
 
   return (
-    <section ref={ref} style={{ padding: '96px 36px' }}>
+    <section ref={ref} style={{ padding: isMobile ? '64px 20px' : '96px 36px' }}>
       <div style={{ maxWidth: 1360, margin: '0 auto' }}>
         <div style={{ marginBottom: 72 }}>
           <Label>WHAT IT DOES</Label>
@@ -117,11 +118,11 @@ export function CineMatrix() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
             gap: 0,
             borderTop: '1px solid var(--ef-line)',
             borderLeft: '1px solid var(--ef-line)',
-            marginBottom: 120,
+            marginBottom: isMobile ? 80 : 120,
           }}
         >
           {feats.map((f, i) => {

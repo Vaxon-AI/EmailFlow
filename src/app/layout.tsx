@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import { QueryProviders } from '@/components/providers'
@@ -8,6 +8,12 @@ import { RootTransition } from '@/components/root-transition'
 export const metadata: Metadata = {
   title: 'EmailFlow AI',
   description: 'AI-Powered Email-to-Task Orchestration',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({
