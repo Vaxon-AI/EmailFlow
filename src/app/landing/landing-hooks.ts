@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 
 export function useScrollY() {
   const [y, setY] = useState(0)
@@ -55,6 +55,37 @@ export function useIsMobile(breakpoint = 768) {
     return () => mql.removeEventListener('change', on)
   }, [breakpoint])
   return isMobile
+}
+
+export function useInViewProgress(durationMs = 1800, threshold = 0.3) {
+  // Ramps 0 → 1 over `durationMs` once the element first enters the viewport.
+  const ref = useRef<HTMLDivElement>(null)
+  const [progress, setProgress] = useState(0)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    let raf = 0
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return
+        io.disconnect()
+        const start = performance.now()
+        const tick = (now: number) => {
+          const t = Math.min(1, (now - start) / durationMs)
+          setProgress(t)
+          if (t < 1) raf = requestAnimationFrame(tick)
+        }
+        raf = requestAnimationFrame(tick)
+      },
+      { threshold },
+    )
+    io.observe(el)
+    return () => {
+      io.disconnect()
+      cancelAnimationFrame(raf)
+    }
+  }, [durationMs, threshold])
+  return [ref, progress] as const
 }
 
 export function clamp(v: number, a = 0, b = 1) {

@@ -109,6 +109,7 @@ export function HeroPipeline() {
               display: 'grid',
               gridTemplateColumns: isMobile ? '1fr' : '1fr 96px 1fr',
               alignItems: 'center',
+              alignContent: isMobile ? 'center' : undefined,
               gap: isMobile ? 12 : 8,
               opacity: step === i ? 1 : 0,
               transform: step === i ? 'translateY(0)' : 'translateY(10px)',
@@ -198,17 +199,31 @@ function PipelineConnector({ vertical = false }: { vertical?: boolean }) {
         <br />
         reads it
       </div>
-      <svg width="40" height="12" viewBox="0 0 40 12" fill="none" style={vertical ? { transform: 'rotate(90deg)' } : undefined}>
-        <path d="M0 6 H32" stroke="var(--ef-signal)" strokeWidth="1.5" />
-        <path
-          d="M30 1.5 L36 6 L30 10.5"
-          stroke="var(--ef-signal)"
-          strokeWidth="1.5"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      {vertical ? (
+        <svg width="12" height="36" viewBox="0 0 12 36" fill="none">
+          <path d="M6 0 V28" stroke="var(--ef-signal)" strokeWidth="1.5" />
+          <path
+            d="M1.5 26 L6 32 L10.5 26"
+            stroke="var(--ef-signal)"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : (
+        <svg width="40" height="12" viewBox="0 0 40 12" fill="none">
+          <path d="M0 6 H32" stroke="var(--ef-signal)" strokeWidth="1.5" />
+          <path
+            d="M30 1.5 L36 6 L30 10.5"
+            stroke="var(--ef-signal)"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { clamp, useIsMobile } from './landing-hooks'
+import { clamp, useInViewProgress, useIsMobile } from './landing-hooks'
 import { Label } from './landing-shared'
 
 const STORY_TITLES = ['Read.', 'Understand.', 'List.', 'Rank.']
@@ -12,15 +12,30 @@ const STORY_DESCS = [
   'Each task is ranked by how urgent it is, so you get one clear list. Start at the top and work your way down.',
 ]
 
+function MobileAct({ index }: { index: number }) {
+  // Plays the act's reveal animation once when the card scrolls into view.
+  const [ref, subP] = useInViewProgress()
+  const Act = [Act1Read, Act2Understand, Act3Extract, Act4Rank][index]
+  return (
+    <div
+      ref={ref}
+      style={{
+        height: 'min(540px, 80vh)',
+        border: '1px solid var(--ef-line)',
+        borderRadius: 20,
+        background: 'var(--ef-surface)',
+        overflow: 'hidden',
+        boxShadow: '0 24px 60px rgba(10,16,36,0.07)',
+        padding: 20,
+      }}
+    >
+      <Act subP={subP} />
+    </div>
+  )
+}
+
 function MobilePinnedStory() {
-  // No scroll-jacking on mobile: stack the four acts as normal sections,
-  // each card fully revealed (subP = 1).
-  const acts = [
-    <Act1Read key={0} subP={1} />,
-    <Act2Understand key={1} subP={1} />,
-    <Act3Extract key={2} subP={1} />,
-    <Act4Rank key={3} subP={1} />,
-  ]
+  // No scroll-jacking on mobile: stack the four acts as normal sections.
   return (
     <section style={{ position: 'relative', padding: '64px 20px', background: 'var(--ef-base)' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
@@ -39,19 +54,7 @@ function MobilePinnedStory() {
                   {STORY_DESCS[i]}
                 </p>
               </div>
-              <div
-                style={{
-                  height: 'min(540px, 80vh)',
-                  border: '1px solid var(--ef-line)',
-                  borderRadius: 20,
-                  background: 'var(--ef-surface)',
-                  overflow: 'hidden',
-                  boxShadow: '0 24px 60px rgba(10,16,36,0.07)',
-                  padding: 20,
-                }}
-              >
-                {acts[i]}
-              </div>
+              <MobileAct index={i} />
             </div>
           ))}
         </div>
