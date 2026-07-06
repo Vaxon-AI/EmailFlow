@@ -114,9 +114,25 @@ export function CineFooter() {
         </div>
         <div style={{ height: 1, background: 'var(--ef-line-soft)', margin: '40px 0 20px' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-          <span className="mono" style={{ fontSize: 11, color: 'var(--ef-ink-mute)' }}>
-            © {new Date().getFullYear()} EmailFlow AI
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--ef-ink-mute)' }}>
+              © {new Date().getFullYear()} EmailFlow AI
+            </span>
+            <Link
+              href="/terms"
+              className="mono hover:underline"
+              style={{ fontSize: 11, color: 'var(--ef-ink-mute)', textDecoration: 'none' }}
+            >
+              Terms
+            </Link>
+            <Link
+              href="/privacy"
+              className="mono hover:underline"
+              style={{ fontSize: 11, color: 'var(--ef-ink-mute)', textDecoration: 'none' }}
+            >
+              Privacy
+            </Link>
+          </div>
           <span className="mono" style={{ fontSize: 11, color: 'var(--ef-signal)' }}>
             ● Read-only · disconnect any time
           </span>

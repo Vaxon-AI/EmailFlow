@@ -4,12 +4,11 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { ArrowLeft, Eye, EyeOff, Loader2, X } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 import { AuthShell } from '@/components/auth-shell'
 import { InlineNotice } from '@/components/inline-notice'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { getErrorMessage } from '@/lib/api-client'
 
@@ -50,7 +49,6 @@ export default function SignUpPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null)
 
   const passwordsDoNotMatch = confirmPassword.length > 0 && password !== confirmPassword
 
@@ -102,187 +100,6 @@ export default function SignUpPage() {
       <Suspense fallback={null}>
         <EmailConnectionErrorReader onError={setError} />
       </Suspense>
-      <Dialog open={legalModal !== null} onOpenChange={(open) => { if (!open) setLegalModal(null) }}>
-        <DialogContent
-          showCloseButton={false}
-          className="flex max-h-[85vh] flex-col gap-0 p-0 sm:max-w-2xl"
-        >
-          <DialogHeader className="flex shrink-0 flex-row items-center justify-between border-b px-6 py-4">
-            <DialogTitle className="text-base font-semibold text-gray-900">
-              {legalModal === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
-            </DialogTitle>
-            <button
-              onClick={() => setLegalModal(null)}
-              className="rounded-md p-1 text-gray-400 transition-colors hover:text-gray-600"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </DialogHeader>
-
-          <div className="overflow-y-auto px-6 py-6 text-sm leading-relaxed text-gray-700">
-            {legalModal === 'terms' ? (
-              <div className="space-y-6">
-                <p className="text-xs text-gray-400">Last updated: April 2026</p>
-                <p>These Terms of Service govern your use of EmailFlow AI, a product of <strong>Vaxon</strong>. By creating an account or using the service, you agree to these terms.</p>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">1. What EmailFlow AI does</h2>
-                  <p>EmailFlow AI connects to your email account using read-only access. It uses AI to classify incoming emails, extract actionable tasks, assign priority scores, and organise work by project.</p>
-                  <p className="mt-2">EmailFlow AI does not send, delete, modify, or forward any of your emails. Our access is strictly read-only.</p>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">2. Your account</h2>
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>You must be 18 years or older to use this service.</li>
-                    <li>You are responsible for keeping your login credentials secure.</li>
-                    <li>You must not share your account with others or use the service on behalf of a third party without their consent.</li>
-                    <li>You agree to provide accurate information when creating your account.</li>
-                  </ul>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">3. Acceptable use</h2>
-                  <p>You agree not to:</p>
-                  <ul className="mt-2 list-disc space-y-1 pl-5">
-                    <li>Use the service for any unlawful purpose or in violation of applicable laws</li>
-                    <li>Attempt to reverse-engineer, scrape, or abuse the service or its APIs</li>
-                    <li>Connect email accounts belonging to others without their explicit permission</li>
-                    <li>Use the service to process sensitive personal data of third parties without their consent</li>
-                  </ul>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">4. Beta and availability</h2>
-                  <p>EmailFlow AI is currently in early access. The service is provided as is and may change, be unavailable, or contain bugs. We do not guarantee uptime during this phase.</p>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">5. Intellectual property</h2>
-                  <p>EmailFlow AI and all associated software, design, and content are owned by Vaxon. Your email data remains yours. We do not claim ownership of any content processed through the service.</p>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">6. Limitation of liability</h2>
-                  <p>To the fullest extent permitted by law, Vaxon is not liable for any indirect, incidental, or consequential damages arising from your use of EmailFlow AI.</p>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">7. Termination</h2>
-                  <p>You may stop using EmailFlow AI and delete your account at any time from Settings. We may suspend or terminate accounts that violate these terms.</p>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">8. Changes to these Terms</h2>
-                  <p>We may update these terms from time to time. We will notify you of material changes by email or via a notice in the app.</p>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">9. Governing law</h2>
-                  <p>These terms are governed by the laws of Australia. Any disputes shall be resolved in the courts of Australia.</p>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">10. Contact</h2>
-                  <p>Questions about these terms? Contact us at <a href="mailto:legal@vaxon.ai" className="text-brand-600 hover:underline">legal@vaxon.ai</a></p>
-                </section>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <p className="text-xs text-gray-400">Last updated: April 2026</p>
-                <p>Vaxon operates EmailFlow AI. This Privacy Policy explains what data we collect, how we use it, and your rights regarding that data.</p>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">1. What data we collect</h2>
-                  <h3 className="mb-1 mt-3 font-medium text-gray-800">Account information</h3>
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>Name and email address</li>
-                    <li>Hashed password</li>
-                    <li>OAuth tokens used to access your email provider</li>
-                  </ul>
-                  <h3 className="mb-1 mt-3 font-medium text-gray-800">Email data</h3>
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>Email metadata: subject, sender, recipients, date, thread ID</li>
-                    <li>Email body content used to extract tasks and summaries</li>
-                    <li>AI-generated task titles, summaries, priority scores, and project classifications</li>
-                  </ul>
-                  <h3 className="mb-1 mt-3 font-medium text-gray-800">Usage data</h3>
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>Actions you take in the app</li>
-                    <li>Sync timestamps and error logs for reliability</li>
-                  </ul>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">2. How we use your data</h2>
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>To provide the EmailFlow AI service: syncing, classifying, and displaying your emails and tasks</li>
-                    <li>To improve reliability and debug issues</li>
-                    <li>To send you service-related emails such as password reset notifications</li>
-                  </ul>
-                  <p className="mt-3">We do not use your email content to train AI models. We do not sell your data and we do not use your data for advertising.</p>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">3. Third-party services</h2>
-                  <div className="space-y-3">
-                    <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                      <p className="font-medium text-gray-800">AI processing</p>
-                      <p className="mt-1 text-xs text-gray-600">Email content is sent to a third-party AI processing service to classify emails and extract tasks. This provider is contractually prohibited from storing or using your content to train models.</p>
-                    </div>
-                    <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                      <p className="font-medium text-gray-800">Google email</p>
-                      <p className="mt-1 text-xs text-gray-600">We connect to your email account with read-only access. You can revoke access at any time from your Google account settings.</p>
-                    </div>
-                    <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                      <p className="font-medium text-gray-800">Infrastructure</p>
-                      <p className="mt-1 text-xs text-gray-600">Your data is stored in a secure cloud database served via enterprise-grade hosting.</p>
-                    </div>
-                  </div>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">4. Data retention</h2>
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>Your data is retained for as long as your account is active</li>
-                    <li>If you delete your account, your data is permanently removed within 30 days</li>
-                    <li>You can disconnect your email at any time from Settings</li>
-                  </ul>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">5. Your rights</h2>
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>Access — request a copy of the data we hold about you</li>
-                    <li>Correction — ask us to correct inaccurate data</li>
-                    <li>Deletion — delete your account and all data from Settings</li>
-                    <li>Portability — request your task data in a machine-readable format</li>
-                    <li>Withdrawal of consent — disconnect your email account or delete your account at any time</li>
-                  </ul>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">6. Security</h2>
-                  <p>We use encrypted connections, hashed passwords, and scoped OAuth tokens. If you discover a security vulnerability, please report it to <a href="mailto:security@vaxon.ai" className="text-brand-600 hover:underline">security@vaxon.ai</a>.</p>
-                </section>
-
-                <section>
-                  <h2 className="mb-2 font-semibold text-gray-900">7. Contact</h2>
-                  <p>For privacy-related questions: <a href="mailto:privacy@vaxon.ai" className="text-brand-600 hover:underline">privacy@vaxon.ai</a></p>
-                </section>
-              </div>
-            )}
-          </div>
-
-          <div className="flex shrink-0 justify-end border-t px-6 py-4">
-            <Button onClick={() => setLegalModal(null)} size="sm">
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <AuthShell
         title={step === 1 ? 'Create your account' : 'Set your password'}
         description={step === 1 ? 'Free to start, no credit card needed.' : `Setting up account for ${email}`}
@@ -422,9 +239,9 @@ export default function SignUpPage() {
               />
               <span className="text-xs leading-relaxed text-gray-500">
                 I agree to the{' '}
-                <button type="button" onClick={() => setLegalModal('terms')} className="text-brand-600 hover:underline">Terms of Service</button>
+                <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">Terms of Service</Link>
                 {' '}and{' '}
-                <button type="button" onClick={() => setLegalModal('privacy')} className="text-brand-600 hover:underline">Privacy Policy</button>
+                <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">Privacy Policy</Link>
               </span>
             </label>
 
