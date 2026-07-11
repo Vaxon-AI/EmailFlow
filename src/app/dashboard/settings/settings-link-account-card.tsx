@@ -46,12 +46,12 @@ export function LinkAccountCard({
         fallbackMessage: 'Disconnect failed',
       }),
     onSuccess: () => {
-      toast.success('Google account disconnected')
+      toast.success('Email account disconnected')
       queryClient.invalidateQueries({ queryKey: ['stats'] })
       queryClient.invalidateQueries({ queryKey: ['auth-me'] })
     },
     onError: (err: Error) => {
-      showError(err.message || 'Failed to disconnect Google account')
+      showError(err.message || 'Failed to disconnect email account')
     },
   })
 
@@ -120,7 +120,10 @@ export function LinkAccountCard({
                           <Button
                             size="sm"
                             className="gap-2"
-                            onClick={() => { window.location.href = '/api/auth/google' }}
+                            onClick={() => {
+                              window.location.href =
+                                account.provider === 'microsoft' ? '/api/auth/microsoft' : '/api/auth/google'
+                            }}
                           >
                             <Mail className="h-3.5 w-3.5" />
                             Reconnect
@@ -158,9 +161,12 @@ export function LinkAccountCard({
                   Add email account
                 </Button>
               </a>
-              <Button size="sm" variant="outline" disabled className="gap-2">
-                Outlook coming soon
-              </Button>
+              <a href="/api/auth/microsoft" className="self-start">
+                <Button size="sm" variant="outline" className="gap-2">
+                  <Mail className="h-3.5 w-3.5" />
+                  Connect Outlook
+                </Button>
+              </a>
             </div>
           </div>
         </div>
@@ -176,7 +182,7 @@ export function LinkAccountCard({
 
         <InlineNotice variant="info">
           <p className="text-sm">
-            Google is available now. Outlook and additional providers can use this same account list when they are added.
+            Google and Outlook are available now. Additional providers can use this same account list when they are added.
           </p>
         </InlineNotice>
       </CardContent>

@@ -63,7 +63,7 @@ export async function getUserSyncInfo(userId: string) {
 }
 
 const SYNC_ENABLED_WHERE = {
-  accounts: { some: { provider: 'google', syncEnabled: true } },
+  accounts: { some: { provider: { in: getEnabledEmailProviderKeys() }, syncEnabled: true } },
 }
 
 export async function findSyncEnabledUserIds() {
@@ -184,7 +184,7 @@ export async function findFullProfile(userId: string) {
       },
     }),
     prisma.account.findMany({
-      where: { userId, provider: 'google' },
+      where: { userId, provider: { in: getEnabledEmailProviderKeys() } },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,

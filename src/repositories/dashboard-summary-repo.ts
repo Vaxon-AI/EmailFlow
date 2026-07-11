@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { getPriorityBand } from '@/types/task'
 import { Prisma } from '@prisma/client'
 import { countAwaitingReview } from '@/repositories/email-repo'
+import { getEnabledEmailProviderKeys } from '@/integrations/provider-registry'
 
 type PriorityCounts = {
   critical: number
@@ -65,7 +66,7 @@ const DASHBOARD_USER_SELECT = {
   emailProviderReauthAt: true,
   emailProviderReauthProvider: true,
   accounts: {
-    where: { provider: 'google', syncEnabled: true },
+    where: { provider: { in: getEnabledEmailProviderKeys() }, syncEnabled: true },
     select: { id: true },
     take: 1,
   },

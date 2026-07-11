@@ -61,7 +61,8 @@ function SettingsContent() {
   // Surface OAuth errors from the "Add email account" flow, which redirects back here.
   useEffect(() => {
     const gmailError = searchParams.get('gmail_error')
-    if (!gmailError) return
+    const outlookError = searchParams.get('outlook_error')
+    if (!gmailError && !outlookError) return
     const messages: Record<string, string> = {
       email_already_registered: "This email is already registered to another account and can't be added.",
       google_account_already_bound: 'This Google account is already linked to another user.',
@@ -73,7 +74,23 @@ function SettingsContent() {
       missing_google_env: 'Google sign-in is not configured on this server.',
       server_error: 'An unexpected error occurred. Please try again.',
     }
-    toast.error(messages[gmailError] ?? 'Could not add this email account. Please try again.')
+    const outlookMessages: Record<string, string> = {
+      email_already_registered: "This email is already registered to another account and can't be added.",
+      microsoft_account_already_bound: 'This Microsoft account is already linked to another user.',
+      no_provider_id: 'Could not add this account: missing account identifier.',
+      no_email: 'Your Microsoft account must have an email address.',
+      token_exchange_failed: 'Microsoft authorization failed. Please try again.',
+      userinfo_failed: 'Could not retrieve your Microsoft account info. Please try again.',
+      missing_access_token: 'Microsoft authorization failed. Please try again.',
+      missing_code: 'Microsoft authorization was cancelled or incomplete.',
+      missing_microsoft_env: 'Microsoft sign-in is not configured on this server.',
+      server_error: 'An unexpected error occurred. Please try again.',
+    }
+    if (gmailError) {
+      toast.error(messages[gmailError] ?? 'Could not add this email account. Please try again.')
+    } else if (outlookError) {
+      toast.error(outlookMessages[outlookError] ?? 'Could not add this email account. Please try again.')
+    }
     setTimeout(() => setActiveSection('email'), 0)
     router.replace('/dashboard/settings', { scroll: false })
   }, [searchParams, router])

@@ -23,13 +23,29 @@ const GOOGLE_OAUTH_ERROR_MESSAGES: Record<string, string> = {
   server_error: 'An unexpected error occurred. Please try again.',
 }
 
+const MICROSOFT_OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  no_email: 'Your Microsoft account must have an email address.',
+  no_provider_id: 'Microsoft sign-in failed: missing account identifier.',
+  token_exchange_failed: 'Microsoft sign-in failed. Please try again.',
+  userinfo_failed: 'Could not retrieve your Microsoft account info. Please try again.',
+  missing_access_token: 'Microsoft sign-in failed. Please try again.',
+  missing_code: 'Microsoft sign-in was cancelled or incomplete.',
+  missing_microsoft_env: 'Microsoft sign-in is not configured on this server.',
+  server_error: 'An unexpected error occurred. Please try again.',
+}
+
 function EmailConnectionErrorReader({ onError }: { onError: (msg: string) => void }) {
   const searchParams = useSearchParams()
   const router = useRouter()
   useEffect(() => {
-    const emailConnectionError = searchParams.get('gmail_error')
-    if (!emailConnectionError) return
-    onError(GOOGLE_OAUTH_ERROR_MESSAGES[emailConnectionError] ?? 'Google sign-in failed. Please try again.')
+    const gmailError = searchParams.get('gmail_error')
+    const outlookError = searchParams.get('outlook_error')
+    if (!gmailError && !outlookError) return
+    if (gmailError) {
+      onError(GOOGLE_OAUTH_ERROR_MESSAGES[gmailError] ?? 'Google sign-in failed. Please try again.')
+    } else if (outlookError) {
+      onError(MICROSOFT_OAUTH_ERROR_MESSAGES[outlookError] ?? 'Microsoft sign-in failed. Please try again.')
+    }
     router.replace('/auth/signup', { scroll: false })
   }, [searchParams, router, onError])
   return null
@@ -133,10 +149,18 @@ export default function SignUpPage() {
                 <span className="flex-1">Continue with Google</span>
               </a>
 
-              <div className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5 text-sm text-gray-400">
+              <a
+                href="/api/auth/microsoft"
+                className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
+                  <path d="M2 2h9.5v9.5H2z" fill="#F25022"/>
+                  <path d="M12.5 2H22v9.5h-9.5z" fill="#7FBA00"/>
+                  <path d="M2 12.5h9.5V22H2z" fill="#00A4EF"/>
+                  <path d="M12.5 12.5H22V22h-9.5z" fill="#FFB900"/>
+                </svg>
                 <span className="flex-1">Continue with Microsoft</span>
-                <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">Coming soon</span>
-              </div>
+              </a>
 
               <div className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5 text-sm text-gray-400">
                 <span className="flex-1">Continue with Apple</span>

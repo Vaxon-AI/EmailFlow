@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { getEnabledEmailProviderKeys } from '@/integrations/provider-registry'
 
 // ============================================================
 // Stats Repository — aggregated counts for dashboard
@@ -50,7 +51,7 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
         emailProviderReauthAt: true,
         emailProviderReauthProvider: true,
         accounts: {
-          where: { provider: 'google', syncEnabled: true },
+          where: { provider: { in: getEnabledEmailProviderKeys() }, syncEnabled: true },
           select: { id: true },
           take: 1,
         },

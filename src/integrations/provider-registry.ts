@@ -1,9 +1,11 @@
 import { AppError } from '@/lib/app-errors'
 import type { EmailProvider } from './email-provider'
 import { gmailProvider } from './gmail'
+import { outlookProvider } from './outlook'
 
 const providersByAccountKey = new Map<string, EmailProvider>([
   [gmailProvider.accountProvider, gmailProvider],
+  [outlookProvider.accountProvider, outlookProvider],
 ])
 
 export function getEmailProvider(providerKey: string): EmailProvider {

@@ -626,20 +626,45 @@ export const gmailProvider: EmailProvider = {
       })
       const remaining = await prisma.account.count({ where: { userId, provider: 'google', syncEnabled: true } })
       if (remaining === 0) {
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            gmailAccessToken: null,
-            gmailRefreshToken: null,
-            gmailTokenExpiry: null,
-            syncEnabled: false,
-            lastSyncAt: null,
-            emailProviderReauthRequired: false,
-            emailProviderReauthReason: null,
-            emailProviderReauthAt: null,
-            emailProviderReauthProvider: null,
-          },
-        })
+        // Only shut off user-level sync when no enabled account remains across
+        // ANY provider — a still-connected Outlook account must keep syncing.
+        const remainingAnyProvider = await prisma.account.count({ where: { userId, syncEnabled: true } })
+        if (remainingAnyProvider === 0) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              gmailAccessToken: null,
+              gmailRefreshToken: null,
+              gmailTokenExpiry: null,
+              syncEnabled: false,
+              lastSyncAt: null,
+              emailProviderReauthRequired: false,
+              emailProviderReauthReason: null,
+              emailProviderReauthAt: null,
+              emailProviderReauthProvider: null,
+            },
+          })
+        } else {
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              gmailAccessToken: null,
+              gmailRefreshToken: null,
+              gmailTokenExpiry: null,
+            },
+          })
+          // Clear the user-level reauth flag only when Gmail set it — never
+          // wipe another provider's pending reauth banner.
+          await prisma.user.updateMany({
+            where: { id: userId, emailProviderReauthProvider: 'gmail' },
+            data: {
+              emailProviderReauthRequired: false,
+              emailProviderReauthReason: null,
+              emailProviderReauthAt: null,
+              emailProviderReauthProvider: null,
+            },
+          })
+        }
       }
       return
     }

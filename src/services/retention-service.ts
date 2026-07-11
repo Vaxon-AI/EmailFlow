@@ -19,6 +19,7 @@ import * as emailRepo from '@/repositories/email-repo'
 import * as digestRepo from '@/repositories/digest-repo'
 import { cleanupTasksForUser } from '@/services/task-cleanup-service'
 import { fetchGmailMessageBody } from '@/integrations/gmail/client'
+import { fetchOutlookMessageBody } from '@/integrations/outlook/client'
 import { prisma } from '@/lib/prisma'
 import { errorMessage } from '@/lib/app-errors'
 
@@ -361,6 +362,8 @@ export async function restoreEmail(
       providerMessageId: true,
       retentionStatus: true,
       restorableUntil: true,
+      accountId: true,
+      account: { select: { provider: true } },
     },
   })
 
@@ -382,11 +385,16 @@ export async function restoreEmail(
     }
   }
 
-  // Re-fetch body from the provider. Gmail is the only concrete provider today.
+  // Re-fetch body from the email's own provider. Routing by account.provider
+  // keeps a Microsoft email from hitting the legacy Gmail token path (which
+  // would wrongly mark the user's Gmail connection as needing reauth).
   let bodyFull: string
   let bodyHtml: string | null
   try {
-    const fetched = await fetchGmailMessageBody(userId, email.providerMessageId)
+    const fetched =
+      email.account?.provider === 'microsoft'
+        ? await fetchOutlookMessageBody(userId, email.accountId, email.providerMessageId)
+        : await fetchGmailMessageBody(userId, email.providerMessageId)
     bodyFull = fetched.text
     bodyHtml = fetched.html
   } catch (err) {
